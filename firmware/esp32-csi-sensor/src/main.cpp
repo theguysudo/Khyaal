@@ -25,6 +25,7 @@
 #include "config.h"
 #include "config_store.h"
 #include "csi_sensor.h"
+#include "led_controller.h"
 #include "presence.h"
 #include "tunnel_crypto.h"
 
@@ -40,6 +41,7 @@ ConfigStore store;
 CsiSensor csi;
 PresenceStateMachine::Params smParams;
 PresenceStateMachine sm;
+LedController leds;
 
 volatile bool wifiUp = false;
 bool timeSynced = false;
@@ -48,6 +50,7 @@ bool timeSynced = false;
 float lastVariance = 0.0f;
 float lastMean = 0.0f;
 float lastPacketRate = 0.0f;
+float lastFastVariance = 0.0f;
 
 // calibration session
 struct Calibration {
@@ -58,14 +61,26 @@ struct Calibration {
   float values[kCalMaxSamples];
 } cal;
 
-// LAN mode: single-slot pending event with exponential backoff. Sized for a
-// sealed envelope (up to ~1 KB), not just the plaintext event.
-char pendingJson[1100] = "";
+// LAN mode: pending events with exponential backoff. Presence and the CSI
+// stream keep separate slots — a fall must never be dropped to make room for
+// a scope reading.
+char pendingPresence[320] = "";
+char pendingCsi[384] = "";
 uint32_t pendingAttempts = 0;
 uint32_t nextLanAttemptMs = 0;
 
 // encrypted envelope buffer (envelopes are larger than the plaintext event)
 char sealedJson[1024] = "";
+
+// One second of CSI readings, batched so the stream costs one request per
+// second instead of one per reading. The slow window is what the presence
+// rules compare against the threshold; the fast window is a ~0.25 s view
+// that reacts to a hand wave without waiting for the slow window to roll.
+float csiBatch[KH_CSI_BATCH];
+float csiFastBatch[KH_CSI_BATCH];
+size_t csiBatchCount = 0;
+uint32_t lastCsiEmitMs = 0;
+bool csiStreamOn = true;
 
 uint32_t lastSenseMs = 0;
 uint32_t lastStatusMs = 0;
@@ -108,7 +123,7 @@ void buildEventJson(char *out, size_t cap, const char *value) {
 }
 
 void emitPresence(const char *value) {
-  char json[sizeof(pendingJson)];
+  char json[sizeof(pendingPresence)];
   buildEventJson(json, sizeof(json), value);
   if (cfg.transport == TRANSPORT_LAN) {
     // Offline fallback: with no Wi-Fi the LAN path is dead, so also hand the
@@ -116,23 +131,70 @@ void emitPresence(const char *value) {
     // returns, flushLan may deliver it again; the engine treats a repeat as
     // confirmation, not a new alarm.
     if (!wifiUp) Serial.println(json);
-    if (cfg.encrypt && cfg.apiKey[0] && cfg.householdId[0] && cfg.sourceId[0]) {
-      // AES-256-GCM: the network sees identity + opaque ciphertext only.
-      if (sealIngestEvent(cfg.apiKey, cfg.householdId, cfg.sourceId, json,
-                          sealedJson, sizeof(sealedJson))) {
-        snprintf(pendingJson, sizeof(pendingJson), "%s", sealedJson);
-        pendingAttempts = 0;
-        nextLanAttemptMs = 0;
-        klog("event sealed for LAN (%s)", value);
-        return;
-      }
-      klog("sealing failed — falling back to plaintext for this event");
-    }
     // Presence is level-based: coalescing to the newest event is correct.
-    snprintf(pendingJson, sizeof(pendingJson), "%s", json);
+    snprintf(pendingPresence, sizeof(pendingPresence), "%s", json);
     pendingAttempts = 0;
     nextLanAttemptMs = 0;
-    klog("event queued for LAN: %s", json);
+  } else {
+    Serial.println(json);
+  }
+}
+
+/**
+ * The machine-readable CSI reading. This is what the live scope draws: the
+ * slow-window variance (the number the presence rules use) as `value`, plus a
+ * batch of slow readings and a batch of fast readings in `meta`, so one
+ * request carries a second of waveform in both time scales. Still scalars
+ * only — no per-subcarrier data leaves the chip.
+ */
+void buildCsiJson(char *out, size_t cap, const float *slow, const float *fast,
+                  size_t count, float slowVariance, float mean, float packetRate,
+                  const char *state) {
+  int n = snprintf(out, cap,
+                   "{\"type\":\"csi\",\"value\":%.2f,\"meta\":{\"mean\":%.1f,"
+                   "\"pkt\":%.1f,\"state\":\"%s\",\"thr\":%.1f,\"samples\":[",
+                   slowVariance, mean, packetRate, state, cfg.threshold);
+  if (n < 0) { out[0] = '\0'; return; }
+  size_t pos = static_cast<size_t>(n);
+  if (pos >= cap) { out[0] = '\0'; return; }
+  for (size_t i = 0; i < count; i++) {
+    if (pos + 12 >= cap) break;
+    n = snprintf(out + pos, cap - pos, "%s%.2f", i ? "," : "", slow[i]);
+    if (n < 0) break;
+    pos += static_cast<size_t>(n);
+    if (pos >= cap) { out[0] = '\0'; return; }
+  }
+  if (pos + 12 >= cap) { out[0] = '\0'; return; }
+  n = snprintf(out + pos, cap - pos, "],\"fast\":[");
+  if (n < 0) { out[0] = '\0'; return; }
+  pos += static_cast<size_t>(n);
+  for (size_t i = 0; i < count; i++) {
+    if (pos + 12 >= cap) break;
+    n = snprintf(out + pos, cap - pos, "%s%.2f", i ? "," : "", fast[i]);
+    if (n < 0) break;
+    pos += static_cast<size_t>(n);
+    if (pos >= cap) { out[0] = '\0'; return; }
+  }
+  if (timeSynced) {
+    snprintf(out + pos, cap - pos, "]},\"ts\":%llu}",
+             static_cast<unsigned long long>(epochMs()));
+  } else {
+    snprintf(out + pos, cap - pos, "]}}");
+  }
+}
+
+void emitCsi() {
+  if (csiBatchCount == 0) return;
+  char json[sizeof(pendingCsi)];
+  buildCsiJson(json, sizeof(json), csiBatch, csiFastBatch, csiBatchCount,
+               lastVariance, lastMean, lastPacketRate,
+               presenceValue(sm.state()));
+  csiBatchCount = 0;
+  if (json[0] == '\0') return;
+  if (cfg.transport == TRANSPORT_LAN) {
+    // A scope reading is a sample, not a state: dropping an intermediate
+    // batch is fine, so the newest batch replaces the old one.
+    snprintf(pendingCsi, sizeof(pendingCsi), "%s", json);
   } else {
     Serial.println(json);
   }
@@ -161,17 +223,39 @@ bool postIngest(const char *json) {
 }
 
 void flushLan(uint32_t nowMs) {
-  if (cfg.transport != TRANSPORT_LAN || pendingJson[0] == '\0' || !wifiUp) {
-    return;
-  }
+  if (cfg.transport != TRANSPORT_LAN || !wifiUp) return;
+  const bool hasPresence = pendingPresence[0] != '\0';
+  const bool hasCsi = pendingCsi[0] != '\0';
+  if (!hasPresence && !hasCsi) return;
   if (pendingAttempts > 0 &&
       static_cast<int32_t>(nowMs - nextLanAttemptMs) < 0) {
     return;  // backing off
   }
-  if (postIngest(pendingJson)) {
-    klog("ingest ok (%s)", presenceValue(sm.state()));
-    pendingJson[0] = '\0';
+
+  // Presence wins: a fall must not wait behind a scope reading.
+  const char *plain = hasPresence ? pendingPresence : pendingCsi;
+  const char *body = plain;
+  if (cfg.encrypt && cfg.apiKey[0] && cfg.householdId[0] && cfg.sourceId[0]) {
+    // Sealed per attempt, not per enqueue: a retry after a lost response
+    // must carry a fresh IV, or the server would reject it as a replay.
+    if (sealIngestEvent(cfg.apiKey, cfg.householdId, cfg.sourceId, plain,
+                        sealedJson, sizeof(sealedJson))) {
+      body = sealedJson;
+    } else {
+      klog("sealing failed — sending plaintext for this event");
+    }
+  }
+
+  if (postIngest(body)) {
+    if (hasPresence) {
+      klog("ingest ok (%s)", presenceValue(sm.state()));
+      pendingPresence[0] = '\0';
+    } else {
+      klog("csi batch accepted");
+      pendingCsi[0] = '\0';
+    }
     pendingAttempts = 0;
+    nextLanAttemptMs = 0;
   } else {
     const uint32_t delayMs =
         pendingAttempts < 6 ? 1000UL << pendingAttempts : KH_HTTP_BACKOFF_MAX_MS;
@@ -307,6 +391,7 @@ void printHelp() {
   Serial.println("  mode <lan|serial>   transport, saved");
   Serial.println("  enc <on|off>    AES-256-GCM seal LAN ingest (on = default), saved");
   Serial.println("  scan            scan Wi-Fi networks, print JSON lines (relay)");
+  Serial.println("  csi <on|off>    stream the live CSI scope readings (on = default)");
   Serial.println("  wififorget      clear stored Wi-Fi, disconnect");
   Serial.println("  statusjson      one-line machine-readable status (relay)");
   Serial.println("  factory         clear NVS, back to compiled defaults");
@@ -411,6 +496,17 @@ void dispatchCli(char *line) {
   } else if (strcmp(line, "falltest") == 0) {
     klog("falltest: emitting one 'fall' presence event");
     emitPresence("fall");
+  } else if (strcmp(line, "csi") == 0) {
+    if (strcmp(arg, "off") == 0) {
+      csiStreamOn = false;
+      csiBatchCount = 0;
+      klog("csi scope stream off");
+    } else if (strcmp(arg, "on") == 0) {
+      csiStreamOn = true;
+      klog("csi scope stream on");
+    } else {
+      klog("usage: csi <on|off>  (currently %s)", csiStreamOn ? "on" : "off");
+    }
   } else if (strcmp(line, "scan") == 0) {
     klog("scanning Wi-Fi networks (blocking, up to ~15 s)...");
     // Bounded scan: the Mac-side relay waits for the scanDone marker, so the
@@ -485,7 +581,7 @@ void printBanner() {
   Serial.println("==============================================");
   Serial.printf("Khayaal CSI room sensor v%s (%s %s)\n", kFwVersion,
                 __DATE__, __TIME__);
-  Serial.println("presence only — raw CSI never leaves this device");
+  Serial.println("presence + variance scalars only — raw CSI never leaves");
   Serial.println("==============================================");
   if (!timeSynced && cfg.transport == TRANSPORT_LAN) {
     klog("note: without NTP the LAN path cannot stamp ts; sync once online");
@@ -498,6 +594,8 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   printBanner();
+
+  leds.begin();
 
   store.load(&cfg);
   smParams.threshold = cfg.threshold;
@@ -523,8 +621,13 @@ void loop() {
   const uint32_t nowMs = millis();
   handleCli();
 
+  // The Wi-Fi flag is written from the event handler; the LEDs read it here,
+  // in loop context, so no LED work ever happens off the main task.
+  leds.onWifi(wifiUp, nowMs);
+
   if (cal.active) {
     runCalibration(nowMs);
+    leds.tick(nowMs);
     return;
   }
 
@@ -541,6 +644,12 @@ void loop() {
       lastVariance = st.variance;
       lastMean = st.mean;
       lastPacketRate = st.packetRate;
+      lastFastVariance = st.fastVariance;
+      if (csiStreamOn && csiBatchCount < KH_CSI_BATCH) {
+        csiBatch[csiBatchCount] = st.variance;
+        csiFastBatch[csiBatchCount] = st.fastVariance;
+        csiBatchCount++;
+      }
     }
     const Presence before = sm.state();
     const Presence after =
@@ -549,7 +658,9 @@ void loop() {
       if (after == Presence::Lost) klog("presence lost (no Wi-Fi link)");
       if (after == Presence::Fall) klog("FALL pattern detected (spike then stillness)");
       emitPresence(presenceValue(after));
+      leds.onPresence(presenceValue(after));
     }
+    if (haveData) leds.onCsiSample(nowMs);
     if (nowMs - lastStatusMs >= kStatusPeriodMs) {
       lastStatusMs = nowMs;
       if (haveData) {
@@ -563,6 +674,15 @@ void loop() {
     }
   }
 
+  // One batched CSI event per second. The scope on the dashboard draws these
+  // as a live waveform; the presence state above still decides everything
+  // that matters.
+  if (csiStreamOn && csiBatchCount > 0 &&
+      nowMs - lastCsiEmitMs >= KH_CSI_EMIT_MS) {
+    lastCsiEmitMs = nowMs;
+    emitCsi();
+  }
+
   if (wifiUp && (sm.state() == Presence::Idle || sm.state() == Presence::Motion) &&
       nowMs - lastHeartbeatMs >= KH_HEARTBEAT_MS) {
     lastHeartbeatMs = nowMs;
@@ -571,4 +691,5 @@ void loop() {
 
   pollDeviceActions(nowMs);
   flushLan(nowMs);
+  leds.tick(nowMs);
 }

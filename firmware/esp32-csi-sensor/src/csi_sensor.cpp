@@ -107,17 +107,33 @@ bool CsiSensor::readStats(Stats *out) {
     portEXIT_CRITICAL(&s_mux);
     return false;
   }
+  // The window is a ring: the newest sample sits just before s_head, so the
+  // last n samples are read backwards from there. Reading s_window[0..n-1]
+  // instead would average the oldest samples in the buffer.
+  const uint16_t fastN = n < KH_CSI_FAST_SAMPLES ? n : KH_CSI_FAST_SAMPLES;
   float sum = 0.0f, sumSq = 0.0f;
+  float fastSum = 0.0f, fastSumSq = 0.0f;
   for (uint16_t i = 0; i < n; i++) {
-    const float v = s_window[i];
+    const uint16_t idx =
+        static_cast<uint16_t>((s_head + KH_CSI_WINDOW - n + i) % KH_CSI_WINDOW);
+    const float v = s_window[idx];
     sum += v;
     sumSq += v * v;
+  }
+  for (uint16_t i = 0; i < fastN; i++) {
+    const uint16_t idx =
+        static_cast<uint16_t>((s_head + KH_CSI_WINDOW - fastN + i) % KH_CSI_WINDOW);
+    const float v = s_window[idx];
+    fastSum += v;
+    fastSumSq += v * v;
   }
   const uint32_t total = s_total;
   portEXIT_CRITICAL(&s_mux);
 
   const float mean = sum / static_cast<float>(n);
   const float variance = sumSq / static_cast<float>(n) - mean * mean;
+  const float fastMean = fastSum / static_cast<float>(fastN);
+  const float fastVariance = fastSumSq / static_cast<float>(fastN) - fastMean * fastMean;
 
   float rate = 0.0f;
   if (s_haveRateSample && now > s_lastStatsMs) {
@@ -132,5 +148,7 @@ bool CsiSensor::readStats(Stats *out) {
   out->mean = mean;
   out->samples = n;
   out->packetRate = rate;
+  out->fastVariance = fastVariance;
+  out->fastSamples = fastN;
   return true;
 }

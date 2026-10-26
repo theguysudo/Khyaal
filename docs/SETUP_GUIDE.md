@@ -57,6 +57,7 @@ keys exist — otherwise that channel is a silent no-op.
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Browser push to the dashboard | `npx web-push generate-vapid-keys` (subject = `mailto:you@example.com`). |
 | `NVIDIA_API_KEY` | LLM behaviour analysis + "Ask Khayaal", served by `minimaxai/minimax-m3.1-flash` on NVIDIA NIM | build.nvidia.com → API key (free tier). One key covers both the MiniMax and the Nemotron models. |
 | `OPENROUTER_API_KEY` | The same, as a second provider | openrouter.ai/keys. Optional — the server falls back to NVIDIA NIM and then to OpenRouter, so a missing key never breaks the assistant. |
+| `XAI_API_KEY` | Grok (api.x.ai) as a provider for the assistant, analysis, blueprint generation and motion narration | console.x.ai → API key. Optional; pick "xAI Grok" in a dashboard provider menu to use it. |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` (or `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`) | Firestore persistence (instead of in-memory) + FCM push to the Android app | Firebase console → project → service account → JSON |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | care-circle email on tier 3 | any free mailbox with SMTP (e.g. Gmail app password) |
 
@@ -74,8 +75,9 @@ them**, so re-create (2 minutes, see step 2).
 > python3 firmware/tunnel/register_source.py --server http://localhost:3100
 > ```
 >
-> That rewrites `firmware/tunnel/config.json`. Restart the relay afterwards so
-> it picks the new credentials up (it caches the config at startup).
+> That rewrites `firmware/tunnel/config.json`. **You no longer need to restart
+> the relay** — it notices the rejection and adopts the new credentials within
+> ~3 s (it logs `picked up a new source from config.json`).
 
 ### Create a family
 
@@ -185,6 +187,12 @@ python3 firmware/tunnel/khayaal_serial_bridge.py    # the relay; keep it running
 No reflashing is ever needed to change networks. Passwords travel
 family-session → server → USB relay only and are never stored server-side.
 
+The panel also tells you which half is missing when a scan does not come
+back: a **"USB relay: checking in every 3 s"** line that flips to **"not
+checking in"** ~30 s after the relay stops, and an explicit message naming
+the remedy (start the relay, or re-run `register_source.py`). A leftover scan
+from an earlier press is never shown as the answer to a new one.
+
 **Tunnel alternative (no device HTTP at all):** leave the transport in the
 default `serial` mode and run the bridge, which seals everything with
 AES-256-GCM before POSTing:
@@ -223,3 +231,5 @@ CI runs the engine/web job and the Android APK job on every push.
 | Sensor `show` says `wifi=down` | 5 GHz network, or hotspot lost — re-join (2.4 GHz / Maximize Compatibility) and `show` again |
 | `encrypt=off` unexpectedly | someone ran `enc off` — send `enc on` from the serial monitor |
 | FCM/email alerts don't arrive | those channels are no-ops without `FIREBASE_*` / `SMTP_*` env; browser push and the app's alarm overlay work without any keys |
+| Talkback: "This address cannot use the microphone" | browsers only expose the mic on a **secure origin**. `http://localhost:3100` works; `http://192.168.x.x:3100` does not — for a phone on the LAN, put the server behind HTTPS |
+| Talkback: "Your browser blocked the microphone" | the page-level block was lifted; the browser's own permission is still denied — allow the mic from the icon beside the address bar, then press again |

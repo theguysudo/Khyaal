@@ -1,6 +1,7 @@
 import type {
   AppCommand,
   Baseline,
+  CsiPoint,
   DeviceAction,
   Household,
   HouseholdEvent,
@@ -64,6 +65,13 @@ export interface Store {
   getDeviceScan(sourceId: string): Promise<unknown | null>;
   putDeviceStatus(sourceId: string, status: unknown): Promise<void>;
   getDeviceStatus(sourceId: string): Promise<unknown | null>;
+  /**
+   * When the Mac-side USB relay last polled this source for actions. The
+   * dashboard uses it to tell "the relay is not running" apart from "the
+   * sensor did not answer" — without it, a missing scan is silence.
+   */
+  noteRelaySeen(sourceId: string): Promise<void>;
+  getRelaySeen(sourceId: string): Promise<number | null>;
 
   // talkback (consent-first walkie-talkie between family and parent)
   createTalkbackSession(session: TalkbackSession): Promise<TalkbackSession>;
@@ -90,6 +98,14 @@ export interface Store {
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
   getSignals(householdId: string, sinceTs: number): Promise<Signal[]>;
+  /**
+   * The CSI stream — one batched reading per second from the room sensor.
+   * Kept apart from the signal log on purpose: at 1 Hz a shared 5000-entry
+   * log would be full of scope readings in under two hours, and the presence
+   * events that actually matter would fall out of retention.
+   */
+  appendCsi(householdId: string, point: CsiPoint): Promise<void>;
+  getCsi(householdId: string, sinceTs: number, limit?: number): Promise<CsiPoint[]>;
   clearSignals(householdId: string): Promise<void>;
 
   // state
@@ -121,6 +137,7 @@ export interface Store {
 interface MemoryDb {
   households: Map<string, Household>;
   signals: Map<string, string[]>; // AES-256-GCM envelopes, never plaintext
+  csi: Map<string, string[]>; // the live scope readings, same encryption
   states: Map<string, HouseholdState>;
   events: Map<string, HouseholdEvent[]>;
   sources: Map<string, Source[]>;
@@ -132,6 +149,7 @@ interface MemoryDb {
   deviceActions: Map<string, DeviceAction[]>; // keyed by sourceId
   deviceScan: Map<string, { data: unknown; ts: number }>;
   deviceStatus: Map<string, { data: unknown; ts: number }>;
+  deviceRelaySeen: Map<string, number>; // keyed by sourceId
   talkbackSessions: Map<string, TalkbackSession>; // keyed by sessionId
   talkbackChunks: Map<string, TalkbackChunk[]>; // keyed by sessionId
 }
@@ -143,6 +161,7 @@ function db(): MemoryDb {
     g.__khayaalDb = {
       households: new Map(),
       signals: new Map(),
+      csi: new Map(),
       states: new Map(),
       events: new Map(),
       sources: new Map(),
@@ -154,6 +173,7 @@ function db(): MemoryDb {
       deviceActions: new Map(),
       deviceScan: new Map(),
       deviceStatus: new Map(),
+      deviceRelaySeen: new Map(),
       talkbackSessions: new Map(),
       talkbackChunks: new Map(),
     };
@@ -290,6 +310,12 @@ export class MemoryStore implements Store {
     if (!hit || Date.now() - hit.ts > 600_000) return null;
     return hit.data;
   }
+  async noteRelaySeen(sourceId: string): Promise<void> {
+    db().deviceRelaySeen.set(sourceId, Date.now());
+  }
+  async getRelaySeen(sourceId: string): Promise<number | null> {
+    return db().deviceRelaySeen.get(sourceId) ?? null;
+  }
 
   // -- Talkback ---------------------------------------------------------------
 
@@ -366,6 +392,27 @@ export class MemoryStore implements Store {
   }
   async clearSignals(householdId: string): Promise<void> {
     db().signals.set(householdId, []);
+  }
+
+  async appendCsi(householdId: string, point: CsiPoint): Promise<void> {
+    const list = db().csi.get(householdId) ?? [];
+    list.push(encrypt(JSON.stringify(point)));
+    // 30 minutes of a 1 Hz stream; the scope only ever draws the last few
+    // minutes, and the movement trail needs a bit more than that.
+    db().csi.set(householdId, list.slice(-1800));
+  }
+  async getCsi(
+    householdId: string,
+    sinceTs: number,
+    limit = 900,
+  ): Promise<CsiPoint[]> {
+    return (db().csi.get(householdId) ?? [])
+      .map((env) => {
+        const plain = decrypt(env);
+        return plain ? (JSON.parse(plain) as CsiPoint) : null;
+      })
+      .filter((p): p is CsiPoint => p !== null && p.ts >= sinceTs)
+      .slice(-limit);
   }
 
   async getState(householdId: string): Promise<HouseholdState | null> {

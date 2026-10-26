@@ -19,9 +19,10 @@ export async function GET(
   const src = await getStore().findSource(id, sourceId);
   if (!src || src.type !== 'esp32') return unauthorized();
 
-  const [raw, status] = await Promise.all([
+  const [raw, status, relaySeenTs] = await Promise.all([
     getStore().getDeviceScan(sourceId),
     getStore().getDeviceStatus(sourceId),
+    getStore().getRelaySeen(sourceId),
   ]);
 
   // One shape, always: the scan is an object with the list, the count and the
@@ -29,11 +30,20 @@ export async function GET(
   // normalised up to the same shape — the dashboard only ever has to read
   // `scan.networks` and `scan.error`.
   const scan = Array.isArray(raw)
-    ? { networks: raw, count: raw.length, error: null }
-    : ((raw as { networks?: unknown[]; count?: number; error?: string | null } | null) ?? null);
+    ? { networks: raw, count: raw.length, error: null, ts: null }
+    : ((raw as { networks?: unknown[]; count?: number; error?: string | null; ts?: number } | null) ?? null);
 
   return NextResponse.json(
-    { scan, networks: scan?.networks ?? null, status },
+    {
+      scan,
+      networks: scan?.networks ?? null,
+      status,
+      // When the USB relay last polled for actions on this source. The panel
+      // uses it to say whether the relay is running at all before blaming
+      // the sensor for an empty scan.
+      relay: { lastSeenTs: relaySeenTs },
+      serverTs: Date.now(),
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

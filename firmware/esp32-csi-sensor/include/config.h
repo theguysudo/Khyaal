@@ -82,6 +82,15 @@
 #define KH_CSI_WINDOW 100
 // Minimum packets in the window before variance is trusted.
 #define KH_CSI_MIN_SAMPLES 20
+// Packets in the short "fast" window (~0.25 s) used by the live scope, so a
+// hand wave shows up immediately instead of after a full slow window.
+#define KH_CSI_FAST_SAMPLES 24
+// How many variance readings one "csi" event carries. The device samples at
+// 4 Hz and batches one second of readings into a single event, so the stream
+// costs one request per second instead of four.
+#define KH_CSI_BATCH 4
+// How often the batched csi event is emitted (ms).
+#define KH_CSI_EMIT_MS 1000u
 // Only accept CSI frames transmitted by the associated AP (stable baseline).
 // Set to 0 to accept frames from any transmitter (busy rooms with mesh APs).
 #define KH_CSI_FILTER_AP_BSSID 1

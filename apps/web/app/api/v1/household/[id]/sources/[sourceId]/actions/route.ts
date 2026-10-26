@@ -89,6 +89,10 @@ export async function POST(
     ok: true,
     action,
     via: channels,
+    // The server's clock when the action was queued. The panel compares it
+    // with the timestamp of the result it gets back, so a scan left over
+    // from an earlier press is never mistaken for the answer to this one.
+    ts: Date.now(),
     note: channels.includes('usb')
       ? 'The USB relay runs this within ~3 s.'
       : 'The sensor fires on its next poll (~5 s).',

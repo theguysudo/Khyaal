@@ -16,7 +16,7 @@ signals, wellbeing scores, care-circle identities, pairing keys.
 | Session hand-off | One-time, 5-minute, single-use transfer links for phones |
 | Rate limiting | Sliding-window per IP: ingest 120/min, pair 10/min, commands 20/min, analysis 6/min, assistant 10/min |
 | Input validation | Strict signal-type allow-list; command text rejected beyond 280 chars; emails validated; unknown actions → 400 |
-| Transport headers | CSP, X-Frame-Options DENY, nosniff, strict Referrer-Policy, Permissions-Policy locking camera/mic/geolocation |
+| Transport headers | CSP, X-Frame-Options DENY, nosniff, strict Referrer-Policy, Permissions-Policy locking camera and geolocation while allowing the microphone on our own origin — the consent-gated talkback needs it, and `microphone=()` made `getUserMedia` reject outright with no browser prompt to allow |
 | Privacy by API | The child-facing state bundle contains no raw signals and no API keys — enforced by construction |
 | Least data | No location permission on Android; ESP32 emits a presence scalar only; audio never leaves the device |
 | Secret hygiene | `.env.local`, `.session-secret`, `.crypto-key` are gitignored; the OAuth client secret never ships to the app (assistant/analysis are proxied server-side) |

@@ -58,6 +58,73 @@ export function resample(input: Float32Array, fromRate: number, toRate: number):
 }
 
 /**
+ * Why the microphone could not be opened. Every one of these used to collapse
+ * into a single "the microphone is blocked" message, which sent people to
+ * their browser settings when the real cause was an unplugged headset.
+ */
+export type MicFailure =
+  | 'insecure-context'
+  | 'permission-denied'
+  | 'no-device'
+  | 'device-busy'
+  | 'audio-unavailable'
+  | 'unknown';
+
+export interface MicStartResult {
+  ok: boolean;
+  reason?: MicFailure;
+  /** The browser's own message, when it is worth showing. */
+  detail?: string;
+}
+
+/** Maps a DOMException from getUserMedia onto something a human can act on. */
+function classifyMicError(err: unknown): MicFailure {
+  const name = (err as { name?: string })?.name ?? '';
+  switch (name) {
+    case 'NotAllowedError':
+    case 'PermissionDeniedError':
+    case 'SecurityError':
+      return 'permission-denied';
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+    case 'OverconstrainedError':
+      return 'no-device';
+    case 'NotReadableError':
+    case 'TrackStartError':
+      return 'device-busy';
+    default:
+      return 'unknown';
+  }
+}
+
+function describeError(err: unknown): string | undefined {
+  const e = err as { name?: string; message?: string } | undefined;
+  if (!e) return undefined;
+  if (e.name && e.message) return `${e.name}: ${e.message}`;
+  return e.name ?? e.message;
+}
+
+/** The sentence shown to the family when the mic will not open. */
+export function micFailureMessage(reason?: MicFailure, detail?: string): string {
+  switch (reason) {
+    case 'insecure-context':
+      return 'This address cannot use the microphone — browsers only allow it on a secure origin. Open the dashboard on https:// or on localhost and try again.';
+    case 'permission-denied':
+      return 'Your browser blocked the microphone for this page. Allow it from the icon beside the address bar (or the site settings), then hold the button again.';
+    case 'no-device':
+      return 'No microphone was found on this device.';
+    case 'device-busy':
+      return 'Another app is using the microphone. Close it and try again.';
+    case 'audio-unavailable':
+      return 'This browser could not start its audio engine.';
+    default:
+      return detail
+        ? `The microphone could not be opened (${detail}).`
+        : 'The microphone could not be opened.';
+  }
+}
+
+/**
  * Microphone capture. Produces base64 PCM16 slices at 16 kHz.
  * `onChunk` is called roughly every 250 ms while recording.
  */
@@ -73,10 +140,31 @@ export class MicCapture {
     return this.running;
   }
 
-  async start(onChunk: (base64: string) => void): Promise<boolean> {
-    if (this.running) return true;
-    if (typeof window === 'undefined') return false;
-    if (!navigator.mediaDevices?.getUserMedia) return false;
+  async start(onChunk: (base64: string) => void): Promise<MicStartResult> {
+    if (this.running) return { ok: true };
+    if (typeof window === 'undefined') return { ok: false, reason: 'audio-unavailable' };
+
+    // The microphone only exists in a secure context. `http://localhost`
+    // counts as one; a plain `http://192.168.x.x` LAN address does not, and
+    // there is no permission prompt to fix it — the API is simply absent.
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      return { ok: false, reason: 'insecure-context' };
+    }
+
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return { ok: false, reason: 'audio-unavailable' };
+
+    // Open the audio context inside the click, before the first await: iOS
+    // Safari refuses to resume a context created after the gesture ended.
+    try {
+      this.ctx = new Ctor();
+      if (this.ctx.state === 'suspended') await this.ctx.resume();
+    } catch (err) {
+      this.stop();
+      return { ok: false, reason: 'audio-unavailable', detail: describeError(err) };
+    }
 
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
@@ -87,19 +175,10 @@ export class MicCapture {
           autoGainControl: true,
         },
       });
-    } catch {
-      return false;
-    }
-
-    const Ctor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) {
+    } catch (err) {
       this.stop();
-      return false;
+      return { ok: false, reason: classifyMicError(err), detail: describeError(err) };
     }
-    this.ctx = new Ctor();
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
 
     this.source = this.ctx.createMediaStreamSource(this.stream);
     // ScriptProcessor is deprecated but it is the one node that works
@@ -137,8 +216,18 @@ export class MicCapture {
     this.processor.connect(mute);
     mute.connect(this.ctx.destination);
 
+    // A context that came back suspended (some mobile browsers) would
+    // capture silence; one more resume attempt here is cheap.
+    if (this.ctx.state !== 'running') {
+      try {
+        await this.ctx.resume();
+      } catch {
+        /* playback will report the problem; capture still opens */
+      }
+    }
+
     this.running = true;
-    return true;
+    return { ok: true };
   }
 
   stop(): void {

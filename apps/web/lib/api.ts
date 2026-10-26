@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Contribution, Household, HouseholdEvent, Tier } from '@khayaal/shared';
+import type {
+  Blueprint,
+  CsiAnchor,
+  CsiEstimate,
+  CsiEvent,
+  CsiPoint,
+  Contribution,
+  Household,
+  HouseholdEvent,
+  Tier,
+} from '@khayaal/shared';
 
 /** Client-safe mirror of the server TickBundle (never imports server code). */
 export interface Bundle {
@@ -78,6 +88,53 @@ export function useHouseholdState(id: string, intervalMs = 1500) {
         if (!res.ok) throw new Error(data.error ?? 'Failed to load');
         if (alive) {
           setBundle(data as Bundle);
+          setError(null);
+        }
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : 'Failed to load');
+      } finally {
+        busy.current = false;
+      }
+    };
+    poll();
+    const t = setInterval(poll, intervalMs);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [id, intervalMs]);
+
+  return { bundle, error };
+}
+
+/** Live CSI scope bundle — client-safe mirror of GET /api/v1/household/{id}/csi. */
+export interface CsiBundle {
+  points: CsiPoint[];
+  events: CsiEvent[];
+  anchors: CsiAnchor[];
+  estimated: CsiEstimate | null;
+  threshold: number;
+  blueprint: Blueprint;
+  nowTs: number;
+}
+
+/** Polling hook for the room sensor's live scope (same pattern as useHouseholdState). */
+export function useCsiSeries(id: string, intervalMs = 1000) {
+  const [bundle, setBundle] = useState<CsiBundle | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    const poll = async () => {
+      if (busy.current) return;
+      busy.current = true;
+      try {
+        const res = await fetch(`/api/v1/household/${id}/csi`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed to load');
+        if (alive) {
+          setBundle(data as CsiBundle);
           setError(null);
         }
       } catch (e) {

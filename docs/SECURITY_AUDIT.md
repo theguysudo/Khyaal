@@ -53,7 +53,7 @@ The tunnel `config.json` stores the source API key in plaintext on the operator'
 - Google OAuth: random `state` double-submitted via cookie (CSRF-safe), redirect URI fixed to localhost, profile fetched from Google's OIDC endpoint; secrets only in `.env.local` (gitignored).
 - Transfer links: one-time, 5-minute TTL, single-use (consumed on first hit), full-profile rotation on claim.
 - At rest: signals are AES-256-GCM encrypted (`crypto-box.ts`, key outside the repo) before touching the store, and the Firestore adapter keeps that envelope format.
-- Transport to browsers: security headers (CSP, X-Frame-Options DENY, nosniff, Permissions-Policy locking camera/mic/geolocation) on every response; HSTS noted as N/A for LAN HTTP demos.
+- Transport to browsers: security headers (CSP, X-Frame-Options DENY, nosniff, Permissions-Policy locking camera and geolocation, microphone allowed on our own origin) on every response; HSTS noted as N/A for LAN HTTP demos. The microphone exception is deliberate and narrow — the talkback is consent-gated on both sides, the audio is never written to disk, and locking it as `microphone=()` made `getUserMedia` reject outright with no browser prompt to allow.
 
 ## 2. Known limits (honest)
 - LAN HTTP between device and server on the personal hotspot is protected by the envelope-level AES-256-GCM above, not by TLS; there is no server certificate on a hotspot demo.

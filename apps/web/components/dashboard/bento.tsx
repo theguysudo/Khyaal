@@ -24,10 +24,12 @@ export function useReducedMotion() {
 }
 
 export function useSize() {
-  const ref = React.useRef(null as HTMLDivElement | null);
+  // Callback-ref, not object-ref: cards like the CSI scope render their
+  // measured div only once data arrives, and an effect keyed on an object
+  // ref would capture null on first paint and never observe the real node.
+  const [el, setEl] = React.useState<HTMLDivElement | null>(null);
   const [size, setSize] = React.useState({ w: 0, h: 0 });
   React.useEffect(() => {
-    const el = ref.current;
     if (!el) return;
     const ro = new ResizeObserver(([e]) => {
       const w = Math.round(e.contentRect.width);
@@ -36,8 +38,8 @@ export function useSize() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
-  return [ref, size] as const;
+  }, [el]);
+  return [setEl, size] as const;
 }
 
 /** smooth path through points (catmull-rom as cubic beziers) */

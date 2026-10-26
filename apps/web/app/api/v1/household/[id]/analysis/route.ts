@@ -32,7 +32,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   const requested = typeof body.provider === 'string' ? body.provider.toLowerCase() : '';
   const provider: LlmProvider | 'auto' =
-    requested === 'minimax' || requested === 'nvidia' || requested === 'openrouter'
+    requested === 'minimax' ||
+    requested === 'nvidia' ||
+    requested === 'openrouter' ||
+    requested === 'xai'
       ? requested
       : 'auto';
 

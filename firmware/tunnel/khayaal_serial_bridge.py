@@ -32,6 +32,7 @@ import base64
 import glob
 import json
 import sys
+import termios
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -58,6 +59,11 @@ READ_TIMEOUT_S = 1.0
 POST_TIMEOUT_S = 5.0
 POST_RETRIES = 3
 RECONNECT_DELAY_S = 2.0
+
+# Device event types the relay passes on to the server. "presence" is the
+# state machine's verdict; "csi" is the batched live reading the dashboard
+# scope draws. Everything else the board prints (scan/status JSON) stays local.
+FORWARDED_TYPES = frozenset({"presence", "csi"})
 
 
 def log(msg: str) -> None:
@@ -346,20 +352,25 @@ def _post_wifi(
 
 def poll_manage(
     ser: "serial.Serial",
-    endpoint_base: str,
-    household_id: str,
-    source_id: str,
-    api_key: str,
+    manage: dict[str, Any],
     forward=None,
+    config_path: Optional[Path] = None,
 ) -> None:
     """Drain dashboard-queued actions; returns quickly when the queue is empty.
 
     Only the 'usb' channel is drained here — the sensor's own Wi-Fi poll takes
     the 'lan' channel, and the two must not eat each other's work.
+
+    `manage` holds the live identity (base/householdId/sourceId/apiKey). It is
+    updated in place when the source is re-registered, so a restart of the
+    server no longer costs a restart of the bridge.
     """
+    household_id = manage["householdId"]
+    source_id = manage["sourceId"]
+    api_key = manage["apiKey"]
     try:
         resp = requests.get(
-            f"{endpoint_base}/api/v1/device/actions?via=usb",
+            f"{manage['base']}/api/v1/device/actions?via=usb",
             headers={
                 "x-kh-household": household_id,
                 "x-kh-source": source_id,
@@ -368,11 +379,84 @@ def poll_manage(
             timeout=5,
         )
         if resp.status_code != 200:
+            _log_poll_failure(resp, household_id, source_id)
+            # The operator may have re-registered the source while we were
+            # running. Adopt the new identity instead of staying broken.
+            if resp.status_code in (401, 403, 404) and config_path is not None:
+                reload_identity(manage, config_path)
             return
         for act in resp.json().get("actions", []):
-            run_manage_action(ser, act, endpoint_base, household_id, source_id, api_key, forward)
-    except (requests.RequestException, ValueError):
-        pass
+            name = str(act.get("action", ""))
+            try:
+                run_manage_action(ser, act, manage["base"], household_id, source_id, api_key, forward)
+            except Exception as exc:  # one bad action must not kill the bridge
+                log(f"manage: {name} failed: {exc}")
+                if name == "wifi_scan":
+                    # Tell the dashboard, so the panel says what went wrong
+                    # instead of waiting for a scan that will never arrive.
+                    _post_wifi(manage["base"], {"kind": "scan", "networks": [],
+                                                "count": 0, "error": f"the relay failed: {exc}"},
+                               household_id, source_id, api_key)
+    except (requests.RequestException, ValueError) as exc:
+        _log_poll_error(exc)
+
+
+def reload_identity(manage: dict[str, Any], config_path: Path) -> bool:
+    """Adopt a re-registered identity from the config file.
+
+    The server keeps sources in memory, so restarting it invalidates them.
+    register_source.py fixes that and rewrites config.json — this picks the
+    new values up without restarting the bridge.
+    """
+    try:
+        cfg = load_config(config_path)
+    except SystemExit:
+        # A half-written config is not worth killing the bridge over.
+        return False
+    fresh = {
+        "householdId": str(cfg.get("householdId") or ""),
+        "sourceId": str(cfg.get("sourceId") or ""),
+        "apiKey": str(cfg.get("apiKey") or ""),
+    }
+    if not all(fresh.values()):
+        return False
+    if all(fresh[k] == manage.get(k) for k in fresh):
+        return False
+    manage.update(fresh)
+    log(f"manage: picked up a new source from {config_path.name} "
+        f"(household={fresh['householdId']} source={fresh['sourceId']}) — trying again")
+    return True
+
+
+_last_poll_problem_log = 0.0
+
+
+def _log_poll_error(exc: Exception) -> None:
+    """Log a connection problem, but not once every three seconds."""
+    global _last_poll_problem_log
+    now = time.time()
+    if now - _last_poll_problem_log < 60:
+        return
+    _last_poll_problem_log = now
+    log(f"manage: cannot reach the server ({exc}) — is it running?")
+
+
+def _log_poll_failure(resp, household_id: str, source_id: str) -> None:
+    """Say why the action poll failed — silence here looks like a dead board."""
+    global _last_poll_problem_log
+    body = (resp.text or "").strip()
+    if resp.status_code in (401, 403, 404):
+        now = time.time()
+        if now - _last_poll_problem_log < 60:
+            return
+        _last_poll_problem_log = now
+        log(f"manage: the server rejected this relay ({resp.status_code}) "
+            f"household={household_id} source={source_id} {body}")
+        log("manage: the server keeps sources in memory, so restarting it makes "
+            "these credentials stale. Fix it with: "
+            "python3 firmware/tunnel/register_source.py")
+    else:
+        log(f"manage: action poll failed ({resp.status_code}) {body}")
 
 
 # ------------------------------------------------------------------ main loop
@@ -380,7 +464,8 @@ def read_loop(
     port_name: str,
     baud: int,
     forward,  # Callable[[dict[str, Any]], bool]
-    manage: Optional[dict[str, str]] = None,
+    manage: Optional[dict[str, Any]] = None,
+    config_path: Optional[Path] = None,
 ) -> None:
     """Read JSON lines forever; reconnect on any serial error.
     `manage` (household/source/key + base) enables the dashboard relay."""
@@ -393,8 +478,7 @@ def read_loop(
                 while True:
                     if manage and time.time() - last_manage > MANAGE_POLL_S:
                         last_manage = time.time()
-                        poll_manage(ser, manage["base"], manage["householdId"],
-                                    manage["sourceId"], manage["apiKey"], forward)
+                        poll_manage(ser, manage, forward, config_path)
                     chunk = ser.read(256)
                     if not chunk:
                         continue
@@ -412,38 +496,43 @@ def read_loop(
                         except json.JSONDecodeError as exc:
                             log(f"bad JSON from device ({exc}): {line[:120]}")
                             continue
-                        if event.get("type") != "presence":
+                        if event.get("type") not in FORWARDED_TYPES:
                             # scan/status JSON and device log JSON stay local
                             if not event.get("scan") and not event.get("status"):
                                 log(f"ignored non-presence event: {line[:120]}")
                             continue
                         if not forward(event):
                             log("forwarding failed; continuing to read")
-        except serial.SerialException as exc:
+        except (serial.SerialException, OSError, termios.error) as exc:
+            # termios.error (a wedged CP2102 raises `Invalid argument (22)` on
+            # every baud) is NOT an OSError subclass, so it must be named —
+            # otherwise a replug-recoverable glitch kills the bridge.
             log(f"serial error on {port_name}: {exc} — retrying in "
-                f"{RECONNECT_DELAY_S:.0f}s")
-            time.sleep(RECONNECT_DELAY_S)
-        except OSError as exc:
-            log(f"OS error on {port_name}: {exc} — retrying in "
                 f"{RECONNECT_DELAY_S:.0f}s")
             time.sleep(RECONNECT_DELAY_S)
 
 
 def build_forwarder(
     endpoint: str,
-    household_id: str,
-    source_id: str,
-    api_key: str,
+    identity: dict[str, Any],
     dry_run: bool,
     encrypt: bool = True,
 ):
-    """Wrap identity + sealing + POST policy into a single callable."""
+    """Wrap identity + sealing + POST policy into a single callable.
+
+    `identity` is live: when the server rejects our credentials and the source
+    is re-registered, the values are swapped in place and the next event uses
+    them without restarting the bridge.
+    """
 
     if encrypt and not _CRYPTO_OK:
         log("WARNING: 'cryptography' not installed — falling back to PLAINTEXT "
             "ingest. Install with: pip3 install cryptography")
 
     def forward(event: dict[str, Any]) -> bool:
+        household_id = identity["householdId"]
+        source_id = identity["sourceId"]
+        api_key = identity["apiKey"]
         ts = event.get("ts")
         if not isinstance(ts, int) or ts <= 0:
             event = dict(event)
@@ -452,8 +541,15 @@ def build_forwarder(
             payload = encrypt_event(event, household_id, source_id, api_key)
         else:
             payload = enrich(event, household_id, source_id, api_key)
-        log(f"presence: {payload.get('value', event.get('value'))} "
-            f"(source {source_id}{' sealed' if encrypt and _CRYPTO_OK else ''})")
+        kind = event.get("type", "presence")
+        if kind == "csi":
+            # One batched reading per second — logging every one would drown
+            # the presence lines in the relay log.
+            log(f"csi: variance {event.get('value')} "
+                f"(source {source_id}{' sealed' if encrypt and _CRYPTO_OK else ''})")
+        else:
+            log(f"presence: {payload.get('value', event.get('value'))} "
+                f"(source {source_id}{' sealed' if encrypt and _CRYPTO_OK else ''})")
         return post_event(endpoint, payload, dry_run)
 
     return forward
@@ -516,23 +612,24 @@ def main(argv: Optional[list[str]] = None) -> int:
     log(f"bridge starting: port={port_name} baud={args.baud} "
         f"endpoint={endpoint} dry_run={args.dry_run} "
         f"encrypt={args.encrypt and _CRYPTO_OK}")
+    # One live identity, shared by the ingest forwarder and the dashboard
+    # relay. It is updated in place when the source is re-registered.
+    link = {
+        "base": endpoint.rsplit("/api/", 1)[0],
+        "householdId": household_id,
+        "sourceId": source_id,
+        "apiKey": api_key,
+    }
     forwarder = build_forwarder(
-        endpoint, household_id, source_id, api_key, args.dry_run,
-        encrypt=args.encrypt,
+        endpoint, link, args.dry_run, encrypt=args.encrypt,
     )
-    # Management base: same server root as the ingest endpoint.
-    manage_base = endpoint.rsplit("/api/", 1)[0]
     manage = None
     if not args.dry_run and household_id and source_id and api_key:
-        manage = {
-            "base": manage_base,
-            "householdId": household_id,
-            "sourceId": source_id,
-            "apiKey": api_key,
-        }
+        manage = link
         log("dashboard relay on (falltest + Wi-Fi management over USB)")
     try:
-        read_loop(port_name, args.baud, forwarder, manage=manage)
+        read_loop(port_name, args.baud, forwarder, manage=manage,
+                  config_path=args.config)
     except KeyboardInterrupt:
         log("stopped")
     return 0

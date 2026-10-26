@@ -4,8 +4,9 @@ The room sensor is **optional**. Khayaal degrades gracefully to phone-only;
 adding the ESP32 raises confidence (and adds a `presence` signal the engine
 already understands). The sensor reads Wi-Fi **CSI** (Channel State
 Information) amplitude variance — no camera, no microphone, nothing worn.
-**Privacy is a hard constraint: only the presence state leaves the device;
-raw CSI never does.**
+**Privacy is a hard constraint: only derived scalars leave the device —
+the presence state and batched variance readings for the live scope; raw CSI
+(subcarrier I/Q) never does.**
 
 ## Layout
 

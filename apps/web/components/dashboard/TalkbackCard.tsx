@@ -11,7 +11,7 @@
 
 import * as React from 'react';
 import { BentoCard, CardTitle } from './bento';
-import { MicCapture, PcmPlayer, TALKBACK_MIME } from './talkback-audio';
+import { MicCapture, PcmPlayer, TALKBACK_MIME, micFailureMessage } from './talkback-audio';
 
 interface TalkbackSession {
   id: string;
@@ -42,6 +42,7 @@ export default function TalkbackCard({
   const [talking, setTalking] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
   const [note, setNote] = React.useState<string | null>(null);
+  const [micError, setMicError] = React.useState<string | null>(null);
   const [heard, setHeard] = React.useState(0);
   const [sent, setSent] = React.useState(0);
 
@@ -50,6 +51,8 @@ export default function TalkbackCard({
   const lastSeqRef = React.useRef(0);
   const sessionIdRef = React.useRef<string | null>(null);
   const busyRef = React.useRef(false);
+  /** Is the talk button still held down? Survives the async mic open. */
+  const heldRef = React.useRef(false);
 
   // --- polling ---------------------------------------------------------------
   React.useEffect(() => {
@@ -146,6 +149,7 @@ export default function TalkbackCard({
   }, []);
 
   const stopEverything = React.useCallback(() => {
+    heldRef.current = false;
     micRef.current?.stop();
     playerRef.current?.stop();
     setTalking(false);
@@ -155,6 +159,7 @@ export default function TalkbackCard({
   // --- actions ---------------------------------------------------------------
   const request = async (direction: 'to_parent' | 'to_family') => {
     setNote(null);
+    setMicError(null);
     try {
       const res = await fetch(`/api/v1/household/${id}/talkback/request`, {
         method: 'POST',
@@ -217,10 +222,11 @@ export default function TalkbackCard({
   };
 
   const startTalking = async () => {
+    heldRef.current = true;
     if (busyRef.current) return;
     busyRef.current = true;
     try {
-      const ok = await micRef.current?.start((base64) => {
+      const result = await micRef.current?.start((base64) => {
         const sessionId = sessionIdRef.current;
         if (!sessionId) return;
         void fetch(`/api/v1/household/${id}/talkback/chunk`, {
@@ -229,17 +235,34 @@ export default function TalkbackCard({
           body: JSON.stringify({ sessionId, mime: TALKBACK_MIME, data: base64 }),
         }).then(() => setSent((n) => n + 1)).catch(() => undefined);
       });
-      if (!ok) {
-        setNote('The microphone is blocked — allow it in your browser to talk.');
+
+      if (!result?.ok) {
+        const message = micFailureMessage(result?.reason, result?.detail);
+        setMicError(message);
+        setNote(message);
         return;
       }
+
+      // The button can be released while the browser is still asking for the
+      // microphone. If that happened, the mic must not stay open.
+      if (!heldRef.current) {
+        micRef.current?.stop();
+        return;
+      }
+
+      setMicError(null);
       setTalking(true);
+    } catch (e) {
+      const message = micFailureMessage('unknown', e instanceof Error ? e.message : undefined);
+      setMicError(message);
+      setNote(message);
     } finally {
       busyRef.current = false;
     }
   };
 
   const stopTalking = () => {
+    heldRef.current = false;
     micRef.current?.stop();
     setTalking(false);
   };
@@ -327,7 +350,19 @@ export default function TalkbackCard({
         </div>
       )}
 
-      {note && <p className="mt-3 text-xs leading-relaxed text-ink/50">{note}</p>}
+      {note && (
+        <div className="mt-3">
+          <p className="text-xs leading-relaxed text-ink/50">{note}</p>
+          {micError && isActive && (
+            <button
+              onClick={startTalking}
+              className="mt-2 rounded-full border border-ink/15 px-3 py-1.5 text-[11px] text-ink/60 transition-colors hover:bg-paper"
+            >
+              Try the microphone again
+            </button>
+          )}
+        </div>
+      )}
 
       {/* the consent popup */}
       {showConsent && incoming && (

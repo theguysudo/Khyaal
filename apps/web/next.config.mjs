@@ -10,7 +10,11 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // The mic has to be allowed on our own origin, or getUserMedia is
+          // rejected before the browser ever shows a permission prompt.
+          // Camera and geolocation stay locked: the product never looks at
+          // either — GPS zones are computed on the phone, never in a browser.
+          { key: 'Permissions-Policy', value: 'camera=(), geolocation=(), microphone=(self)' },
           {
             key: 'Content-Security-Policy',
             value:

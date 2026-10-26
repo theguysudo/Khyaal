@@ -1,6 +1,7 @@
 import type {
   AppCommand,
   Baseline,
+  CsiPoint,
   Household,
   HouseholdEvent,
   HouseholdState,
@@ -172,6 +173,41 @@ function movementSummary(signals: Signal[], nowTs: number): MovementSummary {
 // Ingest
 // ---------------------------------------------------------------------------
 
+/**
+ * Turns a `csi` signal into the reading the dashboard's scope draws.
+ *
+ * The batch arrives as two arrays in the signal's detail bag: `samples` is
+ * the slow window (the same units as the device's motion threshold) and
+ * `fast` is the ~0.25 s view. Anything missing falls back to the signal's
+ * own value, so a partial reading still plots.
+ */
+function csiPointFromSignal(signal: Signal): CsiPoint | null {
+  const meta = signal.meta ?? {};
+  const finite = (v: unknown): number =>
+    typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  const vector = (v: unknown): number[] =>
+    Array.isArray(v)
+      ? v.filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+      : [];
+  const samples = vector(meta.samples);
+  const fast = vector(meta.fast);
+  const v = typeof signal.value === 'number' && Number.isFinite(signal.value)
+    ? signal.value
+    : samples.length > 0
+      ? samples[samples.length - 1]
+      : 0;
+  return {
+    ts: signal.ts,
+    v,
+    f: fast.length > 0 ? fast[fast.length - 1] : v,
+    thr: finite(meta.thr),
+    state: typeof meta.state === 'string' && meta.state ? meta.state : 'idle',
+    sourceId: signal.sourceId,
+    ...(samples.length ? { samples } : {}),
+    ...(fast.length ? { fast } : {}),
+  };
+}
+
 export async function ingestSignal(
   householdId: string,
   signal: Signal,
@@ -184,6 +220,16 @@ export async function ingestSignal(
   const source = await store.findSource(householdId, signal.sourceId);
   if (!source) return { ok: false, error: 'Unknown source — pair this device first' };
   if (apiKey && source.apiKey !== apiKey) return { ok: false, error: 'Bad source key' };
+
+  // The CSI stream is a live scope, not a risk input: it goes to its own
+  // series so a 1 Hz reading cannot crowd presence events out of the log.
+  if (signal.type === 'csi') {
+    const point = csiPointFromSignal(signal);
+    if (!point) return { ok: false, error: 'Invalid csi reading' };
+    await store.appendCsi(householdId, point);
+    await store.touchSource(householdId, signal.sourceId, signal.ts);
+    return { ok: true };
+  }
 
   await store.appendSignal(householdId, signal);
   await store.touchSource(householdId, signal.sourceId, signal.ts);

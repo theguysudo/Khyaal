@@ -40,10 +40,14 @@ export async function POST(req: Request) {
     // Keep the count and the device's own error string: "no networks here"
     // and "the sensor never answered" are very different problems, and the
     // dashboard should be able to say which one it was.
+    // `ts` is the server's clock at the moment the result landed: the panel
+    // compares it against the moment the scan was asked for, so a leftover
+    // scan from an earlier press cannot pass itself off as the new one.
     await getStore().putDeviceScan(sourceId, {
       networks: body.networks,
       count: typeof body.count === 'number' ? body.count : body.networks.length,
       error: typeof body.error === 'string' ? body.error : null,
+      ts: Date.now(),
     });
     return NextResponse.json({ ok: true });
   }
@@ -51,7 +55,8 @@ export async function POST(req: Request) {
     if (typeof body.status !== 'object' || body.status === null) {
       return NextResponse.json({ error: 'status object required' }, { status: 400 });
     }
-    await getStore().putDeviceStatus(sourceId, body.status);
+    const status = body.status as Record<string, unknown>;
+    await getStore().putDeviceStatus(sourceId, { ...status, ts: Date.now() });
     return NextResponse.json({ ok: true });
   }
   return NextResponse.json({ error: 'kind must be scan|status' }, { status: 400 });

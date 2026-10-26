@@ -16,11 +16,15 @@ export type SignalType =
   | 'location_zone' // 'home' | 'away' — presence, never a trail
   | 'gps_motion' // GPS-derived movement — distance/speed, never coordinates
   | 'presence' // ESP32 Wi-Fi sensing: 'motion' | 'idle' | 'lost' | 'fall'
+  | 'csi' // ESP32 CSI scalars: variance/mean/rate — never raw subcarriers
   | 'manual_checkin' // parent tapped "I'm OK"
   | 'sleep_event' // on-device classifier: 'asleep' | 'awake' | 'restless' | 'woke'
   | 'sound_event'; // on-device loudness: 'quiet' | 'noise' | 'loud' — never audio
 
 export type SignalValue = number | string | boolean;
+
+/** One primitive in a signal's detail bag, or a short vector of numbers. */
+export type SignalMetaValue = string | number | boolean | number[];
 
 export interface Signal {
   sourceId: string;
@@ -28,12 +32,13 @@ export interface Signal {
   value: SignalValue;
   ts: number; // epoch ms, already in simulation time
   /**
-   * Optional privacy-safe detail bag — numbers, strings and booleans only.
-   * Used by signals that need a little more shape than a single primitive
-   * (gps_motion carries distance/speed/accuracy here). Never free-form
-   * content, never coordinates.
+   * Optional privacy-safe detail bag — numbers, strings, booleans and short
+   * numeric vectors only. Used by signals that need a little more shape than
+   * a single primitive (gps_motion carries distance/speed/accuracy here;
+   * csi carries a batch of variance readings). Never free-form content,
+   * never coordinates, never raw CSI.
    */
-  meta?: Record<string, string | number | boolean>;
+  meta?: Record<string, SignalMetaValue>;
 }
 
 /** Dashboard → device control, relayed over the tunnel. */
@@ -86,6 +91,8 @@ export interface Household {
   callPlan?: { callElderAfterMin: number; alertCircleAfterMin: number };
   /** Last saved LLM behaviour analysis. */
   lastAnalysis?: { ts: number; model: string; text: string };
+  /** The room sensor's floor plan — rooms and where each sensor sits. */
+  blueprint?: Blueprint;
 }
 
 export interface CareCircleMember {
@@ -118,8 +125,92 @@ export interface KhayaalUser {
 
 export const TIER_THRESHOLDS = { 1: 35, 2: 55, 3: 72 } as const;
 
-/** Which free LLM backend answers. All three speak the same chat shape. */
-export type LlmProvider = 'openrouter' | 'minimax' | 'nvidia';
+/** Which free LLM backend answers. All of them speak the same chat shape. */
+export type LlmProvider = 'openrouter' | 'minimax' | 'nvidia' | 'xai';
+
+// ---------------------------------------------------------------------------
+// Blueprint — the room sensor's floor plan
+// ---------------------------------------------------------------------------
+
+/**
+ * A room on the blueprint. Coordinates are percentages of the blueprint box
+ * (0..100) so the same layout renders at any card size.
+ */
+export interface BlueprintRoom {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * A sensor placed on the blueprint. `sourceId` ties the anchor to a paired
+ * ESP32 or phone; the room it sits in decides which room lights up when that
+ * sensor reports motion.
+ */
+export interface BlueprintAnchor {
+  sourceId: string;
+  label: string;
+  roomId: string | null;
+  x: number;
+  y: number;
+}
+
+export interface Blueprint {
+  rooms: BlueprintRoom[];
+  anchors: BlueprintAnchor[];
+  updatedTs: number;
+  source: 'manual' | 'llm';
+}
+
+/** One reading from the CSI stream, as the dashboard sees it. */
+export interface CsiPoint {
+  ts: number;
+  /** Slow-window variance — the number the fall/motion rules use. */
+  v: number;
+  /** Fast-window variance — a ~0.25 s view, so a hand wave shows up at once. */
+  f: number;
+  /** The device's own motion threshold, in the same units as `v`. */
+  thr: number;
+  /** Presence state at the moment of the reading. */
+  state: string;
+  sourceId: string;
+  /** The slow-window readings in this batch (one per 250 ms). */
+  samples?: number[];
+  /** The fast-window readings in this batch. */
+  fast?: number[];
+}
+
+/** A state change on the CSI stream — the "something happened" line. */
+export interface CsiEvent {
+  ts: number;
+  sourceId: string;
+  kind: 'motion' | 'idle' | 'fall' | 'lost';
+  label: string;
+}
+
+/** A sensor's current standing on the blueprint. */
+export interface CsiAnchor {
+  sourceId: string;
+  label: string;
+  roomId: string | null;
+  x: number;
+  y: number;
+  /** 0..1 — how strongly this sensor is seeing motion right now. */
+  level: number;
+  state: string;
+  lastMotionTs: number | null;
+}
+
+/** Where the room sensors say the movement is, and how sure we are. */
+export interface CsiEstimate {
+  x: number;
+  y: number;
+  confidence: number;
+  sourceId: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Talkback — a consent-first walkie-talkie between family and parent
@@ -259,10 +350,14 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
   'location_zone',
   'gps_motion',
   'presence',
+  'csi',
   'manual_checkin',
   'sleep_event',
   'sound_event',
 ];
+
+/** Longest numeric vector allowed in a signal's detail bag. */
+export const MAX_META_VECTOR = 32;
 
 export function isSignalType(v: unknown): v is SignalType {
   return typeof v === 'string' && (SIGNAL_TYPES as readonly string[]).includes(v);
@@ -274,12 +369,18 @@ export function isSignalValue(v: unknown): v is SignalValue {
 
 /**
  * Keeps the optional detail bag small and primitive. Anything else — nested
- * objects, arrays, long strings — is dropped rather than stored, so a signal
- * can never smuggle content into the encrypted-at-rest store.
+ * objects, long strings, oversized vectors — is dropped rather than stored,
+ * so a signal can never smuggle content into the encrypted-at-rest store.
+ *
+ * The one exception is a short vector of finite numbers (MAX_META_VECTOR),
+ * which the CSI stream uses to carry a batch of variance readings in one
+ * request instead of one request per reading.
  */
-export function sanitizeSignalMeta(meta: unknown): Record<string, string | number | boolean> | undefined {
+export function sanitizeSignalMeta(
+  meta: unknown,
+): Record<string, SignalMetaValue> | undefined {
   if (typeof meta !== 'object' || meta === null) return undefined;
-  const out: Record<string, string | number | boolean> = {};
+  const out: Record<string, SignalMetaValue> = {};
   let count = 0;
   for (const [key, value] of Object.entries(meta as Record<string, unknown>)) {
     if (count >= 8) break;
@@ -287,7 +388,13 @@ export function sanitizeSignalMeta(meta: unknown): Record<string, string | numbe
     if (typeof value === 'boolean') out[key] = value;
     else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
     else if (typeof value === 'string' && value.length <= 64) out[key] = value;
-    else continue;
+    else if (Array.isArray(value)) {
+      const vec = value.filter(
+        (v): v is number => typeof v === 'number' && Number.isFinite(v),
+      );
+      if (vec.length > 0 && vec.length <= MAX_META_VECTOR) out[key] = vec.slice(0, MAX_META_VECTOR);
+      else continue;
+    } else continue;
     count++;
   }
   return Object.keys(out).length > 0 ? out : undefined;

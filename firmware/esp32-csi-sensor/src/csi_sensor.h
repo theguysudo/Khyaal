@@ -27,6 +27,14 @@ class CsiSensor {
     float mean;         // mean subcarrier amplitude
     uint32_t samples;   // packets in the window
     float packetRate;   // CSI frames per second
+    /**
+     * Variance over the most recent packets only (~0.25 s at 100 fps). The
+     * slow window is deliberately long so a fall spike cannot be averaged
+     * away, but it lags a hand wave by a full window; this short view is
+     * what the live scope draws.
+     */
+    float fastVariance;
+    uint32_t fastSamples;
   };
 
   void begin();

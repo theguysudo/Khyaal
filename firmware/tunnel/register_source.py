@@ -30,27 +30,39 @@ except ImportError:  # pragma: no cover
     sys.exit("requests missing — run: pip3 install requests")
 
 
-def register(server: str, household_id: Optional[str], label: str) -> dict[str, Any]:
+def register(
+    server: str,
+    household_id: Optional[str],
+    label: str,
+    pairing_code: Optional[str] = None,
+) -> dict[str, Any]:
     """Create a source on `server` and return the full ingest identity.
 
     Source creation mints an API key, so the server requires either a family
-    session or the household's current pairing code — here we take the demo
-    (or join) response's code and present it; the server rotates it after use.
+    session or the household's current pairing code. The demo household hands
+    out both (the cookie and its code), so the session below is the family
+    seat; a different household needs its code passed in.
     """
-    pairing_code = None
-    if not household_id:
-        resp = requests.post(
-            f"{server}/api/v1/pair",
-            json={"action": "demo"},
-            timeout=5,
-        )
-        resp.raise_for_status()
-        household = resp.json()["household"]
-        household_id = household["id"]
-        pairing_code = household.get("pairingCode")
-        print(f"household: {household_id}")
+    session = requests.Session()
+    demo = session.post(f"{server}/api/v1/pair", json={"action": "demo"}, timeout=5)
+    demo.raise_for_status()
+    demo_household = demo.json()["household"]
 
-    resp = requests.post(
+    if not household_id:
+        household_id = demo_household["id"]
+    if household_id == demo_household["id"]:
+        # The demo cookie authorizes exactly this household, and its pairing
+        # code is on the same response.
+        pairing_code = pairing_code or demo_household.get("pairingCode")
+    elif not pairing_code:
+        sys.exit(
+            f"household {household_id} is not the demo household, so its pairing "
+            f"code is needed — read it from the dashboard's Sources card and "
+            f"pass --pairing-code"
+        )
+    print(f"household: {household_id}")
+
+    resp = session.post(
         f"{server}/api/v1/household/{household_id}/sources",
         json={"type": "esp32", "label": label, "pairingCode": pairing_code},
         timeout=5,
@@ -75,15 +87,19 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="Khayaal backend base URL")
     parser.add_argument("--household-id", dest="household_id", default=None,
                         help="use this household instead of the demo one")
-    parser.add_argument("--label", default="Room sensor (ESP32)",
-                        help="label shown in the web app")
+    parser.add_argument("--label", default="Room sensor (USB relay)",
+                        help="label shown in the web app — the dashboard's Wi-Fi "
+                             "panel is per-source, so this must be the row that "
+                             "belongs to the relay")
+    parser.add_argument("--pairing-code", dest="pairing_code", default=None,
+                        help="pairing code, for a household that is not the demo one")
     parser.add_argument("--config", type=Path,
                         default=Path(__file__).with_name("config.json"),
                         help="config file to write")
     args = parser.parse_args(argv)
 
     try:
-        identity = register(args.server, args.household_id, args.label)
+        identity = register(args.server, args.household_id, args.label, args.pairing_code)
     except (requests.RequestException, KeyError, ValueError) as exc:
         print(f"registration failed: {exc}", file=sys.stderr)
         return 1

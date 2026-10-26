@@ -11,11 +11,13 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/dashboard/bento';
 import NightWatchCard from '@/components/dashboard/NightWatchCard';
 import TalkbackCard from '@/components/dashboard/TalkbackCard';
 import MovementCard from '@/components/dashboard/MovementCard';
+import BlueprintMap from '@/components/dashboard/BlueprintMap';
+import CsiScope from '@/components/dashboard/CsiScope';
 import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
 
 export default function DashboardPage() {
@@ -126,6 +128,8 @@ export default function DashboardPage() {
           <ExplainCard bundle={bundle} />
           <NightWatchCard events={bundle.sleepSound} />
           <MovementCard movement={bundle.movement} nowTs={bundle.simNowTs} />
+          <BlueprintMap id={id} />
+          <CsiScope id={id} />
           <AnalysisCard id={id} bundle={bundle} />
           <CircleCard id={id} bundle={bundle} />
           <PushCard id={id} />
@@ -607,46 +611,73 @@ function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
 
 /**
  * The scan comes back in one of a few shapes depending on which server wrote
- * it: a bare array (the original), or {networks, count, error}. Rather than
- * guess, read every shape the API has ever produced and normalise to the
- * list plus the reason it might be empty.
+ * it: a bare array (the original), or {networks, count, error, ts}. Rather
+ * than guess, read every shape the API has ever produced and normalise to the
+ * list, the reason it might be empty, and the moment it landed.
  */
-function readScan(payload: unknown): { list: { ssid: string; rssi: number; secure: boolean }[] | null; error: string | null } {
+function readScan(payload: unknown): {
+  list: { ssid: string; rssi: number; secure: boolean }[] | null;
+  error: string | null;
+  ts: number | null;
+} {
   const isList = (v: unknown): v is { ssid: string; rssi: number; secure: boolean }[] => Array.isArray(v);
   const body = (payload ?? {}) as Record<string, unknown>;
   const scan = body.scan ?? body;
-  if (isList(scan)) return { list: scan, error: null };
+  const errOf = (o: Record<string, unknown>) => (typeof o.error === 'string' ? o.error : null);
+  const tsOf = (o: Record<string, unknown>) => (typeof o.ts === 'number' ? o.ts : null);
+
+  if (isList(scan)) return { list: scan, error: null, ts: null };
   if (scan && typeof scan === 'object') {
     const inner = (scan as Record<string, unknown>).networks;
     if (isList(inner)) {
-      const err = (scan as Record<string, unknown>).error;
-      return { list: inner, error: typeof err === 'string' ? err : null };
+      const o = scan as Record<string, unknown>;
+      return { list: inner, error: errOf(o), ts: tsOf(o) };
     }
   }
   // The wrapper itself may carry the list, when the server stores it flat.
   if (isList(body.networks)) {
-    const err = body.error;
-    return { list: body.networks, error: typeof err === 'string' ? err : null };
+    return { list: body.networks, error: errOf(body), ts: tsOf(body) };
   }
-  return { list: null, error: null };
+  return { list: null, error: null, ts: null };
 }
+
+/** The USB relay checks in every 3 s; a longer gap means it is not there. */
+const RELAY_STALE_MS = 30_000;
 
 function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   const [networks, setNetworks] = useState<{ ssid: string; rssi: number; secure: boolean }[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [status, setStatus] = useState<{ connected?: boolean; ssid?: string; rssi?: number; ip?: string } | null>(null);
+  const [relayError, setRelayError] = useState<string | null>(null);
+  const [relaySeenTs, setRelaySeenTs] = useState<number | null>(null);
+  const [status, setStatus] = useState<{ connected?: boolean; ssid?: string; rssi?: number; ip?: string; ts?: number } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
+  /** When the scan on screen landed. A new scan must be newer than this. */
+  const scanTsRef = useRef<number | null>(null);
+  const relaySeenRef = useRef<number | null>(null);
+
+  // The relay checks in every 3 s, so a gap longer than this means it is
+  // gone — stopped, unplugged, or working from stale credentials.
+  const relayAlive = (ts: number | null) => ts !== null && Date.now() - ts < RELAY_STALE_MS;
+
   const refresh = async () => {
     try {
       const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
-      const { list, error } = readScan(r);
-      setNetworks(list);
-      setScanError(error);
+      const { list, error, ts } = readScan(r);
+      // A leftover scan must never replace a newer one already on screen.
+      if (list && (ts ?? 0) >= (scanTsRef.current ?? 0)) {
+        setNetworks(list);
+        if (ts !== null) scanTsRef.current = ts;
+        setScanError(error);
+      }
       setStatus(r.status ?? null);
+      if (r.relay?.lastSeenTs) {
+        relaySeenRef.current = r.relay.lastSeenTs;
+        setRelaySeenTs(r.relay.lastSeenTs);
+      }
       return list;
     } catch {
       /* panel stays with what it has */
@@ -655,40 +686,79 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   };
   useEffect(() => {
     void refresh();
+    // Keep the relay's heartbeat line honest: it has to notice the relay
+    // going away, not keep claiming the relay is fine.
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => window.clearInterval(timer);
   }, [id, sourceId]);
 
   const queue = async (action: string, payload?: Record<string, unknown>) => {
     setBusy(action);
     setNote(null);
+    setRelayError(null);
+    setScanError(null);
     try {
-      await postJSON(`/api/v1/household/${id}/sources/${sourceId}/actions`, { action, ...payload });
+      const queued = await postJSON<{ ts?: number }>(
+        `/api/v1/household/${id}/sources/${sourceId}/actions`,
+        { action, ...payload },
+      );
+      // The server's clock when the action was queued. Anything that lands
+      // after this moment is the answer to THIS request — a scan left over
+      // from an earlier press must not pass itself off as the new one.
+      const since = queued.ts ?? 0;
+
       if (action === 'wifi_scan') {
         setNote('Scanning — the USB relay types it to the sensor and waits for the list…');
         // The scan is a serial round-trip: give it room, then report honestly.
         // The list may land after the window closes (the relay posts when the
         // sensor finishes), so the final refresh below is what decides whether
         // we saw something — not the loop.
+        let landed = false;
         for (let i = 0; i < 15; i++) {
           await new Promise((r) => setTimeout(r, 2000));
           const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
-          const { list, error } = readScan(r);
-          if (list) {
+          const { list, error, ts } = readScan(r);
+          if (r.relay?.lastSeenTs) {
+            relaySeenRef.current = r.relay.lastSeenTs;
+            setRelaySeenTs(r.relay.lastSeenTs);
+          }
+          if (list && (ts ?? 0) > since) {
             setNetworks(list);
+            scanTsRef.current = ts ?? null;
             setScanError(error);
             setNote(null);
+            landed = true;
             break;
           }
+        }
+        if (!landed) {
+          // Never go quiet. Say which half is missing: the relay, or the
+          // sensor behind it.
+          setRelayError(
+            relayAlive(relaySeenRef.current)
+              ? 'The USB relay is running, but the sensor did not answer the scan. Check that the room sensor is plugged into this Mac and awake.'
+              : 'No answer from the USB relay. It has to be running on this Mac — python3 firmware/tunnel/khayaal_serial_bridge.py. If it is already running, its credentials are out of date (the server keeps sources in memory): python3 firmware/tunnel/register_source.py',
+          );
+          setNote(null);
         }
         await refresh();
       } else if (action === 'wifi_connect' || action === 'wififorget') {
         setNote('Applying — checking in ~12 s…');
+        let landed = false;
         for (let i = 0; i < 8; i++) {
           await new Promise((r) => setTimeout(r, 2000));
           const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
-          if (r.status && (action === 'wififorget' || (r.status.ts ?? true))) {
-            if (r.status) setStatus(r.status);
+          const st = (r.status ?? null) as { ts?: number } | null;
+          if (st && (st.ts ?? 0) > since) {
+            setStatus(st);
+            landed = true;
             break;
           }
+        }
+        if (!landed) {
+          setRelayError(
+            'The sensor did not report back after the change. The USB relay may not be running — python3 firmware/tunnel/khayaal_serial_bridge.py',
+          );
         }
         setNote(null);
         await refresh();
@@ -721,12 +791,28 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         )}
       </div>
       {note && <p className="mt-2 text-xs text-ink/50">{note}</p>}
-      {scanError && (
+      <p className="mt-1.5 text-[11px] text-ink/45">
+        {relaySeenTs ? (
+          relayAlive(relaySeenTs) ? (
+            <>USB relay: checking in every 3 s — last {fmtAgo(relaySeenTs, Date.now())}.</>
+          ) : (
+            <>USB relay: not checking in — last seen {fmtAgo(relaySeenTs, Date.now())}.</>
+          )
+        ) : (
+          <>USB relay: not checking in. Start it on this Mac — <code>python3 firmware/tunnel/khayaal_serial_bridge.py</code>.</>
+        )}
+      </p>
+      {relayError && (
         <p className="mt-2 rounded-xl border border-[#b23a2f]/25 bg-[#f6dcd8]/50 px-3 py-2 text-xs leading-relaxed text-[#77231c]">
-          The scan came back empty — {scanError}. If the relay is not running, start it and try again.
+          {relayError}
         </p>
       )}
-      {networks && networks.length === 0 && !scanError && (
+      {scanError && (
+        <p className="mt-2 rounded-xl border border-[#b23a2f]/25 bg-[#f6dcd8]/50 px-3 py-2 text-xs leading-relaxed text-[#77231c]">
+          The scan came back empty — {scanError}.
+        </p>
+      )}
+      {networks && networks.length === 0 && !scanError && !relayError && (
         <p className="mt-2 text-xs text-ink/45">No networks found nearby.</p>
       )}
       {networks && networks.length > 0 && (

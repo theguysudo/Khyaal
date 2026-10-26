@@ -132,11 +132,52 @@ Full audit in **[SECURITY_AUDIT.md](SECURITY_AUDIT.md)**; the fixes:
 6. **Pen-test grown to 40 checks** — all passing; engine 20/20; Android 43/43;
    CI green. APK rebuilt (v0.3.0, auth headers + pairing code).
 
+## Stage 14 — Live movement interface: CSI scope, room blueprint, Grok (2026-10-26)
+1. **Firmware** — the sensor now streams what it computes: a batched `csi`
+   event per second (4 slow-window + 4 fast-window variance readings, mean,
+   packet rate, threshold, state), alongside the unchanged presence events.
+   Fast window (`KH_CSI_FAST_SAMPLES`, ~0.25 s) added so a hand wave shows
+   immediately; ring-buffer indexing fixed in `readStats`. Still scalars
+   only — raw subcarrier I/Q never leaves the chip. **Status LEDs**:
+   `led_controller.{h,cpp}` — green GPIO 27 = fresh CSI data (pulsed,
+   rate-limited), pink GPIO 26 = confirmed motion (state machine), red
+   GPIO 25 = fault (link lost after being up, or 5 s frame silence past a
+   30 s grace). Non-blocking, `csi on|off` CLI. Build green; flash pending
+   a physical replug (board unplugged).
+2. **Pipeline** — `SignalType` gains `csi` with a bounded numeric-vector
+   `meta` (≤32 numbers); the bridge forwards it; the server stores the
+   series separately from the signal log (30 min retention) so a 1 Hz stream
+   can never evict presence events.
+3. **Dashboard** — `GET /household/{id}/csi` returns the flattened 4 Hz
+   series, state changes with room labels, per-sensor levels, and a weighted
+   position estimate. Two new cards: **Room blueprint** (LLM-draftable floor
+   plan, draggable sensor anchors, glowing motion anchors, fading movement
+   trail) and **What the sensor hears** (live oscilloscope with threshold
+   line, motion shading, event rail). `POST .../motion/narrate` turns the
+   sensor log into plain language ("brief pass-through movement rather than
+   sustained activity").
+4. **LLM** — xAI **Grok** added as a fourth provider (`XAI_API_KEY`);
+   request-supplied keys now stay on the provider they belong to; the 429
+   backoff actually retries the same model (NIM per-minute throttle); JSON
+   mode is best-effort with a prompt-side fallback; dead model id
+   `nemotron-3.5-bolt-e4b` replaced after the NIM catalogue rotated
+   (verified live against `/v1/models`).
+5. **No-hardware demo** — `firmware/tunnel/simulate_csi.py` speaks the real
+   wire format over a PTY; `apps/web/scripts/csi_stress.py` benchmarks the
+   path. Benchmarks (dev server, sim device + readers): ingest p50 16 ms /
+   p95 96 ms, `GET /csi` p50 19 ms / p95 92 ms, 300-post flood fully shed
+   by the 120/min limiter, 0×5xx, RSS high-water GC-reclaimable.
+6. **Verification** — engine 36/36 (11 new blueprint tests), pen-test
+   43/43, pipeline sim 4/4, web typecheck + production build green; both
+   cards verified live in the browser with the simulator driving real
+   sealed traffic (waveform, blueprint, narration all confirmed on-screen).
+
 ## Where things stand
 - Landing + dashboard + demo console: live.
 - Android v0.3.0 APK: `apps/web/public/khayaal-debug.apk` (+ CI artifact).
-- ESP32: firmware built with fall detection + sealed LAN ingest; the board's
-  USB port is currently driver-wedged (physical replug needed), then
-  `bash firmware/test-pipeline.sh flash` → serial CLI → done.
-- Verification: engine 20/20, Android 43/43, pen-test 37/37, pipeline sim/enc/lan
-  all green, CI green on every push.
+- ESP32: firmware carries fall detection, sealed LAN ingest, the live CSI
+  stream and the 3-LED controller — built and ready; flash as soon as the
+  board is back on USB (`pio run -t upload --upload-port /dev/cu.usbserial-0001`,
+  no erase — NVS keeps the Wi-Fi + household config).
+- Verification: engine 36/36, Android 43/43, pen-test 43/43, pipeline
+  sim/enc/lan green, CSI stress PASS (0×5xx), CI green on every push.

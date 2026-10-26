@@ -1,6 +1,7 @@
 import type {
   AppCommand,
   Baseline,
+  CsiPoint,
   DeviceAction,
   Household,
   HouseholdEvent,
@@ -360,6 +361,19 @@ export class FirestoreStore implements Store {
     if (!doc || Date.now() - doc.ts > 600_000) return null;
     return doc.data;
   }
+  async noteRelaySeen(sourceId: string): Promise<void> {
+    await setDoc(`devicedata/${encodeURIComponent(sourceId)}-relay`, {
+      data: { seenTs: Date.now() },
+      ts: Date.now(),
+    });
+  }
+  async getRelaySeen(sourceId: string): Promise<number | null> {
+    const doc = await getDoc<{ data: { seenTs: number }; ts: number }>(
+      `devicedata/${encodeURIComponent(sourceId)}-relay`,
+    );
+    if (!doc) return null;
+    return doc.data?.seenTs ?? null;
+  }
 
   // -- Talkback ---------------------------------------------------------------
 
@@ -441,6 +455,34 @@ export class FirestoreStore implements Store {
   async clearSignals(householdId: string): Promise<void> {
     const rows = await listDocs(sub(householdId, 'signals'), 300);
     await Promise.all(rows.map((r) => deleteDoc(`${sub(householdId, 'signals')}/${r.id}`).catch(() => undefined)));
+  }
+
+  async appendCsi(householdId: string, point: CsiPoint): Promise<void> {
+    const res = await call(`documents/${sub(householdId, 'csi')}`, {
+      method: 'POST',
+      body: toDoc({ env: encrypt(JSON.stringify(point)) }),
+    });
+    if (!res.ok) throw new Error(`firestore appendCsi: ${res.status}`);
+    // Keep the last ~30 minutes, matching MemoryStore.
+    const rows = await runQuery(sub(householdId, ''), 'csi', 'ts', 'GREATER_THAN_OR_EQUAL', 0, 300);
+    const stale = rows.slice(0, Math.max(0, rows.length - 1500));
+    await Promise.all(
+      stale.map((r) => deleteDoc(`${sub(householdId, 'csi')}/${r.id}`).catch(() => undefined)),
+    );
+  }
+  async getCsi(
+    householdId: string,
+    sinceTs: number,
+    limit = 900,
+  ): Promise<CsiPoint[]> {
+    const rows = await runQuery(sub(householdId, ''), 'csi', 'ts', 'GREATER_THAN_OR_EQUAL', sinceTs, 2000);
+    return rows
+      .map((r) => {
+        const plain = decrypt(String(r.data.env ?? ''));
+        return plain ? (JSON.parse(plain) as CsiPoint) : null;
+      })
+      .filter((p): p is CsiPoint => p !== null)
+      .slice(-limit);
   }
 
   async getState(householdId: string): Promise<HouseholdState | null> {

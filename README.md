@@ -233,6 +233,10 @@ session cookie **or** a device credential pair (`x-kh-source` / `x-kh-key`).
 | POST | `/api/v1/household/{id}/command-ack` | The phone confirms a command landed |
 | POST | `/api/v1/household/{id}/circle` | `{action:"add"\|"remove", name, email, phone, role}` |
 | POST | `/api/v1/household/{id}/analysis` | LLM behaviour analysis over privacy-safe aggregates |
+| GET | `/api/v1/household/{id}/csi` | Live room-sensor scope: variance series, state changes, blueprint anchors, position estimate |
+| GET/POST | `/api/v1/household/{id}/blueprint` | The room plan — read it, save it |
+| POST | `/api/v1/household/{id}/blueprint/generate` | `{rooms: "2BHK, ..."}` → the model lays out the plan |
+| POST | `/api/v1/household/{id}/motion/narrate` | The model reads the room-sensor log in plain language |
 | POST | `/api/v1/household/{id}/assistant` | "Ask Khayaal" — `{messages, provider?}` → `{reply, provider, model}` |
 | POST/DELETE | `/api/v1/household/{id}/devices` | Register / remove an FCM token |
 | POST | `/api/v1/household/{id}/push-subscribe` | Browser push subscription |
@@ -313,7 +317,9 @@ clients.
   she already sits in.
 - **Consent before audio.** Talkback opens a microphone only after the other
   side taps Allow. The audio passes through and is gone; it is never written
-  to disk.
+  to disk. The browser's own permission is the outer lock — asked once for
+  this origin — and the in-product Allow gate is the inner one; the mic does
+  not open without both.
 - **Encrypted at rest and in transit.** Signals are AES-256-GCM sealed in the
   store; the sensor tunnel is sealed with a key derived by HKDF-SHA256 from
   the source key and never transmitted, with the household and source bound
@@ -441,6 +447,11 @@ and free push channels, never a paid gateway.
   no-ops without credentials.
 - VAPID and SMTP alerting are the same: configured in `.env.local`, dormant
   until then.
+- The **browser** talkback needs a secure origin: browsers only expose the
+  microphone over `https://` or `http://localhost`. The dashboard opened at a
+  plain `http://192.168.x.x:3100` LAN address cannot use the mic, and the card
+  says so rather than pretending the browser is blocking it. Her phone app is
+  unaffected — it records natively.
 - The two open questions a pilot must answer: Wi-Fi CSI reliability across
   room layouts, and the false-alarm rate of the baseline model in real
   households.

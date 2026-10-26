@@ -82,10 +82,23 @@ epoch ms itself.
 | `host <url>` | LAN backend base URL (NVS) |
 | `hh <id>` / `src <id>` / `key <sk>` | ingest identity (NVS) |
 | `mode <lan\|serial>` | transport (NVS) |
+| `csi <on\|off>` | live scope stream (default on) |
 | `factory` | wipe NVS, restore compiled defaults |
 
 Log lines are `[<ms>] ...`; event lines are raw JSON — that is how the bridge
 tells them apart.
+
+## Status LEDs
+
+Three LEDs on the dev kit's GPIO headers, active-HIGH through series
+resistors to common GND (`led_controller.{h,cpp}`, all `millis()`-based and
+non-blocking):
+
+| LED | pin | driven by | meaning |
+| --- | --- | --- | --- |
+| Green | GPIO 27 | `readStats()` returning true | fresh CSI data is flowing — one short pulse per accepted sample, rate-limited; dark = no frames |
+| Pink | GPIO 26 | the presence state machine | confirmed Motion (or Fall) — not per-frame activity |
+| Red | GPIO 25 | fault logic in `tick()` | Wi-Fi dropped after having been up, or no frames for 5 s while the link is up past a 30 s startup grace; clears itself when the condition ends |
 
 ## How the CSI pipeline works
 
@@ -106,9 +119,10 @@ Frames are filtered to the associated AP's BSSID by default
 (`KH_CSI_FILTER_AP_BSSID` in `include/config.h`), so laptops and phones on
 other links do not pollute the baseline.
 
-Privacy: the variance scalar and the resulting presence state are the only
-derived data; `buf`/raw CSI stays on-chip. The only strings ever transmitted
-are the JSON presence events shown above.
+Privacy: derived scalars only — the presence state and the batched
+variance readings the live scope draws; `buf`/raw CSI (per-subcarrier I/Q)
+stays on-chip. The only strings ever transmitted are the JSON presence and
+`csi` events shown above.
 
 ## Layout
 

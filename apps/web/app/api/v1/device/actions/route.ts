@@ -36,6 +36,10 @@ export async function GET(req: Request) {
 
   const via = new URL(req.url).searchParams.get('via') === 'usb' ? 'usb' : 'lan';
   const actions = await getStore().drainDeviceActions(sourceId, via);
+  // A successful poll means the relay is alive and its credentials work. The
+  // dashboard reads this back, so a missing scan can say "the relay is not
+  // running" instead of leaving the family staring at nothing.
+  await getStore().noteRelaySeen(sourceId);
   return NextResponse.json(
     { actions },
     { headers: { 'Cache-Control': 'no-store' } },
