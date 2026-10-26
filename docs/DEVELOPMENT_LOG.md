@@ -196,6 +196,16 @@ paste block:
    peer never reads blocks writers). The real board keeps its existing
    pairing; the flow is identical.
 
+## Stage 15b — LED remap to the family's semantics (2026-10-27, night)
+Aditya reassigned the LEDs on the wired board: **green = connectivity**
+(solid when the link is up and frames flow, slow blink while connecting),
+**red = movement** — LEDC PWM brightness follows the variance-above-
+threshold ratio (the same number the dashboard's blueprint uses), smoothed
+so the glow breathes, and **solid full red for 30 s on a fall (SOS)**;
+**pink = link/sensor fault** (the fault role red used to carry). PWM falls
+back to on/off GPIO if LEDC cannot attach. Flashed and verified live on
+the board; documented in the sensor README.
+
 ## Where things stand
 - Landing + dashboard + demo console: live.
 - Android v0.3.0 APK: `apps/web/public/khayaal-debug.apk` (+ CI artifact).

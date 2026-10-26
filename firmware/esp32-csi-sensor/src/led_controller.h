@@ -1,21 +1,20 @@
 /**
  * @file led_controller.h
- * @brief Three status LEDs driven by the room sensor's real signals.
+ * @brief Three status LEDs with one job each.
  *
- *  GREEN (GPIO 27) — fresh CSI data: a short pulse for every accepted sample
- *    (a readStats() that returned true), rate-limited to a visible cadence.
- *    Dark means the sensor is not receiving frames.
- *  PINK  (GPIO 26) — confirmed motion: on while the presence state machine
- *    says Motion or Fall. It is NOT a per-frame indicator — a received frame
- *    is not movement, and the state machine is what decides that.
- *  RED   (GPIO 25) — fault: the Wi-Fi link dropped after having been up, or
- *    no CSI frames for DATA_TIMEOUT_MS while the link is up and past the
- *    startup grace period. It clears by itself when the condition ends, and
- *    never fires during normal startup or a brief reconnect.
+ *  GREEN (GPIO 27) — connectivity. Solid while the Wi-Fi link is up AND the
+ *    sensor is actually receiving frames; a slow blink while the link is up
+ *    but the room is still quiet (connecting); dark with no link.
+ *  RED (GPIO 25) — movement, brightness following intensity. The duty cycle
+ *    tracks how far the CSI variance is above the motion threshold (smoothed
+ *    so it glows rather than flickers); full brightness, solid, when the
+ *    presence machine flags a fall (SOS), latched for SOS_LATCH_MS.
+ *  PINK (GPIO 26) — link/sensor fault. Solid when the link dropped after
+ *    having been up, or frames went silent for DATA_TIMEOUT_MS while the
+ *    link was up past the startup grace; clears itself when the fault ends.
  *
- * Everything is millis()-based and non-blocking: begin() once, then tick()
- * every loop() iteration. No delay() calls, no ISR work, no interference
- * with Wi-Fi, CSI capture, the presence machine, the CLI or the transports.
+ * Red and pink are PWM channels (LEDC); everything is millis()-based and
+ * non-blocking — begin() once, tick() every loop(), no delay().
  */
 #pragma once
 
@@ -30,11 +29,15 @@ class LedController {
   void onCsiSample(uint32_t nowMs);
   /** The presence state machine's verdict: "idle"|"motion"|"lost"|"fall". */
   void onPresence(const char *state);
+  /** How far the variance is above the threshold, clamped 0..1. */
+  void onMotionLevel(float level);
   /** Current Wi-Fi link state; the controller reacts to changes only. */
   void onWifi(bool up, uint32_t nowMs);
 
  private:
-  void write(int pin, bool on);
+  void writeDuty(int pin, uint8_t duty);
+
+  bool redPwm_ = false;  // false when LEDC could not attach; red then is on/off
 
   bool wifiUp_ = false;
   bool everWifiUp_ = false;
@@ -42,8 +45,9 @@ class LedController {
   bool haveCsiSample_ = false;
   uint32_t lastCsiSampleMs_ = 0;
 
-  uint32_t greenOnUntilMs_ = 0;
-  uint32_t greenNextPulseMs_ = 0;
-
-  bool motionLatch_ = false;
+  // movement intensity, smoothed so the glow breathes instead of flickering
+  float level_ = 0.0f;
+  float targetLevel_ = 0.0f;
+  bool sosLatch_ = false;
+  uint32_t sosSinceMs_ = 0;
 };

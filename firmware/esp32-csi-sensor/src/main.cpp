@@ -705,6 +705,15 @@ void loop() {
     if (haveData) {
       leds.onCsiSample(nowMs);
       lastFramesSeenMs = nowMs;
+      // Red's brightness: how far the variance is above the motion
+      // threshold — the same ratio the server's blueprint uses for its
+      // "how strong is the movement" level.
+      const float level = cfg.threshold > 0.0f
+                              ? (lastVariance - cfg.threshold) / cfg.threshold
+                              : 0.0f;
+      leds.onMotionLevel(level);
+    } else {
+      leds.onMotionLevel(0.0f);
     }
     if (nowMs - lastStatusMs >= kStatusPeriodMs) {
       lastStatusMs = nowMs;

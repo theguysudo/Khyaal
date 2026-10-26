@@ -98,9 +98,9 @@ non-blocking):
 
 | LED | pin | driven by | meaning |
 | --- | --- | --- | --- |
-| Green | GPIO 27 | `readStats()` returning true | fresh CSI data is flowing — one short pulse per accepted sample, rate-limited; dark = no frames |
-| Pink | GPIO 26 | the presence state machine | confirmed Motion (or Fall) — not per-frame activity |
-| Red | GPIO 25 | fault logic in `tick()` | Wi-Fi dropped after having been up, or no frames for 5 s while the link is up past a 30 s startup grace; clears itself when the condition ends |
+| Green | GPIO 27 | link + `readStats()` | **connectivity** — solid while the link is up and frames are flowing; slow blink while connecting (link up, room still quiet); dark with no link |
+| Red | GPIO 25 | variance vs threshold (LEDC PWM) | **movement** — brightness follows intensity, smoothed; solid full red for 30 s when the state machine flags a fall (SOS) |
+| Pink | GPIO 26 | fault logic in `tick()` | **link/sensor fault** — Wi-Fi dropped after having been up, or no frames for 5 s while the link is up past a 30 s startup grace; clears itself |
 
 ## How the CSI pipeline works
 
