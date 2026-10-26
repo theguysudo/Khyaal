@@ -17,6 +17,7 @@ export type SignalType =
   | 'gps_motion' // GPS-derived movement — distance/speed, never coordinates
   | 'presence' // ESP32 Wi-Fi sensing: 'motion' | 'idle' | 'lost' | 'fall'
   | 'csi' // ESP32 CSI scalars: variance/mean/rate — never raw subcarriers
+  | 'ir_reflective' // ESP32 IR beam: 'detected' | 'clear' — near-field only
   | 'manual_checkin' // parent tapped "I'm OK"
   | 'sleep_event' // on-device classifier: 'asleep' | 'awake' | 'restless' | 'woke'
   | 'sound_event'; // on-device loudness: 'quiet' | 'noise' | 'loud' — never audio
@@ -192,6 +193,8 @@ export interface CsiPoint {
   thr: number;
   /** Presence state at the moment of the reading. */
   state: string;
+  /** 1 when the reflective IR beam sees an object (near-field only). */
+  ir?: number;
   sourceId: string;
   /** The slow-window readings in this batch (one per 250 ms). */
   samples?: number[];
@@ -367,6 +370,7 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
   'gps_motion',
   'presence',
   'csi',
+  'ir_reflective',
   'manual_checkin',
   'sleep_event',
   'sound_event',

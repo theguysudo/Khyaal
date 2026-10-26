@@ -26,6 +26,7 @@
 #include "config_store.h"
 #include "csi_sensor.h"
 #include "csi_traffic.h"
+#include "ir_sensor.h"
 #include "led_controller.h"
 #include "presence.h"
 #include "tunnel_crypto.h"
@@ -43,6 +44,7 @@ CsiSensor csi;
 PresenceStateMachine::Params smParams;
 PresenceStateMachine sm;
 LedController leds;
+IrSensor ir;
 CsiTraffic traffic;
 
 volatile bool wifiUp = false;
@@ -68,6 +70,7 @@ struct Calibration {
 // a scope reading.
 char pendingPresence[320] = "";
 char pendingCsi[384] = "";
+char pendingIr[192] = "";
 uint32_t pendingAttempts = 0;
 uint32_t nextLanAttemptMs = 0;
 
@@ -91,6 +94,8 @@ uint32_t lastDevicePollMs = 0;
 uint32_t wifiUpSinceMs = 0;
 uint32_t lastFramesSeenMs = 0;
 bool csiFilterOn = true;
+float ledBaseline = 0.0f;  // the room's quiet, as an EMA of slow variance
+float lastRedLevel = 0.0f;
 
 // ------------------------------------------------------------------ logging
 // Every log line starts with "[<ms>] " — deliberately not JSON, so the
@@ -157,8 +162,9 @@ void buildCsiJson(char *out, size_t cap, const float *slow, const float *fast,
                   const char *state) {
   int n = snprintf(out, cap,
                    "{\"type\":\"csi\",\"value\":%.2f,\"meta\":{\"mean\":%.1f,"
-                   "\"pkt\":%.1f,\"state\":\"%s\",\"thr\":%.1f,\"samples\":[",
-                   slowVariance, mean, packetRate, state, cfg.threshold);
+                   "\"pkt\":%.1f,\"state\":\"%s\",\"thr\":%.1f,\"ir\":%d,\"samples\":[",
+                   slowVariance, mean, packetRate, state, cfg.threshold,
+                   ir.state() == IrSensor::State::DETECTED ? 1 : 0);
   if (n < 0) { out[0] = '\0'; return; }
   size_t pos = static_cast<size_t>(n);
   if (pos >= cap) { out[0] = '\0'; return; }
@@ -186,6 +192,36 @@ void buildCsiJson(char *out, size_t cap, const float *slow, const float *fast,
   } else {
     snprintf(out + pos, cap - pos, "]}}");
   }
+}
+
+/**
+ * The IR beam's verdict as its own signal — kept distinct from CSI everywhere
+ * downstream (a different SignalType), so the two channels are never fused
+ * silently.
+ */
+void emitIr(const char *value) {
+  char json[sizeof(pendingIr)];
+  if (timeSynced) {
+    snprintf(json, sizeof(json),
+             "{\"type\":\"ir_reflective\",\"value\":\"%s\",\"ts\":%llu}",
+             value, static_cast<unsigned long long>(epochMs()));
+  } else {
+    snprintf(json, sizeof(json),
+             "{\"type\":\"ir_reflective\",\"value\":\"%s\"}", value);
+  }
+  if (cfg.transport == TRANSPORT_LAN) {
+    snprintf(pendingIr, sizeof(pendingIr), "%s", json);
+  } else {
+    Serial.println(json);
+  }
+}
+
+void onIrEvent(IrSensor::State state, uint32_t nowMs) {
+  (void)nowMs;
+  const bool detected = state == IrSensor::State::DETECTED;
+  leds.onIr(detected);
+  klog("ir: %s", detected ? "object inside the beam" : "beam clear");
+  emitIr(detected ? "detected" : "clear");
 }
 
 void emitCsi() {
@@ -231,14 +267,16 @@ void flushLan(uint32_t nowMs) {
   if (cfg.transport != TRANSPORT_LAN || !wifiUp) return;
   const bool hasPresence = pendingPresence[0] != '\0';
   const bool hasCsi = pendingCsi[0] != '\0';
-  if (!hasPresence && !hasCsi) return;
+  const bool hasIr = pendingIr[0] != '\0';
+  if (!hasPresence && !hasCsi && !hasIr) return;
   if (pendingAttempts > 0 &&
       static_cast<int32_t>(nowMs - nextLanAttemptMs) < 0) {
     return;  // backing off
   }
 
-  // Presence wins: a fall must not wait behind a scope reading.
-  const char *plain = hasPresence ? pendingPresence : pendingCsi;
+  // Presence wins, then the scope, then IR: a fall must not wait behind a
+  // scope reading, and a scope reading must not wait behind an IR event.
+  const char *plain = hasPresence ? pendingPresence : (hasCsi ? pendingCsi : pendingIr);
   const char *body = plain;
   if (cfg.encrypt && cfg.apiKey[0] && cfg.householdId[0] && cfg.sourceId[0]) {
     // Sealed per attempt, not per enqueue: a retry after a lost response
@@ -255,9 +293,11 @@ void flushLan(uint32_t nowMs) {
     if (hasPresence) {
       klog("ingest ok (%s)", presenceValue(sm.state()));
       pendingPresence[0] = '\0';
-    } else {
+    } else if (hasCsi) {
       klog("csi batch accepted");
       pendingCsi[0] = '\0';
+    } else {
+      pendingIr[0] = '\0';
     }
     pendingAttempts = 0;
     nextLanAttemptMs = 0;
@@ -400,6 +440,7 @@ void printHelp() {
   Serial.println("  csi <on|off>    stream the live CSI scope readings (on = default)");
   Serial.println("  ping <on|off>   gateway ping traffic that feeds CSI frames (on = default)");
   Serial.println("  bssid <on|off>  CSI frame filter (auto-relaxes if the AP sends none)");
+  Serial.println("  ir <on|off>     reflective IR beam channel on GPIO 23 (on = default)");
   Serial.println("  wififorget      clear stored Wi-Fi, disconnect");
   Serial.println("  statusjson      one-line machine-readable status (relay)");
   Serial.println("  factory         clear NVS, back to compiled defaults");
@@ -504,6 +545,18 @@ void dispatchCli(char *line) {
   } else if (strcmp(line, "falltest") == 0) {
     klog("falltest: emitting one 'fall' presence event");
     emitPresence("fall");
+  } else if (strcmp(line, "ir") == 0) {
+    if (strcmp(arg, "off") == 0) {
+      ir.setEnabled(false);
+      klog("ir beam channel off");
+    } else if (strcmp(arg, "on") == 0) {
+      ir.setEnabled(true);
+      klog("ir beam channel on");
+    } else {
+      klog("usage: ir <on|off>  (currently %s, %s)",
+           ir.enabled() ? "on" : "off",
+           ir.state() == IrSensor::State::DETECTED ? "object detected" : "clear");
+    }
   } else if (strcmp(line, "bssid") == 0) {
     if (strcmp(arg, "off") == 0) {
       csi.setBssidFilter(false);
@@ -646,6 +699,8 @@ void setup() {
   // WiFi.mode() the esp_wifi_set_csi* calls fail on an uninitialized driver
   // and the sensor silently never sees a frame.
   csi.begin();
+  ir.begin();
+  ir.onEvent(onIrEvent);
 
   if (cfg.ssid[0]) {
     klog("connecting to \"%s\" ...", cfg.ssid);
@@ -705,22 +760,33 @@ void loop() {
     if (haveData) {
       leds.onCsiSample(nowMs);
       lastFramesSeenMs = nowMs;
-      // Red's brightness: how far the variance is above the motion
-      // threshold — the same ratio the server's blueprint uses for its
-      // "how strong is the movement" level.
-      const float level = cfg.threshold > 0.0f
-                              ? (lastVariance - cfg.threshold) / cfg.threshold
-                              : 0.0f;
+      // Red's brightness: how far the reading rises above the room's own
+      // quiet, not just the motion threshold. The threshold is a verdict
+      // (motion needs 2 s above it) — the LED is an instrument, so it uses
+      // the fast window against an EMA of the slow one and reacts to a hand
+      // that would never survive the verdict's 2 s bar.
+      ledBaseline = ledBaseline == 0.0f
+                        ? lastVariance
+                        : 0.97f * ledBaseline + 0.03f * lastVariance;
+      const float ref = cfg.threshold > 4.0f * ledBaseline
+                            ? cfg.threshold
+                            : 4.0f * ledBaseline;
+      float level = (lastFastVariance - 1.6f * ledBaseline) / (ref + 1e-6f);
+      level = level < 0.0f ? 0.0f : (level > 1.0f ? 1.0f : level);
       leds.onMotionLevel(level);
+      lastRedLevel = level;
     } else {
       leds.onMotionLevel(0.0f);
+      lastRedLevel = 0.0f;
     }
     if (nowMs - lastStatusMs >= kStatusPeriodMs) {
       lastStatusMs = nowMs;
       if (haveData) {
-        klog("csi var=%.2f mean=%.1f pkt/s=%.1f thr=%.1f state=%s",
+        klog("csi var=%.2f mean=%.1f pkt/s=%.1f thr=%.1f state=%s red=%d%% ir=%s",
              lastVariance, lastMean, lastPacketRate, cfg.threshold,
-             presenceValue(sm.state()));
+             presenceValue(sm.state()),
+             static_cast<int>(lastRedLevel * 100.0f),
+             ir.state() == IrSensor::State::DETECTED ? "near" : "clear");
       } else {
         klog("csi waiting for frames (wifi=%s) state=%s",
              wifiUp ? "up" : "down", presenceValue(sm.state()));
@@ -755,6 +821,7 @@ void loop() {
     klog("     (restore with: bssid on)");
   }
 
+  ir.tick(nowMs);
   pollDeviceActions(nowMs);
   flushLan(nowMs);
   leds.tick(nowMs);

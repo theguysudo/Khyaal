@@ -196,6 +196,7 @@ function csiPointFromSignal(signal: Signal): CsiPoint | null {
     : samples.length > 0
       ? samples[samples.length - 1]
       : 0;
+  const ir = meta.ir === 1 || meta.ir === true;
   return {
     ts: signal.ts,
     v,
@@ -203,6 +204,7 @@ function csiPointFromSignal(signal: Signal): CsiPoint | null {
     thr: finite(meta.thr),
     state: typeof meta.state === 'string' && meta.state ? meta.state : 'idle',
     sourceId: signal.sourceId,
+    ...(ir ? { ir: 1 } : {}),
     ...(samples.length ? { samples } : {}),
     ...(fast.length ? { fast } : {}),
   };

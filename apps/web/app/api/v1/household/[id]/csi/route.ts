@@ -64,6 +64,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         f: fast[i] ?? samples[i],
         thr: batch.thr,
         state: batch.state,
+        ...(batch.ir === 1 ? { ir: 1 } : {}),
         sourceId: batch.sourceId,
       });
     }
@@ -105,10 +106,33 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const events = deriveCsiEvents(batches, roomName);
   const estimated = estimatePosition(anchors);
 
+  // The IR beam is a separate channel, reported separately: its own event
+  // list (object entered / left the beam) and a per-anchor flag. Nothing
+  // here feeds the presence verdict — IR never overrides CSI.
+  const irEvents: { ts: number; sourceId: string; state: 'detected' | 'clear' }[] = [];
+  let lastIr: number | null = null;
+  for (const b of batches) {
+    const ir = b.ir === 1 ? 1 : 0;
+    if (lastIr === null || ir !== lastIr) {
+      irEvents.push({ ts: b.ts, sourceId: b.sourceId, state: ir === 1 ? 'detected' : 'clear' });
+      lastIr = ir;
+    }
+  }
+  // Per-anchor IR: whether the newest batches of that source see an object.
+  const irBySource = new Map<string, number>();
+  for (const b of batches) {
+    if (b.ir === 1) irBySource.set(b.sourceId, 1);
+    else if (!irBySource.has(b.sourceId)) irBySource.set(b.sourceId, 0);
+  }
+
   return NextResponse.json({
     points,
     events,
-    anchors,
+    irEvents,
+    anchors: anchors.map((a) => ({
+      ...a,
+      ...(irBySource.get(a.sourceId) === 1 ? { irDetected: true } : {}),
+    })),
     estimated,
     threshold: batches.length ? batches[batches.length - 1].thr : 0,
     blueprint,

@@ -63,7 +63,7 @@ RECONNECT_DELAY_S = 2.0
 # Device event types the relay passes on to the server. "presence" is the
 # state machine's verdict; "csi" is the batched live reading the dashboard
 # scope draws. Everything else the board prints (scan/status JSON) stays local.
-FORWARDED_TYPES = frozenset({"presence", "csi"})
+FORWARDED_TYPES = frozenset({"presence", "csi", "ir_reflective"})
 
 
 def log(msg: str) -> None:

@@ -20,15 +20,20 @@ constexpr int RED_LED_PIN = 25;
 constexpr int RED_PWM_FREQ_HZ = 5000;
 constexpr int RED_PWM_RESOLUTION = 8;  // 0..255 duty
 
-// Red duty at the moment motion crosses the threshold — a visible floor so
-// "just detected" does not look like "off", before intensity takes over.
+// Red duty at the moment motion shows up — a visible floor so "just
+// detected" does not look like "off", before intensity takes over.
 constexpr uint8_t RED_DUTY_FLOOR = 60;
+// What an IR detection holds the red duty at: something is right there.
+constexpr uint8_t RED_DUTY_IR_FLOOR = 140;
 
 // Green: the "connecting" blink while the link is up but frames are silent.
 constexpr uint32_t GREEN_BLINK_PERIOD_MS = 1200;
 
-// Pink: what counts as a fault, and how long the board may take to start
-// producing frames after link-up before it counts as one.
+// Pink: how long one presence-transition pulse lasts.
+constexpr uint32_t PINK_PULSE_MS = 600;
+
+// Fault detection: how long without frames counts as sensor silence, and how
+// long the board may take to start producing after link-up.
 constexpr uint32_t DATA_TIMEOUT_MS = 5000;
 constexpr uint32_t STARTUP_GRACE_MS = 30000;
 
@@ -70,6 +75,9 @@ void LedController::onCsiSample(uint32_t nowMs) {
 }
 
 void LedController::onPresence(const char *state) {
+  // Every genuine verdict change gets a pulse — movement starting, the room
+  // going quiet, a fall, the link being lost. A fall also latches red.
+  pinkPulseUntilMs_ = millis() + PINK_PULSE_MS;
   if (state != nullptr && strcmp(state, "fall") == 0) {
     sosLatch_ = true;
     sosSinceMs_ = millis();
@@ -81,6 +89,8 @@ void LedController::onMotionLevel(float level) {
     targetLevel_ = level < 0.0f ? 0.0f : (level > 1.0f ? 1.0f : level);
   }
 }
+
+void LedController::onIr(bool detected) { irDetected_ = detected; }
 
 void LedController::onWifi(bool up, uint32_t nowMs) {
   if (up == wifiUp_) return;
@@ -104,14 +114,15 @@ void LedController::tick(uint32_t nowMs) {
   }
   digitalWrite(GREEN_LED_PIN, greenOn ? HIGH : LOW);
 
-  // ---- pink: link / sensor fault -----------------------------------------
+  // ---- pink: presence-transition pulses, solid on fault -------------------
   const bool linkStale =
       wifiUp_ && (nowMs - wifiUpSinceMs_) > STARTUP_GRACE_MS &&
       (!haveCsiSample_ || (nowMs - lastCsiSampleMs_) > DATA_TIMEOUT_MS);
   const bool fault = (everWifiUp_ && !wifiUp_) || linkStale;
-  digitalWrite(PINK_LED_PIN, fault ? HIGH : LOW);
+  const bool pinkOn = fault || nowMs < pinkPulseUntilMs_;
+  digitalWrite(PINK_LED_PIN, pinkOn ? HIGH : LOW);
 
-  // ---- red: movement intensity, solid on SOS ------------------------------
+  // ---- red: movement intensity, IR floor, solid on SOS --------------------
   if (sosLatch_ && (nowMs - sosSinceMs_) > SOS_LATCH_MS) {
     sosLatch_ = false;
   }
@@ -121,6 +132,8 @@ void LedController::tick(uint32_t nowMs) {
   uint8_t duty = 0;
   if (sosLatch_) {
     duty = 255;
+  } else if (irDetected_) {
+    duty = RED_DUTY_IR_FLOOR;
   } else if (level_ > 0.02f) {
     const float scaled = RED_DUTY_FLOOR + (255.0f - RED_DUTY_FLOOR) * level_;
     duty = static_cast<uint8_t>(scaled + 0.5f);
