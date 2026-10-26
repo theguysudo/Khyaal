@@ -108,10 +108,18 @@ export function useHouseholdState(id: string, intervalMs = 1500) {
 }
 
 /** Live CSI scope bundle — client-safe mirror of GET /api/v1/household/{id}/csi. */
+/** The reflective IR beam — a distinct channel, never fused with CSI. */
+export interface CsiIrEvent {
+  ts: number;
+  sourceId: string;
+  state: 'detected' | 'clear';
+}
+
 export interface CsiBundle {
   points: CsiPoint[];
   events: CsiEvent[];
-  anchors: CsiAnchor[];
+  irEvents: CsiIrEvent[];
+  anchors: (CsiAnchor & { irDetected?: boolean })[];
   estimated: CsiEstimate | null;
   threshold: number;
   blueprint: Blueprint;

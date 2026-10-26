@@ -99,7 +99,7 @@ export function BentoCard({
   return (
     <section
       aria-label={label}
-      className={`relative min-w-0 overflow-hidden rounded-[24px] border border-ink/10 bg-white p-5 text-ink shadow-[0_2px_24px_rgba(42,36,29,0.06)] sm:p-6 ${className}`}
+      className={`relative min-w-0 overflow-hidden rounded-[24px] border border-ink/10 bg-white p-5 text-ink shadow-[0_1px_2px_rgba(42,36,29,0.04),0_10px_30px_-12px_rgba(42,36,29,0.10)] sm:p-6 ${className}`}
     >
       {children}
     </section>

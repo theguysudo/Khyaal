@@ -21,6 +21,9 @@ interface SleepSoundEvent {
   ts: number;
 }
 
+const FOCUS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+
 export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }) {
   const engineRef = React.useRef<NatureSoundEngine | null>(null);
   const [playing, setPlaying] = React.useState<Record<SoundId, boolean>>({
@@ -175,7 +178,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
             {anyPlaying && (
               <button
                 onClick={stopAll}
-                className="rounded-full border border-ink/15 px-3 py-1 text-[11px] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink"
+                className={`rounded-full border border-ink/15 px-3 py-1 text-[11px] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink ${FOCUS}`}
               >
                 stop all
               </button>
@@ -187,7 +190,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
                 masterMuted
                   ? 'border-[#b23a2f]/40 bg-[#f6dcd8]/70 text-[#77231c]'
                   : 'border-ink/15 text-ink/55 hover:border-ink/30 hover:text-ink'
-              }`}
+              } ${FOCUS}`}
             >
               {masterMuted ? '🔇 muted' : '🔊 sound on'}
             </button>
@@ -213,9 +216,9 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
                   onClick={() => toggle(s.id)}
                   disabled={!supported}
                   aria-label={`${on ? 'Stop' : 'Play'} ${s.label}`}
-                  className={`flex h-9 w-9 flex-none items-center justify-center rounded-full text-base transition-transform active:scale-95 ${
+                  className={`flex h-9 w-9 flex-none items-center justify-center rounded-full text-base transition-transform active:scale-95 motion-reduce:active:scale-100 ${
                     on ? 'bg-clay text-paper shadow-[0_4px_14px_rgba(185,92,56,.35)]' : 'bg-white text-ink/60 shadow-sm'
-                  } disabled:opacity-40`}
+                  } disabled:opacity-40 ${FOCUS}`}
                 >
                   {on ? '❚❚' : s.glyph}
                 </button>
@@ -242,7 +245,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
                   aria-pressed={muted[s.id]}
                   className={`flex-none rounded-full px-2 py-1 text-[11px] transition-colors ${
                     muted[s.id] ? 'bg-ink/10 text-ink/45' : 'text-ink/35 hover:bg-ink/5 hover:text-ink/60'
-                  }`}
+                  } ${FOCUS}`}
                 >
                   {muted[s.id] ? '🔇' : '🔈'}
                 </button>

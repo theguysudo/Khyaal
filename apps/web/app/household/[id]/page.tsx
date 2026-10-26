@@ -20,6 +20,20 @@ import BlueprintMap from '@/components/dashboard/BlueprintMap';
 import CsiScope from '@/components/dashboard/CsiScope';
 import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
 
+/**
+ * Focus rings shared by every actionable chip on the dashboard. Kept as full
+ * literal strings (no runtime composition) so Tailwind's scanner sees each
+ * class and generates it.
+ */
+const FOCUS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+const FOCUS_ON_PAPER =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-paper';
+const FOCUS_ON_RED =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b23a2f]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fdf3f1]';
+const FOCUS_ON_PAPER_RED =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b23a2f]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-paper';
+
 export default function DashboardPage() {
   const { id } = useParams<{ id: string }>();
   const { bundle, error } = useHouseholdState(id);
@@ -31,7 +45,7 @@ export default function DashboardPage() {
         <div className="max-w-sm rounded-3xl border border-ink/10 bg-white p-8 text-center shadow-sm">
           <p className="font-heading text-xl text-ink">We couldn't reach this household</p>
           <p className="mt-2 text-sm text-ink/60">{error}</p>
-          <Link href="/login" className="mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm text-paper">
+          <Link href="/login" className={`mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm text-paper transition-colors hover:bg-ink/85 ${FOCUS_ON_PAPER}`}>
             Your families
           </Link>
         </div>
@@ -62,13 +76,20 @@ export default function DashboardPage() {
 
   return (
     <main
-      className="min-h-screen px-4 pb-16 pt-6 transition-colors duration-700 sm:px-8"
-      style={{ background: `linear-gradient(180deg, ${meta.soft} 0%, #faf6ef 40%)` }}
+      className="min-h-screen px-4 pb-16 pt-6 transition-colors duration-700 motion-reduce:transition-none sm:px-8"
+      style={{
+        // The tint rides on background-color (which transition-colors can
+        // actually animate); the paper wash above it is a static gradient.
+        // Together they render pixel-identically to a hard-coded gradient —
+        // but a tier change now cross-fades instead of snapping.
+        backgroundColor: meta.soft,
+        backgroundImage: 'linear-gradient(180deg, rgba(250,246,239,0) 0%, #faf6ef 40%)',
+      }}
     >
       <div className="mx-auto max-w-5xl">
         {/* header */}
         <header className="flex items-center justify-between">
-          <Link href="/login" className="flex items-center gap-2">
+          <Link href="/login" className="flex items-center gap-2 rounded-full px-1 py-0.5">
             <span className="font-heading text-lg tracking-tight text-ink">Khayaal</span>
             <span className="text-clay">✳︎</span>
           </Link>
@@ -76,49 +97,84 @@ export default function DashboardPage() {
             {hh.simTimeOffsetMs !== 0 && (
               <span className="rounded-full bg-dusk/10 px-3 py-1 text-xs text-dusk">demo clock · {fmtClock(bundle.simNowTs)}</span>
             )}
-            <Link href={`/household/${id}/settings`} className="rounded-full border border-ink/15 bg-white/70 px-4 py-1.5 text-ink/70 transition-colors hover:bg-white">
+            <Link
+              href={`/household/${id}/settings`}
+              className={`rounded-full border border-ink/15 bg-white/70 px-4 py-1.5 text-ink/70 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
+            >
               Settings
             </Link>
           </div>
         </header>
 
-        {/* tier-3 alert — the only thing allowed to shout */}
-        {isAlert && (
-          <section className="mt-6 rounded-[24px] border-2 border-[#b23a2f]/40 bg-white p-5 shadow-[0_10px_40px_rgba(178,58,47,0.12)] sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#b23a2f]">Needs attention</p>
-                <p className="mt-1.5 font-heading text-xl text-ink">{hh.parentName} hasn't responded to the nudge or the check-in.</p>
-                <p className="mt-1 text-sm text-ink/60">
-                  {state.ack
-                    ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
-                    : hh.callPlan
-                      ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
-                      : 'A call is usually the right next step.'}
+        {/*
+          tier-3 alert — the only thing allowed to shout.
+          The section stays mounted and collapses through a grid row so the
+          bento below glides aside instead of teleporting when a poll flips
+          the tier; when collapsed it is inert, so the hidden buttons can
+          neither be tabbed into nor clicked.
+        */}
+        <div
+          className="grid transition-[grid-template-rows] duration-500 ease-out motion-reduce:transition-none"
+          style={{ gridTemplateRows: isAlert ? '1fr' : '0fr' }}
+          aria-hidden={!isAlert}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <section
+              inert={!isAlert}
+              className={`mt-6 rounded-[24px] border border-[#b23a2f]/25 border-l-4 border-l-[#b23a2f] bg-white p-5 shadow-[0_12px_44px_rgba(178,58,47,0.14)] transition-opacity duration-500 motion-reduce:transition-none sm:p-6 ${
+                isAlert ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-xl">
+                  <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#b23a2f]">
+                    <span className="inline-block h-2 w-2 rounded-full bg-[#b23a2f]" aria-hidden />
+                    Needs attention
+                  </p>
+                  <p className="mt-2 font-heading text-xl text-ink">{hh.parentName} hasn't responded to the nudge or the check-in.</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink/60">
+                    {state.ack
+                      ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
+                      : hh.callPlan
+                        ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
+                        : 'A call is usually the right next step.'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  <a
+                    href="#"
+                    onClick={(e) => e.preventDefault()}
+                    title="Wire your number in settings — this demo cannot place calls"
+                    className={`rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#9e352b] ${FOCUS_ON_RED}`}
+                  >
+                    📞 Call {hh.parentName}
+                  </a>
+                  <button
+                    onClick={ack}
+                    disabled={acking}
+                    className={`rounded-full border border-[#b23a2f]/35 bg-[#b23a2f]/[0.05] px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 disabled:opacity-50 ${FOCUS_ON_RED}`}
+                  >
+                    {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
+                  </button>
+                  <button
+                    onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
+                    className={`rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
+                  >
+                    Snooze 1 h
+                  </button>
+                </div>
+              </div>
+              {circle.length > 0 && (
+                <p className="mt-3 border-t border-[#b23a2f]/15 pt-3 text-xs text-ink/50">
+                  Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2.5">
-                <a href="#" onClick={(e) => e.preventDefault()} title="Wire your number in settings — this demo cannot place calls" className="rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90">
-                  📞 Call {hh.parentName}
-                </a>
-                <button onClick={ack} disabled={acking} className="rounded-full border border-[#b23a2f]/40 px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/60 disabled:opacity-50">
-                  {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
-                </button>
-                <button onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })} className="rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:bg-paper">
-                  Snooze 1 h
-                </button>
-              </div>
-            </div>
-            {circle.length > 0 && (
-              <p className="mt-3 border-t border-[#b23a2f]/15 pt-3 text-xs text-ink/50">
-                Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
-              </p>
-            )}
-          </section>
-        )}
+              )}
+            </section>
+          </div>
+        </div>
 
         {/* the bento */}
-        <div className="mt-6 grid grid-cols-12 gap-4">
+        <div className="mt-6 grid grid-cols-12 gap-4 sm:gap-5">
           <StatusCard bundle={bundle} />
           <TrendCard bundle={bundle} />
           <CommandsCard id={id} bundle={bundle} />
@@ -229,7 +285,12 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
           <button
             key={t}
             onClick={() => setType(t)}
-            className={`rounded-full border px-4 py-1.5 text-[13px] transition-colors ${type === t ? 'border-clay bg-clay/10 text-claydeep' : 'border-ink/15 text-ink/60 hover:bg-paper'}`}
+            aria-pressed={type === t}
+            className={`rounded-full border px-4 py-1.5 text-[13px] transition-colors ${
+              type === t
+                ? 'border-clay bg-clay/10 text-claydeep'
+                : 'border-ink/15 text-ink/60 hover:border-ink/25 hover:bg-paper'
+            } ${FOCUS}`}
           >
             {label}
           </button>
@@ -253,20 +314,25 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
                   ? 'एक छोटा, प्यारा संदेश…'
                   : 'A short, warm message…'
           }
-          className="flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-clay"
+          className="min-w-0 flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
         />
-        <div className="flex overflow-hidden rounded-full border border-ink/15 text-xs">
+        <div className="flex flex-none overflow-hidden rounded-full border border-ink/15 text-xs">
           {(['en', 'hi'] as const).map((l) => (
             <button
               key={l}
               onClick={() => setLang(l)}
-              className={`px-3 py-2.5 transition-colors ${lang === l ? 'bg-ink text-paper' : 'text-ink/50 hover:bg-paper'}`}
+              aria-pressed={lang === l}
+              className={`px-3 py-2.5 transition-colors ${lang === l ? 'bg-ink text-paper' : 'text-ink/50 hover:bg-paper'} ${FOCUS_ON_PAPER}`}
             >
               {l === 'en' ? 'EN' : 'हिं'}
             </button>
           ))}
         </div>
-        <button onClick={send} disabled={busy || !text.trim()} className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40">
+        <button
+          onClick={send}
+          disabled={busy || !text.trim()}
+          className={`flex-none rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+        >
           {busy ? 'Sending…' : 'Send'}
         </button>
       </div>
@@ -296,7 +362,7 @@ function RhythmCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
         {activity.map((v, h) => (
           <div key={h} className="group relative flex-1">
             <div
-              className="w-full rounded-t transition-all duration-500"
+              className="w-full rounded-t transition-all duration-500 motion-reduce:transition-none"
               style={{
                 height: `${Math.max(4, (v / max) * 76)}px`,
                 background: h === nowHour ? '#b95c38' : v === 0 ? '#e7e0d3' : '#7d8c6f',
@@ -331,7 +397,7 @@ function LadderCard({ tier }: { tier: number }) {
           return (
             <div key={label as string} className="flex items-center gap-3">
               <span
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold transition-colors duration-500"
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold transition-colors duration-500 motion-reduce:transition-none"
                 style={{ background: active ? (i === 3 ? '#b23a2f' : i === 0 ? '#4c7a4f' : '#c98a2b') : '#efe9de', color: active ? 'white' : '#a2988a' }}
               >
                 {i}
@@ -363,7 +429,10 @@ function ExplainCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>[
         {state.contributions.map((c, i) => (
           <div key={i} className="flex items-start gap-3">
             <div className="mt-1.5 h-2 w-24 flex-none overflow-hidden rounded-full bg-ink/10">
-              <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, (c.effect / 30) * 100)}%`, background: meta.color }} />
+              <div
+                className="h-full rounded-full transition-[width] duration-700 motion-reduce:transition-none"
+                style={{ width: `${Math.min(100, (c.effect / 30) * 100)}%`, background: meta.color }}
+              />
             </div>
             <p className="text-sm leading-relaxed text-ink/75">{c.reason}</p>
           </div>
@@ -419,7 +488,7 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
         <select
           value={provider}
           onChange={(e) => setProvider(e.target.value as 'minimax' | 'nvidia' | 'openrouter')}
-          className="rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none"
+          className={`rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15 ${FOCUS_ON_PAPER}`}
         >
           <option value="minimax">MiniMax</option>
           <option value="nvidia">NVIDIA NIM</option>
@@ -429,9 +498,13 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder="API key (or set env on the server)"
-          className="min-w-[180px] flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay"
+          className="min-w-[180px] flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
         />
-        <button onClick={run} disabled={busy} className="rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40">
+        <button
+          onClick={run}
+          disabled={busy}
+          className={`rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+        >
           {busy ? 'Reading the week…' : 'Run analysis'}
         </button>
       </div>
@@ -492,22 +565,34 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
                 {m.phone ? ` · ${m.phone}` : ''}
               </span>
             </span>
-            <button onClick={() => manage('remove', m.email)} disabled={busy} className="text-xs text-ink/40 transition-colors hover:text-[#b23a2f]">
+            <button
+              onClick={() => manage('remove', m.email)}
+              disabled={busy}
+              className={`rounded-full px-2 py-1 text-xs text-ink/40 transition-colors hover:bg-[#f6dcd8]/60 hover:text-[#b23a2f] disabled:opacity-40 ${FOCUS_ON_PAPER_RED}`}
+            >
               remove
             </button>
           </li>
         ))}
       </ul>
       <div className="mt-3 space-y-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (they sign in with Google)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (for the alert call chain)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15" />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (they sign in with Google)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15" />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (for the alert call chain)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15" />
         <div className="flex items-center justify-between gap-2">
-          <select value={role} onChange={(e) => setRole(e.target.value as 'family' | 'neighbor')} className="rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as 'family' | 'neighbor')}
+            className={`rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15 ${FOCUS_ON_PAPER}`}
+          >
             <option value="neighbor">Neighbour</option>
             <option value="family">Family</option>
           </select>
-          <button onClick={() => manage('add')} disabled={busy || !email.includes('@')} className="rounded-full bg-ink px-4 py-2 text-sm text-paper transition-opacity hover:opacity-90 disabled:opacity-40">
+          <button
+            onClick={() => manage('add')}
+            disabled={busy || !email.includes('@')}
+            className={`rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+          >
             Add to circle
           </button>
         </div>
@@ -580,7 +665,7 @@ function PushCard({ id }: { id: string }) {
           <button
             onClick={subscribe}
             disabled={busy || status === 'on'}
-            className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
+            className={`rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
           >
             {status === 'on' ? 'Alerts are on ✓' : busy ? 'Enabling…' : 'Enable urgent alerts here'}
           </button>
@@ -781,11 +866,19 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
             ? `Connected to ${status.ssid} · ${bars(status.rssi ?? -80)} ${status.rssi ?? ''} dBm${status.ip ? ` · ${status.ip}` : ''}`
             : 'Not connected to any network'}
         </span>
-        <button onClick={() => queue('wifi_scan')} disabled={busy !== null} className="rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-ink hover:text-paper disabled:opacity-40">
+        <button
+          onClick={() => queue('wifi_scan')}
+          disabled={busy !== null}
+          className={`rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
+        >
           {busy === 'wifi_scan' ? 'Scanning…' : 'Scan networks'}
         </button>
         {status?.connected && (
-          <button onClick={() => queue('wififorget')} disabled={busy !== null} className="rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-[#b23a2f] hover:text-paper disabled:opacity-40">
+          <button
+            onClick={() => queue('wififorget')}
+            disabled={busy !== null}
+            className={`rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-[#b23a2f] hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
+          >
             Forget Wi-Fi
           </button>
         )}
@@ -827,7 +920,7 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
                     setSelected(n.ssid);
                     setPassword('');
                   }}
-                  className={`flex w-full items-center justify-between px-2 py-2 text-left text-sm transition-colors hover:bg-paper ${selected === n.ssid ? 'bg-paper' : ''}`}
+                  className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-paper ${selected === n.ssid ? 'bg-paper' : ''} ${FOCUS_ON_PAPER}`}
                 >
                   <span className="text-ink/80">
                     {n.secure && <span className="mr-1.5 text-ink/40">🔒</span>}
@@ -847,12 +940,12 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && queue('wifi_connect', { ssid: selected, password })}
             placeholder={`Password for ${selected}`}
-            className="flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none focus:border-clay"
+            className="min-w-0 flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
           />
           <button
             onClick={() => queue('wifi_connect', { ssid: selected, password })}
             disabled={busy !== null || password.length < 8}
-            className="rounded-full bg-ink px-4 py-2 text-sm text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
+            className={`flex-none rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
           >
             {busy === 'wifi_connect' ? 'Joining…' : 'Connect'}
           </button>
@@ -1008,7 +1101,7 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
                 /* keep showing the old one */
               }
             }}
-            className="ml-auto rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
+            className={`ml-auto rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS}`}
           >
             regenerate
           </button>
@@ -1027,13 +1120,14 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
                 <>
                   <button
                     onClick={() => fallTest(s.id)}
-                    className="rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
+                    className={`rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
                   >
                     {testedSrc === s.id ? 'firing…' : 'fall test'}
                   </button>
                   <button
                     onClick={() => setWifiOpenFor(wifiOpenFor === s.id ? null : s.id)}
-                    className="rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
+                    aria-pressed={wifiOpenFor === s.id}
+                    className={`rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
                   >
                     Wi-Fi
                   </button>
@@ -1045,14 +1139,14 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
         <button
           onClick={connectSensor}
           disabled={connectState === 'waiting'}
-          className="rounded-full border border-ink bg-ink px-4 py-2 text-sm text-paper transition-opacity hover:opacity-85 disabled:opacity-50"
+          className={`rounded-full border border-ink bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-50 ${FOCUS}`}
         >
           {connectState === 'waiting' ? 'Connecting…' : 'Connect room sensor (plug in via USB)'}
         </button>
         <button
           onClick={addSensor}
           disabled={busy}
-          className="rounded-full border border-dashed border-ink/25 px-4 py-2 text-sm text-ink/55 transition-colors hover:bg-paper disabled:opacity-40"
+          className={`rounded-full border border-dashed border-ink/25 px-4 py-2 text-sm text-ink/55 transition-colors hover:border-ink/40 hover:bg-paper disabled:opacity-40 ${FOCUS}`}
         >
           {busy ? 'Pairing…' : '+ Add manually'}
         </button>

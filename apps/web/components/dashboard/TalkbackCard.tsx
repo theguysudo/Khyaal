@@ -28,6 +28,12 @@ interface TalkbackSession {
 
 const POLL_MS = 1200;
 
+/** Focus ring shared with the rest of the dashboard's controls. Full literals so Tailwind sees every class. */
+const FOCUS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+const FOCUS_ON_RED =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b23a2f]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fdf3f1]';
+
 export default function TalkbackCard({
   id,
   parentName,
@@ -286,13 +292,13 @@ export default function TalkbackCard({
           <>
             <button
               onClick={() => request('to_parent')}
-              className="rounded-full bg-clay px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-90"
+              className={`rounded-full bg-clay px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-claydeep ${FOCUS}`}
             >
               📞 Ask {parentName} to talk
             </button>
             <button
               onClick={() => request('to_family')}
-              className="rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink/60 transition-colors hover:bg-paper"
+              className={`rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
             >
               Call the family
             </button>
@@ -301,7 +307,7 @@ export default function TalkbackCard({
 
         {isPending && (
           <span className="inline-flex items-center gap-2 rounded-full bg-paper px-4 py-2.5 text-sm text-ink/65">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-clay" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-clay motion-reduce:animate-none" />
             Waiting for {session?.callee === 'parent' ? parentName : 'the family'} to allow it…
           </span>
         )}
@@ -315,23 +321,24 @@ export default function TalkbackCard({
               onTouchStart={startTalking}
               onTouchEnd={stopTalking}
               aria-label="Hold to talk"
-              className={`select-none rounded-full px-7 py-3 text-sm font-medium transition-all active:scale-95 ${
+              className={`select-none rounded-full px-7 py-3 text-sm font-medium transition-all active:scale-95 motion-reduce:active:scale-100 ${FOCUS} ${
                 talking
                   ? 'bg-[#b23a2f] text-white shadow-[0_8px_28px_rgba(178,58,47,.4)]'
-                  : 'bg-ink text-paper hover:opacity-90'
+                  : 'bg-ink text-paper hover:bg-ink/85'
               }`}
             >
               {talking ? '🎙 talking… release to stop' : '🎙 hold to talk'}
             </button>
             <button
               onClick={() => setMuted((m) => !m)}
-              className="rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink/60 transition-colors hover:bg-paper"
+              aria-pressed={muted}
+              className={`rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
             >
               {muted ? '🔇 muted' : '🔊 microphone on'}
             </button>
             <button
               onClick={endCall}
-              className="rounded-full border border-[#b23a2f]/40 px-4 py-2.5 text-sm text-[#77231c] transition-colors hover:bg-[#f6dcd8]/60"
+              className={`rounded-full border border-[#b23a2f]/40 px-4 py-2.5 text-sm text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 ${FOCUS_ON_RED}`}
             >
               hang up
             </button>
@@ -344,7 +351,7 @@ export default function TalkbackCard({
           <span>sent {sent} slices</span>
           <span>heard {heard} slices</span>
           <span className="inline-flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${talking ? 'animate-pulse bg-[#b23a2f]' : 'bg-ink/20'}`} />
+            <span className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${talking ? 'animate-pulse bg-[#b23a2f]' : 'bg-ink/20'}`} />
             {talking ? 'your microphone is open' : 'your microphone is closed'}
           </span>
         </div>
@@ -356,7 +363,7 @@ export default function TalkbackCard({
           {micError && isActive && (
             <button
               onClick={startTalking}
-              className="mt-2 rounded-full border border-ink/15 px-3 py-1.5 text-[11px] text-ink/60 transition-colors hover:bg-paper"
+              className={`mt-2 rounded-full border border-ink/15 px-3 py-1.5 text-[11px] text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
             >
               Try the microphone again
             </button>
@@ -381,13 +388,13 @@ export default function TalkbackCard({
             <div className="mt-5 flex flex-col gap-2.5">
               <button
                 onClick={() => answer(true)}
-                className="rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90"
+                className={`rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition-colors hover:bg-ink/85 ${FOCUS}`}
               >
                 Allow the talkback
               </button>
               <button
                 onClick={() => answer(false)}
-                className="rounded-full border border-ink/15 px-5 py-3 text-sm text-ink/60 transition-colors hover:bg-white"
+                className={`rounded-full border border-ink/15 px-5 py-3 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
               >
                 Not now
               </button>

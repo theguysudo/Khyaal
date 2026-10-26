@@ -16,6 +16,9 @@ import { BentoCard, CardTitle, useReducedMotion, useSize } from './bento';
 import { fmtClock, postJSON, useCsiSeries } from '@/lib/api';
 import type { Blueprint, CsiAnchor } from '@khayaal/shared';
 
+/** The live anchor as the /csi endpoint returns it — may carry the IR flag. */
+type LiveAnchor = CsiAnchor & { irDetected?: boolean };
+
 const MAP_H = 300;
 
 const INK = '#2a241d';
@@ -27,6 +30,10 @@ const DUSK = '#3d3352';
 const GREY = '#c9b8a0';
 
 type Provider = 'auto' | 'nvidia' | 'xai' | 'minimax' | 'openrouter';
+
+/** Focus ring shared with the rest of the dashboard's controls. */
+const FOCUS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
 
 export default function BlueprintMap({ id }: { id: string }) {
   const { bundle } = useCsiSeries(id, 2000);
@@ -78,7 +85,7 @@ export default function BlueprintMap({ id }: { id: string }) {
   // Dots come from the live stream (levels, states), positions from the
   // effective blueprint — plus any streaming sensor the plan does not know
   // about yet, so a live sensor is never invisible.
-  const anchors: CsiAnchor[] = React.useMemo(() => {
+  const anchors: LiveAnchor[] = React.useMemo(() => {
     if (!bundle) return [];
     const eff = savedBp ?? bundle.blueprint;
     const byId = new Map<string, CsiAnchor>();
@@ -311,8 +318,25 @@ export default function BlueprintMap({ id }: { id: string }) {
               const dragging = drag?.sourceId === a.sourceId;
               const roomName = a.roomId ? bp.rooms.find((r) => r.id === a.roomId)?.name ?? null : null;
               const labelY = cy + 22 > H - 2 ? cy - 14 : cy + 22;
+              // The IR beam is near-field and its own channel: it points at
+              // the sensor itself, never at a person's position.
+              const irHere = a.irDetected === true;
               return (
                 <g key={a.sourceId} onPointerDown={onDotDown(a)} style={{ cursor: edit && !saving ? 'grab' : 'default' }}>
+                  {irHere && (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={13}
+                      fill="none"
+                      stroke="#8a5a8f"
+                      strokeWidth="1.5"
+                      strokeDasharray="3 3"
+                      opacity="0.85"
+                    >
+                      <title>{`Object right at the sensor (IR beam) — ${a.label}${roomName ? `, ${roomName}` : ''}`}</title>
+                    </circle>
+                  )}
                   <circle
                     cx={cx}
                     cy={cy}
@@ -359,22 +383,24 @@ export default function BlueprintMap({ id }: { id: string }) {
         <button
           onClick={toggleEdit}
           disabled={saving}
+          aria-pressed={edit}
           className={`rounded-full border px-4 py-1.5 text-[13px] transition-colors disabled:opacity-40 ${
-            edit ? 'border-clay bg-clay/10 text-claydeep' : 'border-ink/15 text-ink/60 hover:bg-paper'
-          }`}
+            edit ? 'border-clay bg-clay/10 text-claydeep' : 'border-ink/15 text-ink/60 hover:border-ink/25 hover:bg-paper'
+          } ${FOCUS}`}
         >
           {saving ? 'Saving…' : edit ? 'Done' : 'Move sensors'}
         </button>
         <button
           onClick={() => runAi('narrate')}
           disabled={busy !== null}
-          className="rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/70 transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+          className={`rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/70 transition-colors hover:border-ink/25 hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS}`}
         >
           {busy === 'narrate' ? 'Reading the room…' : 'What happened?'}
         </button>
         <button
           onClick={() => setAiOpen(!aiOpen)}
-          className="rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/60 transition-colors hover:bg-paper"
+          aria-expanded={aiOpen}
+          className={`rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
         >
           {aiOpen ? 'Hide AI layout' : 'Generate with AI'}
         </button>
@@ -395,12 +421,12 @@ export default function BlueprintMap({ id }: { id: string }) {
               value={roomsText}
               onChange={(e) => setRoomsText(e.target.value)}
               placeholder="2BHK — bedroom, kitchen, hall, balcony"
-              className="min-w-[200px] flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none focus:border-clay"
+              className="min-w-[200px] flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
             />
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value as Provider)}
-              className="rounded-full border border-ink/15 bg-white px-3 py-2 text-sm outline-none"
+              className={`rounded-full border border-ink/15 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15 ${FOCUS}`}
             >
               <option value="auto">Auto</option>
               <option value="nvidia">NVIDIA NIM</option>
@@ -415,12 +441,12 @@ export default function BlueprintMap({ id }: { id: string }) {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="leave empty to use the server key"
-              className="min-w-[200px] flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none focus:border-clay"
+              className="min-w-[200px] flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
             />
             <button
               onClick={() => runAi('generate')}
               disabled={busy !== null}
-              className="rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
+              className={`rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
             >
               {busy === 'generate' ? 'Drafting…' : 'Generate layout'}
             </button>

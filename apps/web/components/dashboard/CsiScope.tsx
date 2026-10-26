@@ -135,6 +135,14 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
   const railEvents = events.filter((e) => e.ts >= t0);
   const recent = events.slice(-4).reverse();
 
+  // The IR beam is the sensor's other channel: near-field only, never part
+  // of the CSI verdict. Its ticks share the rail with a distinct colour.
+  const IR_COLOR = '#8a5a8f';
+  const irEvents = (bundle.irEvents ?? []).slice(-30);
+  const irOnRail = irEvents.filter((e) => e.ts >= t0);
+  const irNearNow = irEvents.length > 0 && irEvents[irEvents.length - 1].state === 'detected';
+  const recentIr = irEvents.slice(-2).reverse();
+
   return (
     <>
       <div className="mt-4 flex items-end justify-between gap-3">
@@ -143,9 +151,17 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
           <p className="mt-1 font-heading text-[32px] leading-none text-ink">{fmtV(latest.v)}</p>
           <p className="mt-1.5 text-xs text-ink/45">{sensorLabel}</p>
         </div>
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ${st.pill}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${st.dot} ${st.pulse && !reduce ? 'animate-pulse' : ''}`} />
-          {st.label}
+        <span className="inline-flex flex-col items-end gap-1.5">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ${st.pill}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${st.dot} ${st.pulse && !reduce ? 'animate-pulse' : ''}`} />
+            {st.label}
+          </span>
+          {irNearNow && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#8a5a8f]/10 px-3 py-1 text-[11px] text-[#8a5a8f]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#8a5a8f]" />
+              Object at the sensor
+            </span>
+          )}
         </span>
       </div>
 
@@ -210,6 +226,21 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
                 <title>{`${e.label} · ${fmtClock(e.ts)}`}</title>
               </line>
             ))}
+            {irOnRail.map((e, i) => (
+              <line
+                key={`ir-${e.ts}-${e.sourceId}-${i}`}
+                x1={X(e.ts)}
+                x2={X(e.ts)}
+                y1={CH - 12}
+                y2={CH - 2}
+                stroke={IR_COLOR}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeDasharray="2 2"
+              >
+                <title>{`${e.state === 'detected' ? 'Object at the sensor (IR beam)' : 'IR beam clear'} · ${fmtClock(e.ts)}`}</title>
+              </line>
+            ))}
           </svg>
         )}
       </div>
@@ -222,6 +253,15 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
             <span className="inline-flex items-center gap-1.5 text-ink/70">
               <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: EVENT_COLOR[e.kind] ?? GREY }} />
               {e.label}
+            </span>
+          </li>
+        ))}
+        {recentIr.map((e, i) => (
+          <li key={`ir-${e.ts}-${i}`} className="flex items-baseline gap-3 text-xs">
+            <span className="flex-none tabular-nums text-ink/40">{fmtClock(e.ts)}</span>
+            <span className="inline-flex items-center gap-1.5 text-ink/70">
+              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: IR_COLOR }} />
+              {e.state === 'detected' ? 'Something is right at the sensor (IR beam)' : 'The IR beam cleared'}
             </span>
           </li>
         ))}

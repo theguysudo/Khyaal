@@ -62,7 +62,7 @@ export default function MovementCard({
               }`}
             >
               <span
-                className={`h-1.5 w-1.5 rounded-full ${movement.moving ? 'animate-pulse bg-clay' : 'bg-ink/25'}`}
+                className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${movement.moving ? 'animate-pulse bg-clay' : 'bg-ink/25'}`}
               />
               {movement.moving ? 'moving' : 'still'}
             </span>
