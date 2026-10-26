@@ -2,6 +2,7 @@ import type {
   AppCommand,
   Baseline,
   CsiPoint,
+  SensorPairRequest,
   DeviceAction,
   Household,
   HouseholdEvent,
@@ -72,6 +73,14 @@ export interface Store {
    */
   noteRelaySeen(sourceId: string): Promise<void>;
   getRelaySeen(sourceId: string): Promise<number | null>;
+
+  /**
+   * The one-click sensor pairing inbox — a single slot per household. The
+   * dashboard mints a source and parks the request here; the USB relay picks
+   * it up on its next poll and types the identity into the board.
+   */
+  putSensorPairRequest(householdId: string, request: SensorPairRequest): Promise<void>;
+  getSensorPairRequest(householdId: string): Promise<SensorPairRequest | null>;
 
   // talkback (consent-first walkie-talkie between family and parent)
   createTalkbackSession(session: TalkbackSession): Promise<TalkbackSession>;
@@ -150,6 +159,7 @@ interface MemoryDb {
   deviceScan: Map<string, { data: unknown; ts: number }>;
   deviceStatus: Map<string, { data: unknown; ts: number }>;
   deviceRelaySeen: Map<string, number>; // keyed by sourceId
+  sensorPairRequests: Map<string, SensorPairRequest>; // one slot per household
   talkbackSessions: Map<string, TalkbackSession>; // keyed by sessionId
   talkbackChunks: Map<string, TalkbackChunk[]>; // keyed by sessionId
 }
@@ -174,6 +184,7 @@ function db(): MemoryDb {
       deviceScan: new Map(),
       deviceStatus: new Map(),
       deviceRelaySeen: new Map(),
+      sensorPairRequests: new Map(),
       talkbackSessions: new Map(),
       talkbackChunks: new Map(),
     };
@@ -392,6 +403,13 @@ export class MemoryStore implements Store {
   }
   async clearSignals(householdId: string): Promise<void> {
     db().signals.set(householdId, []);
+  }
+
+  async putSensorPairRequest(householdId: string, request: SensorPairRequest): Promise<void> {
+    db().sensorPairRequests.set(householdId, request);
+  }
+  async getSensorPairRequest(householdId: string): Promise<SensorPairRequest | null> {
+    return db().sensorPairRequests.get(householdId) ?? null;
   }
 
   async appendCsi(householdId: string, point: CsiPoint): Promise<void> {

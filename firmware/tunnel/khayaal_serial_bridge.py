@@ -350,6 +350,60 @@ def _post_wifi(
         log(f"manage: post wifi result failed: {exc}")
 
 
+# ------------------------------------------------------- one-click pairing
+_last_paired_source: str | None = None
+
+
+def pair_sensor_from_request(
+    ser: "serial.Serial",
+    request: dict[str, Any],
+    manage: dict[str, Any],
+    config_path: Optional[Path],
+) -> None:
+    """Type a dashboard-minted identity into the board (one-click Connect).
+
+    The dashboard minted a source and parked {householdId, sourceId, apiKey}
+    in the household's pair-request slot; this is the "plug in and press
+    Connect" half. Typing the same identity twice is idempotent, and the
+    request expires server-side, so no ack bookkeeping is needed.
+    """
+    global _last_paired_source
+    hh = str(request.get("householdId", ""))
+    src = str(request.get("sourceId", ""))
+    key = str(request.get("apiKey", ""))
+    if not (hh and src and key):
+        return
+    if src == _last_paired_source or src == manage.get("sourceId"):
+        return  # already typed this one; stay quiet on the re-polls
+    _last_paired_source = src
+    log(f"pair: dashboard requested sensor connect -> source {src}")
+    for line in (f"hh {hh}", f"src {src}", f"key {key}", "mode serial", "show"):
+        try:
+            ser.write((line + "\n").encode())
+        except (serial.SerialException, OSError, termios.error) as exc:
+            log(f"pair: serial write failed ({exc}) — the dashboard's wait will time out")
+            _last_paired_source = None
+            return
+        time.sleep(0.5)
+    _read_for(ser, 2.0)  # drain the board's echo + show output
+    manage.update({"householdId": hh, "sourceId": src, "apiKey": key})
+    if config_path is not None:
+        try:
+            cfg = load_config(config_path) if config_path.exists() else {}
+        except SystemExit:
+            cfg = {}
+        cfg.update({"householdId": hh, "sourceId": src, "apiKey": key})
+        tmp = config_path.with_suffix(".json.tmp")
+        try:
+            tmp.write_text(json.dumps(cfg, indent=2) + "\n")
+            tmp.replace(config_path)
+            log("pair: identity typed into the board and saved to config.json")
+        except OSError as exc:
+            log(f"pair: could not persist config.json ({exc}) — this session still works")
+    else:
+        log("pair: identity typed into the board (no config file — session only)")
+
+
 def poll_manage(
     ser: "serial.Serial",
     manage: dict[str, Any],
@@ -397,6 +451,23 @@ def poll_manage(
                     _post_wifi(manage["base"], {"kind": "scan", "networks": [],
                                                 "count": 0, "error": f"the relay failed: {exc}"},
                                household_id, source_id, api_key)
+        # One-click Connect: the dashboard may have parked a pairing request.
+        try:
+            pair_resp = requests.get(
+                f"{manage['base']}/api/v1/device/pair-request",
+                headers={
+                    "x-kh-household": household_id,
+                    "x-kh-source": source_id,
+                    "x-kh-key": api_key,
+                },
+                timeout=5,
+            )
+            if pair_resp.status_code == 200:
+                request = pair_resp.json().get("request")
+                if request:
+                    pair_sensor_from_request(ser, request, manage, config_path)
+        except (requests.RequestException, ValueError):
+            pass  # the actions poll above already reports connectivity problems
     except (requests.RequestException, ValueError) as exc:
         _log_poll_error(exc)
 

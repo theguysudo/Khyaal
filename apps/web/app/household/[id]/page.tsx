@@ -877,10 +877,80 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
   const [wifiOpenFor, setWifiOpenFor] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
 
+  const [connectState, setConnectState] = useState<'idle' | 'waiting' | 'connected'>('idle');
+  const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+  const connectTimer = useRef<number | null>(null);
+
   useEffect(() => {
     fetch('/api/v1/server-info').then((r) => r.json()).then((i) => setHost(i.lanBaseUrl ?? 'http://localhost:3100')).catch(() => {});
     fetch(`/api/v1/household/${id}/pairing-code`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setPairingCode(d.pairingCode)).catch(() => {});
+    return () => {
+      if (connectTimer.current) window.clearTimeout(connectTimer.current);
+    };
   }, [id]);
+
+  /**
+   * One-click Connect: mint the source, park the pairing request, and the
+   * USB relay running on this laptop types the identity into the board over
+   * its serial port. The effect below watches the new source go live.
+   */
+  const connectSensor = async () => {
+    if (!bundle) return;
+    setError(null);
+    setConnectState('waiting');
+    setConnectSourceId(null);
+    // If a relay should be checking in and is not, say so before waiting 60 s.
+    // Most-recently-seen first: the relay polls as whichever sensor it last
+    // paired, so the live one may not be the first in the list.
+    const espSources = bundle.sources
+      .filter((s) => s.type === 'esp32')
+      .sort((a, b) => (b.lastSeenTs ?? 0) - (a.lastSeenTs ?? 0));
+    let relayAlive = espSources.length === 0; // first-ever sensor: nothing to check against
+    for (const s of espSources) {
+      try {
+        const w = await fetch(`/api/v1/household/${id}/sources/${s.id}/wifi`, { cache: 'no-store' });
+        if (w.ok) {
+          const d = (await w.json()) as { relay?: { lastSeenTs?: number | null } };
+          const seen = d.relay?.lastSeenTs;
+          if (seen && Date.now() - seen < RELAY_STALE_MS) {
+            relayAlive = true;
+            break;
+          }
+        }
+      } catch {
+        /* try the next source */
+      }
+    }
+    if (!relayAlive) {
+      setConnectState('idle');
+      setError('The USB relay is not checking in. Start it on this laptop: python3 firmware/tunnel/khayaal_serial_bridge.py — then plug the board in and press Connect again.');
+      return;
+    }
+    try {
+      const d = await postJSON<{ requestId: string }>(`/api/v1/household/${id}/sensor/connect`, {});
+      setConnectSourceId(d.requestId);
+      if (connectTimer.current) window.clearTimeout(connectTimer.current);
+      connectTimer.current = window.setTimeout(() => {
+        setConnectState((st) => {
+          if (st !== 'waiting') return st;
+          setError('The sensor did not come alive within 60 s. Check the board is plugged into this laptop (the green LED should pulse), and that the relay is running.');
+          return 'idle';
+        });
+      }, 60_000);
+    } catch (e) {
+      setConnectState('idle');
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
+  useEffect(() => {
+    if (connectState !== 'waiting' || !connectSourceId || !bundle) return;
+    const src = bundle.sources.find((s) => s.id === connectSourceId);
+    if (src?.lastSeenTs && bundle.simNowTs - src.lastSeenTs < 30 * 60_000) {
+      if (connectTimer.current) window.clearTimeout(connectTimer.current);
+      setConnectState('connected');
+    }
+  }, [bundle, connectState, connectSourceId]);
 
   if (!bundle) return null;
   const addSensor = async () => {
@@ -973,13 +1043,31 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
           );
         })}
         <button
+          onClick={connectSensor}
+          disabled={connectState === 'waiting'}
+          className="rounded-full border border-ink bg-ink px-4 py-2 text-sm text-paper transition-opacity hover:opacity-85 disabled:opacity-50"
+        >
+          {connectState === 'waiting' ? 'Connecting…' : 'Connect room sensor (plug in via USB)'}
+        </button>
+        <button
           onClick={addSensor}
           disabled={busy}
           className="rounded-full border border-dashed border-ink/25 px-4 py-2 text-sm text-ink/55 transition-colors hover:bg-paper disabled:opacity-40"
         >
-          {busy ? 'Pairing…' : '+ Add room sensor (ESP32)'}
+          {busy ? 'Pairing…' : '+ Add manually'}
         </button>
       </div>
+      {connectState === 'waiting' && (
+        <p className="mt-3 text-sm text-ink/60">
+          Identity minted — the USB relay is typing it into the board. Keep the ESP32 plugged into this laptop; this
+          finishes on its own.
+        </p>
+      )}
+      {connectState === 'connected' && (
+        <p className="mt-3 text-sm text-[#4c7a4f]">
+          Room sensor connected — it is streaming live. Wave a hand in front of it and watch the blueprint.
+        </p>
+      )}
       {error && <p className="mt-3 text-sm text-[#b23a2f]">{error}</p>}
       {wifiOpenFor && <WiFiPanel id={id} sourceId={wifiOpenFor} />}
       {serialBlock && (

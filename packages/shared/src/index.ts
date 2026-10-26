@@ -85,6 +85,8 @@ export interface Household {
   createdAtTs: number;
   /** Google-account subjects linked to this family (the child side). */
   ownerSubs?: string[];
+  /** True for the throwaway household behind the /demo console. */
+  isDemo?: boolean;
   /** Neighbours & family who can check in — tier 3 alerts them too. */
   careCircle?: CareCircleMember[];
   /** Escalation extras: call the elder, then loop in the circle. */
@@ -111,6 +113,20 @@ export interface AppCommand {
   text: string;
   lang?: 'hi' | 'en'; // TTS language for spoken reminders
   ackTs: number | null;
+}
+
+/**
+ * One-click sensor pairing. The dashboard mints the source and stores this
+ * request; the laptop-side USB relay picks it up (it already polls the
+ * household's device channel) and types the identity into the board over its
+ * serial port. The key rides the household's own authenticated channel —
+ * readable only by a source of the same family.
+ */
+export interface SensorPairRequest {
+  householdId: string;
+  sourceId: string;
+  apiKey: string;
+  ts: number;
 }
 
 /** A signed-in family member (Google OIDC profile + linked households). */

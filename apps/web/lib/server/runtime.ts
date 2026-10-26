@@ -600,7 +600,12 @@ export async function seedDemoScenario(
 /** Demo quick-start: first household or a fresh one. */
 export async function ensureDemoHousehold(): Promise<Household> {
   const store = getStore();
-  const existing = await store.listHouseholds();
-  if (existing.length > 0) return existing[0];
-  return createHousehold({ parentName: 'Amma', childName: 'Aditya' });
+  // Reuse only a household actually flagged as the demo one — grabbing the
+  // first household in the store once handed a real family's household to
+  // whoever clicked the demo button.
+  const existing = (await store.listHouseholds()).find((h) => h.isDemo);
+  if (existing) return existing;
+  const created = await createHousehold({ parentName: 'Amma', childName: 'Aditya' });
+  await store.updateHousehold(created.id, { isDemo: true });
+  return { ...created, isDemo: true };
 }

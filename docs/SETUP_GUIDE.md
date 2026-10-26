@@ -126,6 +126,12 @@ CI also uploads the APK artifact on every push to
 
 ## 3. ESP32 room sensor (20 minutes)
 
+**The easy way (USB, one click):** flash the board once, plug it into the
+laptop running the server + `firmware/tunnel/khayaal_serial_bridge.py`, open
+the dashboard's Watchers card and press **Connect room sensor (plug in via
+USB)**. The dashboard mints the identity and the relay types it into the
+board — the card flips to "connected — it is streaming live" on its own.
+
 Hardware: original ESP32-WROOM-32 dev board (micro-USB, CP2102/CH340).
 
 ```bash

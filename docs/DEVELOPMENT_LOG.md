@@ -172,6 +172,30 @@ Full audit in **[SECURITY_AUDIT.md](SECURITY_AUDIT.md)**; the fixes:
    cards verified live in the browser with the simulator driving real
    sealed traffic (waveform, blueprint, narration all confirmed on-screen).
 
+## Stage 15 — One-click sensor connect (2026-10-26, late)
+"Plug in the ESP32, press Connect, it connects" — no serial monitor, no
+paste block:
+1. **Dashboard** — Watchers card grows a primary **Connect room sensor**
+   button. It first checks the USB relay's heartbeat (honest failure with
+   the exact remedy instead of a 60 s stall), mints the source, parks a
+   `SensorPairRequest` in a per-household slot, then watches the new
+   source's `lastSeenTs` flip live and reports "connected — streaming".
+2. **Relay** — `khayaal_serial_bridge.py` polls the new
+   `GET /api/v1/device/pair-request` alongside its actions queue, types
+   `hh/src/key/mode serial` into the board over USB, adopts the identity in
+   place (same live-identity mechanism as re-registration) and persists it
+   to config.json. Typing is idempotent; the request expires in 5 minutes.
+3. **Authz** — connect is family-session only; the pair-request read needs
+   the household's own device credentials. 3 new pen-test checks.
+4. **Fixed while testing** — `ensureDemoHousehold` reused the first
+   household in the store, which on a fresh server hands a real family's
+   household to the demo console; demo households are now flagged
+   (`isDemo`). Pentest 46/46 on a fresh store.
+5. E2E verified with the CSI simulator standing in for the board (the
+   simulator now drains its input side like a real board — a PTY whose
+   peer never reads blocks writers). The real board keeps its existing
+   pairing; the flow is identical.
+
 ## Where things stand
 - Landing + dashboard + demo console: live.
 - Android v0.3.0 APK: `apps/web/public/khayaal-debug.apk` (+ CI artifact).

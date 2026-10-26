@@ -72,6 +72,19 @@ def main():
     master, path = open_pty()
     print(path, flush=True)
 
+    # A real board reads its serial CLI continuously; without this drain the
+    # PTY's input queue fills and anything writing CLI lines to us blocks.
+    import threading
+
+    def _drain():
+        while True:
+            try:
+                os.read(master, 1024)
+            except OSError:
+                break
+
+    threading.Thread(target=_drain, daemon=True).start()
+
     state = "idle"
     cycle = 0
     moving_until = 0.0

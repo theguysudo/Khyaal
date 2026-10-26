@@ -2,6 +2,7 @@ import type {
   AppCommand,
   Baseline,
   CsiPoint,
+  SensorPairRequest,
   DeviceAction,
   Household,
   HouseholdEvent,
@@ -483,6 +484,13 @@ export class FirestoreStore implements Store {
       })
       .filter((p): p is CsiPoint => p !== null)
       .slice(-limit);
+  }
+
+  async putSensorPairRequest(householdId: string, request: SensorPairRequest): Promise<void> {
+    await setDoc(`${sub(householdId, 'meta')}/pair-request`, request);
+  }
+  async getSensorPairRequest(householdId: string): Promise<SensorPairRequest | null> {
+    return getDoc<SensorPairRequest>(`${sub(householdId, 'meta')}/pair-request`);
   }
 
   async getState(householdId: string): Promise<HouseholdState | null> {
