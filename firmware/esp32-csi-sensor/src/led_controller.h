@@ -50,6 +50,7 @@ class LedController {
 
   float level_ = 0.0f;
   float targetLevel_ = 0.0f;
+  uint32_t lastSmoothMs_ = 0;
   bool irDetected_ = false;
   bool sosLatch_ = false;
   uint32_t sosSinceMs_ = 0;

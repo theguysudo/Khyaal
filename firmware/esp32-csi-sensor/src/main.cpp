@@ -771,7 +771,7 @@ void loop() {
       const float ref = cfg.threshold > 4.0f * ledBaseline
                             ? cfg.threshold
                             : 4.0f * ledBaseline;
-      float level = (lastFastVariance - 1.6f * ledBaseline) / (ref + 1e-6f);
+      float level = (lastFastVariance - 1.6f * ledBaseline) / (2.0f * ref + 1e-6f);
       level = level < 0.0f ? 0.0f : (level > 1.0f ? 1.0f : level);
       leds.onMotionLevel(level);
       lastRedLevel = level;

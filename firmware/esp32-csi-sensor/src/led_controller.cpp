@@ -41,8 +41,11 @@ constexpr uint32_t STARTUP_GRACE_MS = 30000;
 // back to the intensity view.
 constexpr uint32_t SOS_LATCH_MS = 30000;
 
-// How fast the smoothed level chases the target (per tick fraction).
-constexpr float LEVEL_SMOOTHING = 0.12f;
+// The level chases its target on a fixed ~40 ms cadence — the loop runs at
+// tens of kHz, so smoothing per iteration would converge in under a
+// millisecond and the LED would read as a hard on/off instead of a glow.
+constexpr uint32_t SMOOTH_STEP_MS = 40;
+constexpr float LEVEL_SMOOTHING = 0.25f;
 
 }  // namespace
 
@@ -58,6 +61,9 @@ void LedController::begin() {
     // Fall back to plain GPIO — intensity is lost, on/off still works.
     pinMode(RED_LED_PIN, OUTPUT);
   }
+  Serial.printf("[%lu] leds: red pwm %s\n", static_cast<unsigned long>(millis()),
+                redPwm_ ? "attached (brightness tracks movement)"
+                        : "UNAVAILABLE (on/off only)");
   writeDuty(RED_LED_PIN, 0);
 }
 
@@ -126,9 +132,12 @@ void LedController::tick(uint32_t nowMs) {
   if (sosLatch_ && (nowMs - sosSinceMs_) > SOS_LATCH_MS) {
     sosLatch_ = false;
   }
-  // Smooth toward the target so the glow breathes with the room instead of
-  // strobing with every variance sample.
-  level_ += LEVEL_SMOOTHING * (targetLevel_ - level_);
+  // Smooth toward the target on the fixed cadence, so the glow breathes
+  // with the room instead of strobing with every variance sample.
+  if (nowMs - lastSmoothMs_ >= SMOOTH_STEP_MS) {
+    lastSmoothMs_ = nowMs;
+    level_ += LEVEL_SMOOTHING * (targetLevel_ - level_);
+  }
   uint8_t duty = 0;
   if (sosLatch_) {
     duty = 255;
