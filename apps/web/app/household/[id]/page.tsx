@@ -1016,7 +1016,14 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
     }
     if (!relayAlive) {
       setConnectState('idle');
-      setError('The USB relay is not checking in. Start it on this laptop: python3 firmware/tunnel/khayaal_serial_bridge.py — then plug the board in and press Connect again.');
+      // The relay cannot poll a household it has no credentials for — that
+      // happens after every server restart (sources live in memory). Give
+      // the family the one command that fixes it, code included.
+      setError(
+        pairingCode
+          ? `The USB relay is not checking in. Run this once on this laptop (it registers the relay into this family), then press Connect again:`
+          : 'The USB relay is not checking in and no pairing code is on screen yet — open the Watchers card to get one, then run: python3 firmware/tunnel/khayaal_serial_bridge.py --pair-code <code>',
+      );
       return;
     }
     try {
@@ -1162,7 +1169,10 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
           Room sensor connected — it is streaming live. Wave a hand in front of it and watch the blueprint.
         </p>
       )}
-      {error && <p className="mt-3 text-sm text-[#b23a2f]">{error}</p>}
+      {error && <p className="mt-3 text-sm leading-relaxed text-[#b23a2f]">{error}</p>}
+      {error && pairingCode && error.startsWith('The USB relay is not checking in') && (
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-ink/90 px-4 py-3 font-mono text-[12.5px] text-paper/90">{`pkill -f khayaal_serial_bridge; python3 firmware/tunnel/khayaal_serial_bridge.py --pair-code ${pairingCode}`}</pre>
+      )}
       {wifiOpenFor && <WiFiPanel id={id} sourceId={wifiOpenFor} />}
       {serialBlock && (
         <div className="mt-4 rounded-2xl border border-ink/10 bg-paper/70 p-4">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { householdAccess, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
+import { encrypt } from '@/lib/server/crypto-box';
 import { rateLimit } from '@/lib/server/rate-limit';
 import { callerRole, isBase64, MAX_CHUNK_B64_CHARS, TALKBACK_AUDIO_MIME } from '@/lib/server/talkback';
 
@@ -46,10 +47,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Talkback is not active' }, { status: 409 });
   }
 
+  // Sealed before it ever touches the store or the wire: a passive listener
+  // on the network sees AES-256-GCM ciphertext, not the conversation.
   const chunk = await getStore().appendTalkbackChunk(id, sessionId, {
     ts: Date.now(),
     mime: typeof body.mime === 'string' && body.mime ? body.mime : TALKBACK_AUDIO_MIME,
-    data,
+    data: encrypt(data),
     from: role,
   });
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { householdAccess, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { MAX_LONG_POLL_MS, wireChunk } from '@/lib/server/talkback';
+import { decrypt } from '@/lib/server/crypto-box';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -38,7 +39,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const chunks = await store.getTalkbackChunks(id, session.id, afterSeq);
     if (chunks.length > 0) {
       return NextResponse.json(
-        { chunks: chunks.map(wireChunk), now: Date.now() },
+        {
+          chunks: chunks.map((c) => {
+            // Only the family's own devices ever see the audio — it leaves
+            // storage opened just-in-time for the long-poll.
+            const plain = decrypt(c.data);
+            return wireChunk({ ...c, data: plain ?? c.data });
+          }),
+          now: Date.now(),
+        },
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }

@@ -649,6 +649,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--dry-run", dest="dry_run", action="store_true",
                         help="print enriched payloads instead of POSTing")
     enc_group = parser.add_mutually_exclusive_group()
+    parser.add_argument("--pair-code", dest="pair_code", default=None,
+                        help="bootstrap this relay into the household that owns this "
+                             "pairing code (use after a server restart wiped sources)")
     enc_group.add_argument("--encrypt", dest="encrypt", action="store_true",
                            default=True,
                            help="AES-256-GCM seal the network leg (default)")
@@ -658,20 +661,70 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def relay_pair(base: str, pairing_code: str, config_path: Optional[Path]) -> Optional[dict[str, str]]:
+    """Bootstrap this relay into a household with its current pairing code.
+
+    A restarted server forgets every source, so a relay that ran yesterday
+    holds stale credentials and the dashboard's Connect button has no one to
+    talk to. One call with the code from the Watchers card mints the relay's
+    own source; the identity is persisted so the next start needs nothing.
+    """
+    try:
+        resp = requests.post(f"{base}/api/v1/relay/pair",
+                             json={"pairingCode": pairing_code}, timeout=10)
+        data = resp.json()
+    except (requests.RequestException, ValueError) as exc:
+        log(f"relay pairing failed: {exc}")
+        return None
+    if resp.status_code != 200 or not data.get("sourceId"):
+        log(f"relay pairing failed: {data.get('error', resp.status_code)}")
+        return None
+    identity = {
+        "householdId": str(data["householdId"]),
+        "sourceId": str(data["sourceId"]),
+        "apiKey": str(data["apiKey"]),
+    }
+    log(f"relay paired into household {identity['householdId']} "
+        f"as {identity['sourceId']}")
+    if config_path is not None:
+        try:
+            cfg = load_config(config_path) if config_path.exists() else {}
+        except SystemExit:
+            cfg = {}
+        cfg.update(identity)
+        tmp = config_path.with_suffix(".json.tmp")
+        try:
+            tmp.write_text(json.dumps(cfg, indent=2) + "\n")
+            tmp.replace(config_path)
+            log(f"relay identity saved to {config_path.name}")
+        except OSError as exc:
+            log(f"relay identity not persisted ({exc}) — this session still works")
+    return identity
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
     cfg = load_config(args.config)
 
     endpoint = args.endpoint or cfg.get("endpoint") \
         or "http://localhost:3100/api/v1/ingest"
+    base = endpoint.rsplit("/api/", 1)[0]
     household_id = args.household_id or cfg.get("householdId") or ""
     source_id = args.source_id or cfg.get("sourceId") or ""
     api_key = args.api_key or cfg.get("apiKey") or ""
 
+    if args.pair_code and not args.dry_run:
+        paired = relay_pair(base, args.pair_code.strip(), args.config)
+        if paired:
+            household_id = paired["householdId"]
+            source_id = paired["sourceId"]
+            api_key = paired["apiKey"]
+
     if not args.dry_run and not (household_id and source_id and api_key):
         log("missing identity: set householdId/sourceId/apiKey in "
             f"{args.config} or pass --household-id/--source-id/--api-key")
-        log("register a source with tunnel/register_source.py")
+        log("or bootstrap with the Watchers card's code: "
+            "python3 khayaal_serial_bridge.py --pair-code <code>")
         return 2
 
     port_name = args.port or detect_port()
@@ -686,7 +739,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # One live identity, shared by the ingest forwarder and the dashboard
     # relay. It is updated in place when the source is re-registered.
     link = {
-        "base": endpoint.rsplit("/api/", 1)[0],
+        "base": base,
         "householdId": household_id,
         "sourceId": source_id,
         "apiKey": api_key,
