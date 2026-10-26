@@ -91,6 +91,9 @@
 #define KH_CSI_BATCH 4
 // How often the batched csi event is emitted (ms).
 #define KH_CSI_EMIT_MS 1000u
+// When Wi-Fi is up but no CSI frames pass the BSSID filter for this long
+// (the router answers pings from a different MAC), the filter relaxes.
+#define KH_CSI_FILTER_RELAX_MS 10000u
 // Only accept CSI frames transmitted by the associated AP (stable baseline).
 // Set to 0 to accept frames from any transmitter (busy rooms with mesh APs).
 #define KH_CSI_FILTER_AP_BSSID 1

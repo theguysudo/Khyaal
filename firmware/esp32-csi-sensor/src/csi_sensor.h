@@ -41,6 +41,15 @@ class CsiSensor {
   /** Call once the STA is associated: locks the BSSID filter onto the AP. */
   void onWifiConnected(const uint8_t bssid[6]);
   void onWifiDisconnected();
+  /**
+   * Accept only frames from the associated AP (default), or every frame the
+   * radio hears. Routers answer pings from their LAN-side MAC, which is NOT
+   * the radio BSSID — so when the room is silent and the filter is on, there
+   * can be no frames at all. The main loop relaxes this automatically after
+   * a frameless stretch.
+   */
+  void setBssidFilter(bool acceptApOnly);
+  bool bssidFilter();
   /** Refresh stats; false when there is not enough data yet. */
   bool readStats(Stats *out);
 };

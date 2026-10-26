@@ -39,13 +39,16 @@ uint32_t s_lastStatsMs = 0;
 bool s_haveRateSample = false;
 uint8_t s_bssid[6];
 volatile bool s_bssidKnown = false;
+volatile bool s_filterEnabled = true;
 
 void csiRxCallback(void *ctx, wifi_csi_info_t *info) {
   if (info == nullptr || info->buf == nullptr || info->len < 2) return;
 
   // Only frames from the associated AP: ties the statistic to the link that
   // crosses the room being sensed, and ignores phones/laptops on other links.
-  if (s_bssidKnown && memcmp(info->mac, s_bssid, 6) != 0) return;
+  // Can be relaxed at runtime — a router's ping replies come from its LAN
+  // MAC, not the radio BSSID, and on a quiet network they are all there is.
+  if (s_filterEnabled && s_bssidKnown && memcmp(info->mac, s_bssid, 6) != 0) return;
 
   const int start = info->first_word_invalid ? 2 : 0;  // invalid first word
   float sum = 0.0f;
@@ -80,16 +83,27 @@ void CsiSensor::begin() {
   s_haveRateSample = false;
   s_bssidKnown = false;
 
-  // Enable CSI on the Wi-Fi driver. LTF merge + channel filter mirror the
-  // esp-csi defaults: cleaner subcarriers, stable length.
+  // Enable CSI on the Wi-Fi driver, mirroring the esp-csi examples: every
+  // LTF type enabled, LTF merge + channel filter on. The struct is zeroed
+  // first, so ANY field left false silently narrows what the driver will
+  // capture — leaving the LTF enables out means capturing nothing at all.
   wifi_csi_config_t csiConfig = {};
+  csiConfig.lltf_en = true;
+  csiConfig.htltf_en = true;
+  csiConfig.stbc_htltf2_en = true;
   csiConfig.ltf_merge_en = true;
   csiConfig.channel_filter_en = true;
   csiConfig.manu_scale = false;
   csiConfig.shift = 0;
-  esp_wifi_set_csi_config(&csiConfig);
-  esp_wifi_set_csi_rx_cb(&csiRxCallback, nullptr);
-  KH_CSI_ENABLE(true);
+  esp_err_t err1 = esp_wifi_set_csi_config(&csiConfig);
+  esp_err_t err2 = esp_wifi_set_csi_rx_cb(&csiRxCallback, nullptr);
+  esp_err_t err3 = KH_CSI_ENABLE(true);
+  if (err1 != ESP_OK || err2 != ESP_OK || err3 != ESP_OK) {
+    Serial.printf("[%lu] csi config FAILED: cfg=%s cb=%s en=%s\n",
+                  static_cast<unsigned long>(millis()),
+                  esp_err_to_name(err1), esp_err_to_name(err2),
+                  esp_err_to_name(err3));
+  }
 }
 
 void CsiSensor::onWifiConnected(const uint8_t bssid[6]) {
@@ -98,6 +112,10 @@ void CsiSensor::onWifiConnected(const uint8_t bssid[6]) {
 }
 
 void CsiSensor::onWifiDisconnected() { s_bssidKnown = false; }
+
+void CsiSensor::setBssidFilter(bool acceptApOnly) { s_filterEnabled = acceptApOnly; }
+
+bool CsiSensor::bssidFilter() { return s_filterEnabled; }
 
 bool CsiSensor::readStats(Stats *out) {
   const uint32_t now = millis();

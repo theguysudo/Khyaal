@@ -83,6 +83,8 @@ epoch ms itself.
 | `hh <id>` / `src <id>` / `key <sk>` | ingest identity (NVS) |
 | `mode <lan\|serial>` | transport (NVS) |
 | `csi <on\|off>` | live scope stream (default on) |
+| `ping <on\|off>` | gateway ping traffic that feeds CSI frames (default on — an idle AP sends no capturable frames) |
+| `bssid <on\|off>` | CSI frame filter (auto-relaxes after 10 s of frameless Wi-Fi: routers answer pings from their LAN MAC, not the radio BSSID) |
 | `factory` | wipe NVS, restore compiled defaults |
 
 Log lines are `[<ms>] ...`; event lines are raw JSON — that is how the bridge

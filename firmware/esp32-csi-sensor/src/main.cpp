@@ -25,6 +25,7 @@
 #include "config.h"
 #include "config_store.h"
 #include "csi_sensor.h"
+#include "csi_traffic.h"
 #include "led_controller.h"
 #include "presence.h"
 #include "tunnel_crypto.h"
@@ -42,6 +43,7 @@ CsiSensor csi;
 PresenceStateMachine::Params smParams;
 PresenceStateMachine sm;
 LedController leds;
+CsiTraffic traffic;
 
 volatile bool wifiUp = false;
 bool timeSynced = false;
@@ -86,6 +88,9 @@ uint32_t lastSenseMs = 0;
 uint32_t lastStatusMs = 0;
 uint32_t lastHeartbeatMs = 0;
 uint32_t lastDevicePollMs = 0;
+uint32_t wifiUpSinceMs = 0;
+uint32_t lastFramesSeenMs = 0;
+bool csiFilterOn = true;
 
 // ------------------------------------------------------------------ logging
 // Every log line starts with "[<ms>] " — deliberately not JSON, so the
@@ -271,6 +276,7 @@ void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   switch (event) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP: {
       wifiUp = true;
+      wifiUpSinceMs = millis();
       uint8_t bssid[6];
       memcpy(bssid, WiFi.BSSID(), sizeof(bssid));
       csi.onWifiConnected(bssid);
@@ -392,6 +398,8 @@ void printHelp() {
   Serial.println("  enc <on|off>    AES-256-GCM seal LAN ingest (on = default), saved");
   Serial.println("  scan            scan Wi-Fi networks, print JSON lines (relay)");
   Serial.println("  csi <on|off>    stream the live CSI scope readings (on = default)");
+  Serial.println("  ping <on|off>   gateway ping traffic that feeds CSI frames (on = default)");
+  Serial.println("  bssid <on|off>  CSI frame filter (auto-relaxes if the AP sends none)");
   Serial.println("  wififorget      clear stored Wi-Fi, disconnect");
   Serial.println("  statusjson      one-line machine-readable status (relay)");
   Serial.println("  factory         clear NVS, back to compiled defaults");
@@ -496,6 +504,29 @@ void dispatchCli(char *line) {
   } else if (strcmp(line, "falltest") == 0) {
     klog("falltest: emitting one 'fall' presence event");
     emitPresence("fall");
+  } else if (strcmp(line, "bssid") == 0) {
+    if (strcmp(arg, "off") == 0) {
+      csi.setBssidFilter(false);
+      csiFilterOn = false;
+      klog("bssid filter off — CSI accepts every transmitter");
+    } else if (strcmp(arg, "on") == 0) {
+      csi.setBssidFilter(true);
+      csiFilterOn = true;
+      lastFramesSeenMs = 0;
+      klog("bssid filter on — CSI accepts only the AP's radio frames");
+    } else {
+      klog("usage: bssid <on|off>  (currently %s)", csiFilterOn ? "on" : "off");
+    }
+  } else if (strcmp(line, "ping") == 0) {
+    if (strcmp(arg, "off") == 0) {
+      traffic.setEnabled(false);
+      klog("gateway ping traffic off (CSI goes quiet on an idle AP)");
+    } else if (strcmp(arg, "on") == 0) {
+      traffic.setEnabled(true);
+      klog("gateway ping traffic on");
+    } else {
+      klog("usage: ping <on|off>  (currently %s)", traffic.enabled() ? "on" : "off");
+    }
   } else if (strcmp(line, "csi") == 0) {
     if (strcmp(arg, "off") == 0) {
       csiStreamOn = false;
@@ -600,12 +631,21 @@ void setup() {
   store.load(&cfg);
   smParams.threshold = cfg.threshold;
   sm.begin(smParams);
-  csi.begin();
 
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
+  // CSI needs the radio listening continuously: in the default modem power
+  // save the radio dozes between DTIM beacons and captures nothing, so every
+  // esp-csi example turns power save off. This is the difference between
+  // "waiting for frames" forever and a live waveform.
+  WiFi.setSleep(false);
   WiFi.onEvent(onWifiEvent);
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+  // CSI must be configured AFTER the Wi-Fi driver is started: before
+  // WiFi.mode() the esp_wifi_set_csi* calls fail on an uninitialized driver
+  // and the sensor silently never sees a frame.
+  csi.begin();
 
   if (cfg.ssid[0]) {
     klog("connecting to \"%s\" ...", cfg.ssid);
@@ -624,10 +664,12 @@ void loop() {
   // The Wi-Fi flag is written from the event handler; the LEDs read it here,
   // in loop context, so no LED work ever happens off the main task.
   leds.onWifi(wifiUp, nowMs);
+  traffic.onWifi(wifiUp);
 
   if (cal.active) {
     runCalibration(nowMs);
     leds.tick(nowMs);
+    traffic.tick(nowMs);
     return;
   }
 
@@ -660,7 +702,10 @@ void loop() {
       emitPresence(presenceValue(after));
       leds.onPresence(presenceValue(after));
     }
-    if (haveData) leds.onCsiSample(nowMs);
+    if (haveData) {
+      leds.onCsiSample(nowMs);
+      lastFramesSeenMs = nowMs;
+    }
     if (nowMs - lastStatusMs >= kStatusPeriodMs) {
       lastStatusMs = nowMs;
       if (haveData) {
@@ -689,7 +734,20 @@ void loop() {
     emitPresence(presenceValue(sm.state()));
   }
 
+  // The BSSID filter can silence the sensor completely: a router answers
+  // pings from its LAN MAC, not the radio BSSID. If the link is up and no
+  // frame has passed the filter for a while, relax it rather than go blind.
+  if (wifiUp && csiFilterOn &&
+      nowMs - (lastFramesSeenMs != 0 ? lastFramesSeenMs : wifiUpSinceMs) >
+          KH_CSI_FILTER_RELAX_MS) {
+    csi.setBssidFilter(false);
+    csiFilterOn = false;
+    klog("csi: no frames matched the AP filter — accepting all transmitters");
+    klog("     (restore with: bssid on)");
+  }
+
   pollDeviceActions(nowMs);
   flushLan(nowMs);
   leds.tick(nowMs);
+  traffic.tick(nowMs);
 }
