@@ -220,7 +220,7 @@ export default function Hero() {
           >
             Hey there, meet Khayaal —
             <br />
-            a silent guardian for parents who live alone
+            a quiet watch over parents who live alone
           </p>
 
           {/* 2. Typewriter — min-height fits the full copy at every clamp size */}

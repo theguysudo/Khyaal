@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { patchJSON, postJSON, useHouseholdState } from '@/lib/api';
+import '../../motion.css';
 
 interface NewSource {
   id: string;
@@ -71,7 +72,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-paper px-4 py-10 sm:px-8">
+    <main className="kh-dash min-h-screen bg-paper px-4 py-10 sm:px-8">
       <div className="mx-auto max-w-2xl">
         <header className="flex items-center justify-between">
           <Link href={`/household/${id}`} className="text-sm text-ink/60 transition-opacity hover:opacity-70">
@@ -133,7 +134,7 @@ export default function SettingsPage() {
         <button
           onClick={save}
           disabled={busy}
-          className="w-full rounded-full bg-ink py-3 text-[15px] font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="kh-press kh-lift w-full rounded-full bg-ink py-3 text-[15px] font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {saved ? 'Saved ✓' : busy ? 'Saving…' : 'Save settings'}
         </button>
@@ -144,7 +145,11 @@ export default function SettingsPage() {
             {(bundle?.sources ?? []).map((s) => (
               <li key={s.id} className="flex items-center justify-between rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm">
                 <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ background: s.lastSeenTs ? '#4c7a4f' : '#c9b8a0' }} />
+                  <span
+                    className={`h-2 w-2 rounded-full ${s.lastSeenTs ? 'kh-dot-live' : ''}`}
+                    style={{ background: s.lastSeenTs ? '#4c7a4f' : '#c9b8a0' }}
+                    aria-hidden
+                  />
                   {s.label}
                   <span className="text-xs text-ink/40">({s.type})</span>
                 </span>
@@ -152,7 +157,7 @@ export default function SettingsPage() {
                   onClick={async () => {
                     await fetch(`/api/v1/household/${id}/sources?sourceId=${s.id}`, { method: 'DELETE' });
                   }}
-                  className="text-xs text-ink/40 transition-colors hover:text-[#b23a2f]"
+                  className="kh-press text-xs text-ink/40 transition-colors hover:text-[#b23a2f]"
                 >
                   remove
                 </button>
@@ -160,10 +165,10 @@ export default function SettingsPage() {
             ))}
           </ul>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button onClick={() => addSource('esp32')} className="rounded-full border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-white">
+            <button onClick={() => addSource('esp32')} className="kh-press rounded-full border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-white">
               + Register an ESP32 room sensor
             </button>
-            <button onClick={() => addSource('phone')} className="rounded-full border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-white">
+            <button onClick={() => addSource('phone')} className="kh-press rounded-full border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-white">
               + Add a simulator source
             </button>
           </div>

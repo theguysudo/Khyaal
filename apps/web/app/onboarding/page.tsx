@@ -58,8 +58,8 @@ function SignInFirst({ welcome }: { welcome: boolean }) {
       </h2>
       <p className="mx-auto mt-3 max-w-sm text-[14.5px] leading-relaxed text-ink/60">
         {welcome
-          ? 'Your account is ready. One short step and Khayaal knows her ordinary — then everything about her stays with this account.'
-          : 'Your family stays with your Google account: sign up once, and every future sign-in lands you straight back in it.'}
+          ? 'Your account is ready. A few questions about her days, and Khayaal takes it from there. Everything about her stays with this account.'
+          : 'Your families live with your Google account. Sign up once, and every sign-in after this lands you straight back in them.'}
       </p>
       <a
         href="/api/auth/google/start?mode=signup"

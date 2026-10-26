@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import '../motion.css';
 import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/dashboard/bento';
 import NightWatchCard from '@/components/dashboard/NightWatchCard';
 import TalkbackCard from '@/components/dashboard/TalkbackCard';
@@ -76,7 +77,7 @@ export default function DashboardPage() {
 
   return (
     <main
-      className="min-h-screen px-4 pb-16 pt-6 transition-colors duration-700 motion-reduce:transition-none sm:px-8"
+      className="kh-dash min-h-screen px-4 pb-16 pt-6 transition-colors duration-700 motion-reduce:transition-none sm:px-8"
       style={{
         // The tint rides on background-color (which transition-colors can
         // actually animate); the paper wash above it is a static gradient.
@@ -99,7 +100,7 @@ export default function DashboardPage() {
             )}
             <Link
               href={`/household/${id}/settings`}
-              className={`rounded-full border border-ink/15 bg-white/70 px-4 py-1.5 text-ink/70 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
+              className={`kh-press rounded-full border border-ink/15 bg-white/70 px-4 py-1.5 text-ink/70 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
             >
               Settings
             </Link>
@@ -127,17 +128,46 @@ export default function DashboardPage() {
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="max-w-xl">
+                  {/*
+                    Masked line reveal: each line slides out of its own
+                    overflow mask while the banner collapses open. The key on
+                    the alert state restarts the animation exactly once, when
+                    the tier flips — polls that keep the banner up never
+                    re-fire it.
+                  */}
                   <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#b23a2f]">
                     <span className="inline-block h-2 w-2 rounded-full bg-[#b23a2f]" aria-hidden />
-                    Needs attention
+                    <span className="kh-line-mask">
+                      <span key={isAlert ? 'eyebrow-in' : 'eyebrow-out'} className={isAlert ? 'kh-line-rise' : undefined}>
+                        Needs attention
+                      </span>
+                    </span>
                   </p>
-                  <p className="mt-2 font-heading text-xl text-ink">{hh.parentName} hasn't responded to the nudge or the check-in.</p>
+                  <p className="mt-2 font-heading text-xl text-ink">
+                    <span className="kh-line-mask">
+                      <span
+                        key={isAlert ? 'head-in' : 'head-out'}
+                        className={isAlert ? 'kh-line-rise' : undefined}
+                        style={{ '--kh-line-delay': '80ms' } as React.CSSProperties}
+                      >
+                        {hh.parentName} hasn't responded to the nudge or the check-in.
+                      </span>
+                    </span>
+                  </p>
                   <p className="mt-1.5 text-sm leading-relaxed text-ink/60">
-                    {state.ack
-                      ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
-                      : hh.callPlan
-                        ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
-                        : 'A call is usually the right next step.'}
+                    <span className="kh-line-mask">
+                      <span
+                        key={isAlert ? 'sub-in' : 'sub-out'}
+                        className={isAlert ? 'kh-line-rise' : undefined}
+                        style={{ '--kh-line-delay': '160ms' } as React.CSSProperties}
+                      >
+                        {state.ack
+                          ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
+                          : hh.callPlan
+                            ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
+                            : 'A call is usually the right next step.'}
+                      </span>
+                    </span>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2.5">
@@ -145,20 +175,20 @@ export default function DashboardPage() {
                     href="#"
                     onClick={(e) => e.preventDefault()}
                     title="Wire your number in settings — this demo cannot place calls"
-                    className={`rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#9e352b] ${FOCUS_ON_RED}`}
+                    className={`kh-press kh-lift rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#9e352b] ${FOCUS_ON_RED}`}
                   >
                     📞 Call {hh.parentName}
                   </a>
                   <button
                     onClick={ack}
                     disabled={acking}
-                    className={`rounded-full border border-[#b23a2f]/35 bg-[#b23a2f]/[0.05] px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 disabled:opacity-50 ${FOCUS_ON_RED}`}
+                    className={`kh-press rounded-full border border-[#b23a2f]/35 bg-[#b23a2f]/[0.05] px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 disabled:opacity-50 ${FOCUS_ON_RED}`}
                   >
                     {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
                   </button>
                   <button
                     onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
-                    className={`rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
+                    className={`kh-press rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
                   >
                     Snooze 1 h
                   </button>
@@ -173,8 +203,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* the bento */}
-        <div className="mt-6 grid grid-cols-12 gap-4 sm:gap-5">
+        {/* the bento — kh-bento drives the once-only entrance stagger (see motion.css) */}
+        <div className="kh-bento mt-6 grid grid-cols-12 gap-4 sm:gap-5">
           <StatusCard bundle={bundle} />
           <TrendCard bundle={bundle} />
           <CommandsCard id={id} bundle={bundle} />
@@ -286,7 +316,7 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
             key={t}
             onClick={() => setType(t)}
             aria-pressed={type === t}
-            className={`rounded-full border px-4 py-1.5 text-[13px] transition-colors ${
+            className={`kh-press rounded-full border px-4 py-1.5 text-[13px] transition-colors ${
               type === t
                 ? 'border-clay bg-clay/10 text-claydeep'
                 : 'border-ink/15 text-ink/60 hover:border-ink/25 hover:bg-paper'
@@ -322,7 +352,7 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
               key={l}
               onClick={() => setLang(l)}
               aria-pressed={lang === l}
-              className={`px-3 py-2.5 transition-colors ${lang === l ? 'bg-ink text-paper' : 'text-ink/50 hover:bg-paper'} ${FOCUS_ON_PAPER}`}
+              className={`kh-press px-3 py-2.5 transition-colors ${lang === l ? 'bg-ink text-paper' : 'text-ink/50 hover:bg-paper'} ${FOCUS_ON_PAPER}`}
             >
               {l === 'en' ? 'EN' : 'हिं'}
             </button>
@@ -331,12 +361,12 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
         <button
           onClick={send}
           disabled={busy || !text.trim()}
-          className={`flex-none rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+          className={`kh-press kh-lift flex-none rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
         >
           {busy ? 'Sending…' : 'Send'}
         </button>
       </div>
-      {sent && <p className="mt-2 text-xs text-[#4c7a4f]">Sent ✓ — her phone picks it up on the next poll.</p>}
+      {sent && <p className="mt-2 text-xs text-[#4c7a4f]">Sent ✓ — her phone picks it up in a moment.</p>}
       {pending.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {pending.slice(-3).map((c) => (
@@ -478,7 +508,7 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
   return (
     <BentoCard label="AI behaviour analysis" className="col-span-12 lg:col-span-7">
       <CardTitle note={model ? `last: ${model}` : 'MiniMax · NVIDIA · OpenRouter'}>
-        Behaviour analysis, read by an LLM
+        Behaviour analysis, read by a model
       </CardTitle>
       <p className="mt-2 text-xs leading-relaxed text-ink/45">
         Only privacy-safe aggregates leave the house: score trend, tier changes, hourly shape, recurring reasons.
@@ -503,7 +533,7 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
         <button
           onClick={run}
           disabled={busy}
-          className={`rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+          className={`kh-press kh-lift rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
         >
           {busy ? 'Reading the week…' : 'Run analysis'}
         </button>
@@ -568,7 +598,7 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
             <button
               onClick={() => manage('remove', m.email)}
               disabled={busy}
-              className={`rounded-full px-2 py-1 text-xs text-ink/40 transition-colors hover:bg-[#f6dcd8]/60 hover:text-[#b23a2f] disabled:opacity-40 ${FOCUS_ON_PAPER_RED}`}
+              className={`kh-press rounded-full px-2 py-1 text-xs text-ink/40 transition-colors hover:bg-[#f6dcd8]/60 hover:text-[#b23a2f] disabled:opacity-40 ${FOCUS_ON_PAPER_RED}`}
             >
               remove
             </button>
@@ -591,7 +621,7 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
           <button
             onClick={() => manage('add')}
             disabled={busy || !email.includes('@')}
-            className={`rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+            className={`kh-press kh-lift rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
           >
             Add to circle
           </button>
@@ -599,8 +629,8 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
         {error && <p className="text-xs text-[#b23a2f]">{error}</p>}
         <p className="text-[11px] leading-relaxed text-ink/40">
           Circle members sign in at /login and claim this household with its pairing code. On a real alert they are
-          notified alongside the family — a neighbour can be the fastest help there is. Phone numbers power the
-          escalation call chain (free dialer hand-off, no SMS gateway needed).
+          notified alongside the family — a neighbour can be the fastest help there is. Phone numbers feed the call
+          chain: your phone's own dialer places the calls, so there's no SMS gateway to set up.
         </p>
       </div>
     </BentoCard>
@@ -655,8 +685,8 @@ function PushCard({ id }: { id: string }) {
     <BentoCard label="Alerts on this device" className="col-span-12 lg:col-span-5">
       <CardTitle note="free browser push, no SMS gateway">Alerts on this device</CardTitle>
       <p className="mt-3 text-sm leading-relaxed text-ink/55">
-        When an urgent alert fires, this laptop or tablet is nudged too — the notification arrives even with
-        Khayaal closed, straight from the browser's own push channel.
+        When an urgent alert fires, this laptop or tablet gets the nudge too — the notification arrives even with
+        Khayaal closed.
       </p>
       <div className="mt-4 flex items-center gap-3">
         {status === 'unsupported' ? (
@@ -665,7 +695,7 @@ function PushCard({ id }: { id: string }) {
           <button
             onClick={subscribe}
             disabled={busy || status === 'on'}
-            className={`rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+            className={`kh-press kh-lift rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
           >
             {status === 'on' ? 'Alerts are on ✓' : busy ? 'Enabling…' : 'Enable urgent alerts here'}
           </button>
@@ -869,7 +899,7 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         <button
           onClick={() => queue('wifi_scan')}
           disabled={busy !== null}
-          className={`rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
+          className={`kh-press rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
         >
           {busy === 'wifi_scan' ? 'Scanning…' : 'Scan networks'}
         </button>
@@ -877,7 +907,7 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
           <button
             onClick={() => queue('wififorget')}
             disabled={busy !== null}
-            className={`rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-[#b23a2f] hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
+            className={`kh-press rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-[#b23a2f] hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
           >
             Forget Wi-Fi
           </button>
@@ -920,7 +950,7 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
                     setSelected(n.ssid);
                     setPassword('');
                   }}
-                  className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-paper ${selected === n.ssid ? 'bg-paper' : ''} ${FOCUS_ON_PAPER}`}
+                  className={`kh-press flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-paper ${selected === n.ssid ? 'bg-paper' : ''} ${FOCUS_ON_PAPER}`}
                 >
                   <span className="text-ink/80">
                     {n.secure && <span className="mr-1.5 text-ink/40">🔒</span>}
@@ -945,7 +975,7 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
           <button
             onClick={() => queue('wifi_connect', { ssid: selected, password })}
             disabled={busy !== null || password.length < 8}
-            className={`flex-none rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+            className={`kh-press flex-none rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
           >
             {busy === 'wifi_connect' ? 'Joining…' : 'Connect'}
           </button>
@@ -955,7 +985,8 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         Needs the sensor's USB cable plugged into this Mac with the relay running:
         <code className="mx-1">python3 firmware/tunnel/khayaal_serial_bridge.py</code>
         — the dashboard queues the action, the relay types it to the sensor over USB and posts the scan
-        results back. Passwords travel family-session → server → USB relay only; they are never stored.
+        results back. Your password only travels from this page through the server to the USB relay — it is never
+        stored anywhere.
       </p>
     </div>
   );
@@ -1108,7 +1139,7 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
                 /* keep showing the old one */
               }
             }}
-            className={`ml-auto rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS}`}
+            className={`ml-auto kh-press rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS}`}
           >
             regenerate
           </button>
@@ -1120,21 +1151,25 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
           const isEsp = s.type === 'esp32';
           return (
             <span key={s.id} className="inline-flex items-center gap-2 rounded-full border border-ink/10 bg-paper px-4 py-2 text-sm text-ink/80">
-              <span className="h-2 w-2 rounded-full" style={{ background: fresh ? '#4c7a4f' : '#c9b8a0' }} />
+              <span
+                className={`h-2 w-2 rounded-full ${fresh ? 'kh-dot-live' : ''}`}
+                style={{ background: fresh ? '#4c7a4f' : '#c9b8a0' }}
+                aria-hidden
+              />
               {s.label}
               <span className="text-xs text-ink/40">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
               {isEsp && (
                 <>
                   <button
                     onClick={() => fallTest(s.id)}
-                    className={`rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
+                    className={`kh-press rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
                   >
                     {testedSrc === s.id ? 'firing…' : 'fall test'}
                   </button>
                   <button
                     onClick={() => setWifiOpenFor(wifiOpenFor === s.id ? null : s.id)}
                     aria-pressed={wifiOpenFor === s.id}
-                    className={`rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
+                    className={`kh-press rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
                   >
                     Wi-Fi
                   </button>
@@ -1146,22 +1181,22 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
         <button
           onClick={connectSensor}
           disabled={connectState === 'waiting'}
-          className={`rounded-full border border-ink bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-50 ${FOCUS}`}
+          className={`kh-press kh-lift rounded-full border border-ink bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-50 ${FOCUS}`}
         >
           {connectState === 'waiting' ? 'Connecting…' : 'Connect room sensor (plug in via USB)'}
         </button>
         <button
           onClick={addSensor}
           disabled={busy}
-          className={`rounded-full border border-dashed border-ink/25 px-4 py-2 text-sm text-ink/55 transition-colors hover:border-ink/40 hover:bg-paper disabled:opacity-40 ${FOCUS}`}
+          className={`kh-press rounded-full border border-dashed border-ink/25 px-4 py-2 text-sm text-ink/55 transition-colors hover:border-ink/40 hover:bg-paper disabled:opacity-40 ${FOCUS}`}
         >
           {busy ? 'Pairing…' : '+ Add manually'}
         </button>
       </div>
       {connectState === 'waiting' && (
         <p className="mt-3 text-sm text-ink/60">
-          Identity minted — the USB relay is typing it into the board. Keep the ESP32 plugged into this laptop; this
-          finishes on its own.
+          Paired — the USB relay is typing the identity into the board now. Keep the ESP32 plugged into this laptop;
+          it finishes on its own.
         </p>
       )}
       {connectState === 'connected' && (

@@ -102,9 +102,9 @@ export default function FooterScene() {
           </Link>
           <h2 className="kft__title">The calm way to know they're okay</h2>
           <p className="kft__text">
-            Khayaal listens to the harmless rhythm of an ordinary day — the morning unlock, the
-            kettle-hour movement, the phone on charge at night — and turns it into one quiet answer
-            for the family. Nothing to press, nothing to wear, nothing to remember.
+            Khayaal listens to the harmless rhythms of an ordinary day: the morning unlock, the
+            kettle hour, the phone charging overnight. In return the family gets one calm status,
+            and she is asked nothing at all.
           </p>
           <Link href="/demo" className="kft__cta">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
@@ -130,7 +130,7 @@ export default function FooterScene() {
           <ul className="kft__status" aria-label="Khayaal status">
             <li className="kft__chip">
               <span className="kft__chip-dot" aria-hidden="true" />
-              No camera · ever
+              No camera, ever
             </li>
             <li className="kft__chip">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -143,7 +143,7 @@ export default function FooterScene() {
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8Z" />
               </svg>
-              6 signals · one quiet score
+              6 signals, one quiet score
             </li>
           </ul>
         </div>

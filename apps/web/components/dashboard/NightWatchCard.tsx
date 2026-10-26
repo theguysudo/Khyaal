@@ -131,6 +131,8 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
               'radial-gradient(1.2px 1.2px at 12% 22%, rgba(255,255,255,.85), transparent), radial-gradient(1px 1px at 28% 12%, rgba(255,255,255,.6), transparent), radial-gradient(1.4px 1.4px at 46% 28%, rgba(255,255,255,.75), transparent), radial-gradient(1px 1px at 62% 15%, rgba(255,255,255,.5), transparent), radial-gradient(1.3px 1.3px at 78% 26%, rgba(255,255,255,.8), transparent), radial-gradient(1px 1px at 90% 18%, rgba(255,255,255,.55), transparent), radial-gradient(1.1px 1.1px at 34% 38%, rgba(255,255,255,.45), transparent), radial-gradient(1px 1px at 70% 40%, rgba(255,255,255,.4), transparent)',
           }}
         />
+        {/* a soft type wash so the headline stays crisp over the starfield */}
+        <div aria-hidden className="kh-type-wash pointer-events-none absolute inset-0" />
         <div className="relative flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-[#f2ecdf]/55">
@@ -178,7 +180,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
             {anyPlaying && (
               <button
                 onClick={stopAll}
-                className={`rounded-full border border-ink/15 px-3 py-1 text-[11px] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink ${FOCUS}`}
+                className={`kh-press rounded-full border border-ink/15 px-3 py-1 text-[11px] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink ${FOCUS}`}
               >
                 stop all
               </button>
@@ -186,7 +188,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
             <button
               onClick={toggleMasterMute}
               aria-pressed={masterMuted}
-              className={`rounded-full border px-3 py-1 text-[11px] transition-colors ${
+              className={`kh-press rounded-full border px-3 py-1 text-[11px] transition-colors ${
                 masterMuted
                   ? 'border-[#b23a2f]/40 bg-[#f6dcd8]/70 text-[#77231c]'
                   : 'border-ink/15 text-ink/55 hover:border-ink/30 hover:text-ink'
@@ -216,7 +218,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
                   onClick={() => toggle(s.id)}
                   disabled={!supported}
                   aria-label={`${on ? 'Stop' : 'Play'} ${s.label}`}
-                  className={`flex h-9 w-9 flex-none items-center justify-center rounded-full text-base transition-transform active:scale-95 motion-reduce:active:scale-100 ${
+                  className={`kh-press flex h-9 w-9 flex-none items-center justify-center rounded-full text-base ${
                     on ? 'bg-clay text-paper shadow-[0_4px_14px_rgba(185,92,56,.35)]' : 'bg-white text-ink/60 shadow-sm'
                   } disabled:opacity-40 ${FOCUS}`}
                 >
@@ -243,7 +245,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
                   onClick={() => toggleMute(s.id)}
                   aria-label={`${muted[s.id] ? 'Unmute' : 'Mute'} ${s.label}`}
                   aria-pressed={muted[s.id]}
-                  className={`flex-none rounded-full px-2 py-1 text-[11px] transition-colors ${
+                  className={`kh-press flex-none rounded-full px-2 py-1 text-[11px] transition-colors ${
                     muted[s.id] ? 'bg-ink/10 text-ink/45' : 'text-ink/35 hover:bg-ink/5 hover:text-ink/60'
                   } ${FOCUS}`}
                 >

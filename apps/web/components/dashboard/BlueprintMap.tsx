@@ -384,7 +384,7 @@ export default function BlueprintMap({ id }: { id: string }) {
           onClick={toggleEdit}
           disabled={saving}
           aria-pressed={edit}
-          className={`rounded-full border px-4 py-1.5 text-[13px] transition-colors disabled:opacity-40 ${
+          className={`kh-press rounded-full border px-4 py-1.5 text-[13px] transition-colors disabled:opacity-40 ${
             edit ? 'border-clay bg-clay/10 text-claydeep' : 'border-ink/15 text-ink/60 hover:border-ink/25 hover:bg-paper'
           } ${FOCUS}`}
         >
@@ -393,14 +393,14 @@ export default function BlueprintMap({ id }: { id: string }) {
         <button
           onClick={() => runAi('narrate')}
           disabled={busy !== null}
-          className={`rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/70 transition-colors hover:border-ink/25 hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS}`}
+          className={`kh-press rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/70 transition-colors hover:border-ink/25 hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS}`}
         >
           {busy === 'narrate' ? 'Reading the room…' : 'What happened?'}
         </button>
         <button
           onClick={() => setAiOpen(!aiOpen)}
           aria-expanded={aiOpen}
-          className={`rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
+          className={`kh-press rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
         >
           {aiOpen ? 'Hide AI layout' : 'Generate with AI'}
         </button>
@@ -446,7 +446,7 @@ export default function BlueprintMap({ id }: { id: string }) {
             <button
               onClick={() => runAi('generate')}
               disabled={busy !== null}
-              className={`rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+              className={`kh-press kh-lift rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
             >
               {busy === 'generate' ? 'Drafting…' : 'Generate layout'}
             </button>

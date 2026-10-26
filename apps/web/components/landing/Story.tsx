@@ -215,7 +215,7 @@ export default function Story() {
 
         <div className="mt-14 grid gap-4 md:grid-cols-3">
           {[
-            ['It listens quietly', 'The Android phone she already owns shares harmless signals. No new habit, no new device, nothing to remember.'],
+            ['It listens quietly', 'The Android phone she already owns shares harmless signals. No new device, nothing to learn.'],
             ['It learns her rhythm', 'A week of ordinary days becomes a baseline. Normal means her normal — a night owl and an early riser are never measured the same.'],
             ['It speaks up only when it matters', 'A nudge, then a question, and only then you — with the last-known signals attached, never a feed.'],
           ].map(([t, b], i) => (
@@ -238,8 +238,8 @@ export default function Story() {
             </h2>
             <p data-reveal="fact" style={{ ['--d' as string]: '0.15s' }} className="mt-6 text-[15.5px] leading-relaxed text-white/60">
               Five come from the phone she already owns. The sixth is an optional sensor that
-              reads movement from Wi-Fi alone. Each on its own proves nothing — together they are
-              how a house says <span className="text-white/90">“all is well.”</span>
+              reads movement from Wi-Fi alone. Any one of them can be explained away. Together,
+              they are how a house says <span className="text-white/90">“all is well.”</span>
             </p>
           </div>
           <dl className="mt-2">
@@ -261,8 +261,8 @@ export default function Story() {
         </h2>
         <p data-reveal="fact" style={{ ['--d' as string]: '0.15s' }} className="mt-6 max-w-xl text-[15.5px] leading-relaxed text-white/65">
           Motion alone trips on a cat. A quiet phone is just a slow morning. A missing charge
-          might be a moved charger. Fused, the absences stop being noise and become a confidence
-          score worth acting on.
+          might be a moved charger. Fused, the absences stop being noise and become one score
+          worth acting on.
         </p>
 
         <div className="mt-12 grid gap-6 md:grid-cols-[1.5fr_auto_1fr] md:items-center">
@@ -337,8 +337,8 @@ export default function Story() {
               The family is the <em className="not-italic text-[#e8a06b]">last</em> step, never the first
             </h2>
             <p data-reveal="fact" style={{ ['--d' as string]: '0.15s' }} className="mt-6 text-[15.5px] leading-relaxed text-white/60">
-              Eight phases. Four of them invisible. The ladder is the trust mechanism — each step
-              must earn the next, and any ordinary moment walks it quietly back down.
+              Eight steps. Four of them invisible. Each one has to earn the next, and any
+              ordinary morning walks her quietly back down.
             </p>
           </div>
           <dl>
@@ -358,7 +358,7 @@ export default function Story() {
       {/* ------------------------------------------------ dignity */}
       <section id="promise" className="relative mx-auto max-w-6xl px-5 pb-32 pt-24 sm:px-8 md:pb-40 md:pt-32">
         <div className="kh-glass rounded-[32px] p-8 md:p-14">
-          <p data-reveal="down" className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#f6d9a0]">The rule that governs every design decision</p>
+          <p data-reveal="down" className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#f6d9a0]">The rule behind every design decision</p>
           <h2 data-reveal="title" className="mt-5 max-w-3xl font-heading text-[clamp(34px,5.5vw,64px)] leading-[1.02] tracking-tight text-white">
             Dignity first. On a normal day, you see three words — <em className="text-[#e8a06b]">All well today.</em>
           </h2>
@@ -370,9 +370,9 @@ export default function Story() {
             ))}
           </div>
           <p data-reveal="fact" style={{ ['--d' as string]: '0.3s' }} className="mt-8 max-w-xl text-[15px] leading-relaxed text-white/65">
-            What leaves the house is a signal, not an account. No feed, no map, no recording — the
-            child sees a calm status and a last-active time, and nothing else. Independence and
-            privacy stay untouched; only safety is added.
+            What leaves the house is a signal, not an account. No feed, no map, no recording —
+            you see a calm status and a last-active time, and nothing else. Her privacy and her
+            independence are not the price. The only thing this adds is safety.
           </p>
         </div>
       </section>

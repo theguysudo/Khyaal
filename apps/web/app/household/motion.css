@@ -1,0 +1,142 @@
+/*
+ * Motion layer for the household dashboard.
+ *
+ * Borrowed craft, Khayaal's voice: a staggered card entrance that plays once,
+ * masked line reveals for the alert banner, small press/lift answers on every
+ * control, and a breathing dot for live sensors. Everything here respects
+ * prefers-reduced-motion by falling back to fully visible, static UI.
+ *
+ * Deliberately plain CSS imported by the household pages — no motion library,
+ * and nothing that touches the tier tint (which cross-fades on <main>'s
+ * background-color).
+ */
+
+/* -------------------------------------------------------------------------
+   1. Card entrance — first paint only.
+   CSS animations run once per element lifetime: the /state poll re-renders
+   the page every 1.5 s but React keeps the same DOM nodes, so the choreography
+   physically cannot re-fire. `backwards` fill means the cards hold their
+   hidden state through the stagger delay, then return to natural styles —
+   no lingering transform/filter, so nothing traps the fixed consent popup
+   in a containing block after the entrance settles.
+   ------------------------------------------------------------------------- */
+@keyframes kh-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(1.02);
+    filter: blur(7px);
+  }
+  60% {
+    filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.kh-bento > * {
+  animation: kh-card-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.kh-bento > :nth-child(1)  { animation-delay: 40ms; }
+.kh-bento > :nth-child(2)  { animation-delay: 95ms; }
+.kh-bento > :nth-child(3)  { animation-delay: 150ms; }
+.kh-bento > :nth-child(4)  { animation-delay: 205ms; }
+.kh-bento > :nth-child(5)  { animation-delay: 260ms; }
+.kh-bento > :nth-child(6)  { animation-delay: 315ms; }
+.kh-bento > :nth-child(7)  { animation-delay: 370ms; }
+.kh-bento > :nth-child(8)  { animation-delay: 425ms; }
+.kh-bento > :nth-child(9)  { animation-delay: 480ms; }
+.kh-bento > :nth-child(10) { animation-delay: 535ms; }
+.kh-bento > :nth-child(11) { animation-delay: 590ms; }
+.kh-bento > :nth-child(12) { animation-delay: 645ms; }
+.kh-bento > :nth-child(13) { animation-delay: 700ms; }
+.kh-bento > :nth-child(14) { animation-delay: 755ms; }
+.kh-bento > :nth-child(15) { animation-delay: 810ms; }
+.kh-bento > :nth-child(16) { animation-delay: 865ms; }
+
+/* -------------------------------------------------------------------------
+   2. Masked line reveal — the tier-3 banner's words slide out from behind
+   an overflow mask while the banner itself is collapsing open. The JSX keys
+   the rising line on the alert state, so the reveal fires when the tier
+   flips (and never again while the banner stays up).
+   ------------------------------------------------------------------------- */
+@keyframes kh-line-out {
+  from { transform: translateY(112%); }
+  to   { transform: translateY(0); }
+}
+.kh-line-mask {
+  display: block;
+  overflow: hidden;
+}
+.kh-line-rise {
+  display: block;
+  animation: kh-line-out 0.66s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--kh-line-delay, 0ms);
+}
+
+/* -------------------------------------------------------------------------
+   3. Press + lift micro-interactions.
+   Scoped under .kh-dash so these rules outrank Tailwind's single-class
+   transition utilities regardless of stylesheet order. One consistent
+   pressed scale (~0.98), a 1px hover lift for solid primary actions,
+   everything well under 200 ms.
+   ------------------------------------------------------------------------- */
+.kh-dash .kh-press {
+  transition:
+    transform 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
+}
+.kh-dash .kh-press:active {
+  transform: scale(0.98);
+}
+.kh-dash .kh-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -10px rgba(42, 36, 29, 0.45);
+}
+.kh-dash .kh-lift:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* -------------------------------------------------------------------------
+   4. Live-sensor breathing dot — the Watchers card's status dot eases its
+   opacity while a sensor is checking in. Gentle, ~2.4 s, opacity only.
+   ------------------------------------------------------------------------- */
+@keyframes kh-dot-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.kh-dot-live {
+  animation: kh-dot-breathe 2.4s ease-in-out infinite;
+}
+
+/* -------------------------------------------------------------------------
+   5. Type wash — a whisper of dusk behind the night-watch headline so the
+   copy stays crisp over the starfield. Static paint, no motion.
+   ------------------------------------------------------------------------- */
+.kh-type-wash {
+  background: radial-gradient(95% 75% at 20% 0%, rgba(26, 21, 43, 0.5) 0%, rgba(26, 21, 43, 0) 62%);
+}
+
+/* -------------------------------------------------------------------------
+   Reduced motion: every animation above gets its escape — cards, lines and
+   dots render fully visible and still; press/lift keep their colour answers
+   but never move.
+   ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .kh-bento > *,
+  .kh-line-rise,
+  .kh-dot-live {
+    animation: none !important;
+  }
+  .kh-dash .kh-press:active,
+  .kh-dash .kh-lift:hover,
+  .kh-dash .kh-lift:active {
+    transform: none;
+  }
+}

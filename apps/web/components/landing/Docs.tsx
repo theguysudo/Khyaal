@@ -21,7 +21,7 @@ const PIPELINE = [
   {
     step: '02',
     title: 'The room sensor',
-    body: 'An optional ESP32 reads Wi-Fi CSI to feel movement and falls — no camera, no microphone, nothing worn.',
+    body: 'An optional ESP32 reads Wi-Fi CSI to feel movement and falls. No camera in the house, no microphone, and she wears nothing.',
     tag: 'Arduino · ESP-CSI · AES-256-GCM',
   },
   {
@@ -39,7 +39,7 @@ const PIPELINE = [
   {
     step: '05',
     title: 'Your dashboard',
-    body: 'The family sees a status, a plain-language reason and a ladder — never a feed, never a map, never a recording.',
+    body: 'The family sees a status, a plain-language reason and a ladder. Never a feed.',
     tag: 'React 19 · Tailwind',
   },
 ];
@@ -114,9 +114,9 @@ export default function Docs() {
             How Khayaal actually works
           </h2>
           <p className="mt-4 text-[15px] leading-relaxed text-ink/60">
-            Khayaal is a passive wellbeing monitor for a parent living alone. It watches the ordinary signals of a day,
-            learns what ordinary looks like for this one person, and tells the family when several absences at once
-            point to something wrong. It never asks her to do anything, and it never shows the family a feed.
+            Khayaal is a passive wellbeing monitor for a parent living alone. It watches the ordinary signals of a day
+            and learns what a normal day looks like for her. When several absences pile up at once, it tells the family.
+            It never asks her to do anything, and it never shows the family a feed.
           </p>
         </div>
 

@@ -133,13 +133,13 @@ export default function DemoPage() {
             <section className="rounded-3xl border border-paper/12 bg-white/[0.04] p-6">
               <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-paper/50">One-click scenarios</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <ScenarioBtn title="Normal day" desc="An ordinary, living morning" onClick={() => runScenario('normal')} busy={busy === 'normal'} tone="ok" />
+                <ScenarioBtn title="Normal day" desc="An ordinary morning, nothing more" onClick={() => runScenario('normal')} busy={busy === 'normal'} tone="ok" />
                 <ScenarioBtn title="Slow morning" desc="Up and about — but no unlock" onClick={() => runScenario('slow')} busy={busy === 'slow'} tone="warn" />
                 <ScenarioBtn title="Possible emergency" desc="Silent since yesterday evening" onClick={() => runScenario('emergency')} busy={busy === 'emergency'} tone="bad" />
               </div>
               <p className="mt-3 text-xs leading-relaxed text-paper/40">
                 Each scenario seeds six days of believable signals and sets the simulated clock.
-                Everything after that is the real engine scoring the real absence.
+                Everything after that is the real engine scoring real absences.
               </p>
             </section>
 
@@ -178,7 +178,7 @@ export default function DemoPage() {
               </div>
               <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-paper/80">
                 <input type="checkbox" checked={espSim} onChange={(e) => setEspSim(e.target.checked)} className="accent-[#f6d9a0]" />
-                SimulatedCsiSensor — ESP32 room sensor posting presence every 12 s
+                Simulated CSI sensor — an ESP32 posting presence every 12 s
               </label>
             </section>
           </div>

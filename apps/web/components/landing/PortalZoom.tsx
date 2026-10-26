@@ -143,7 +143,7 @@ export default function PortalZoom() {
             The day still happens
           </p>
           <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-white/75">
-            The kettle, the courtyard, the grandchild visiting — Khayaal hears the shape of it,
+            The kettle, the courtyard, the grandchild visiting — Khayaal hears the shape of it
             and turns it into one quiet answer for you.
           </p>
         </div>
