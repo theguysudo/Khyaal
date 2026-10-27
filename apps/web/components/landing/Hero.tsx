@@ -1,28 +1,38 @@
 'use client';
 
 /**
- * Full-screen hero implemented 1:1 from the provided Mainframe reference:
+ * Full-screen hero from the Mainframe reference, carrying Khayaal's branding:
  * mouse-scrub background video (SENSITIVITY 0.8, seek-queue so we never flood
- * video.currentTime), fixed white navbar with comma-separated links, blurred
- * intro label, typewriter, four white pills + one copy-email pill, and the
- * black/90 mobile overlay. Fonts load from the reference's webfont links and
- * the two family variables are scoped here so the rest of the site keeps its
- * own type.
+ * video.currentTime), a sleek transparent-glass navbar, blurred intro label,
+ * typewriter, four white pills + one copy-email pill, and the black/90 mobile
+ * overlay. Reference webfonts load via link; the --mf-* variables are scoped
+ * to this hero so the rest of the site keeps its own type.
  */
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useTypewriter } from './useTypewriter';
 
 const SENSITIVITY = 0.8;
-const EMAIL = 'hello@mainframe.co';
+const EMAIL = 'hello@khayaal.care';
 
-const NAV_LINKS = ['Labs', 'Studio', 'Openings', 'Shop'];
+const NAV_LINKS = [
+  { label: 'How it works', href: '/#how' },
+  { label: 'Signals', href: '/#signals' },
+  { label: 'Demo', href: '/demo' },
+  { label: 'Privacy', href: '/#promise' },
+];
 
-const PILL_LABELS = ['Pitch us an idea', 'Come work here', 'Send a brief hello', 'See how we operate'];
+const PILL_LINKS = [
+  { label: 'See how it works', href: '/#how' },
+  { label: 'Try the live demo', href: '/demo' },
+  { label: 'Set up your family', href: '/onboarding' },
+  { label: 'The privacy promise', href: '/#promise' },
+];
 
 export default function Hero() {
   const { displayed, done } = useTypewriter(
-    'Glad you stopped in. Good taste tends to find us. Now, what are we building?',
+    "She hasn't pressed a button, worn a gadget, or remembered a thing. And you already know — all is well today.",
     38,
     600,
   );
@@ -118,38 +128,41 @@ export default function Hero() {
           />
         )}
       </div>
-      <div aria-hidden className="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
+      <div aria-hidden className="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-black/40 via-black/10 to-black/60" />
 
-      {/* ------------------------------------------------ Navbar (fixed) */}
-      <header className="fixed top-0 z-10 w-full">
-        <div className="flex items-center justify-between px-5 py-4 sm:px-8 sm:py-5">
-          <div className="flex items-center gap-3 select-none">
+      {/* ------------------------------------------------ Navbar — sleek glass bar */}
+      <header className="fixed inset-x-0 top-0 z-10 px-4 pt-4 sm:px-6 sm:pt-5">
+        <div className="kh-glass mx-auto flex max-w-5xl items-center justify-between rounded-full px-5 py-3 sm:px-7">
+          <Link href="/" className="flex items-center gap-2.5 select-none">
             <span
-              className="text-[21px] tracking-tight text-white sm:text-[26px]"
+              className="text-[19px] tracking-tight text-white sm:text-[23px]"
               style={{ fontFamily: 'var(--mf-heading)' }}
             >
-              Mainframe®
+              Khayaal
             </span>
-            <span className="select-none text-[25px] leading-none text-white sm:text-[30px]" style={{ letterSpacing: '-0.02em' }}>
+            <span className="select-none text-[21px] leading-none text-[#e8a06b] sm:text-[25px]" style={{ letterSpacing: '-0.02em' }}>
               ✳︎
             </span>
-          </div>
+          </Link>
 
-          <nav className="hidden items-center text-[23px] text-white md:flex">
+          <nav className="hidden items-center text-[15px] text-white/90 md:flex">
             {NAV_LINKS.map((l, i) => (
-              <span key={l}>
-                <a href="#" className="transition-opacity hover:opacity-60">
-                  {l}
-                </a>
-                {i < NAV_LINKS.length - 1 && <span className="mx-2">,&nbsp;</span>}
+              <span key={l.label}>
+                <Link href={l.href} className="transition-opacity hover:opacity-60">
+                  {l.label}
+                </Link>
+                {i < NAV_LINKS.length - 1 && <span className="mx-1.5 text-white/40">,</span>}
               </span>
             ))}
           </nav>
 
           <div className="hidden md:block">
-            <a href="#" className="text-[23px] text-white underline underline-offset-2 transition-opacity hover:opacity-60">
-              Get in touch
-            </a>
+            <Link
+              href="/onboarding"
+              className="rounded-full bg-white/95 px-4 py-1.5 text-[14px] font-medium text-black transition-colors duration-200 hover:bg-white"
+            >
+              Start for your family
+            </Link>
           </div>
 
           {/* Mobile hamburger */}
@@ -176,44 +189,49 @@ export default function Hero() {
         }`}
       >
         {NAV_LINKS.map((l) => (
-          <a key={l} href="#" onClick={() => setMenuOpen(false)} className="text-[32px] font-medium text-white">
-            {l}
-          </a>
+          <Link key={l.label} href={l.href} onClick={() => setMenuOpen(false)} className="text-[32px] font-medium text-white">
+            {l.label}
+          </Link>
         ))}
-        <a href="#" className="text-[32px] font-medium text-white underline underline-offset-4">
-          Get in touch
-        </a>
+        <Link
+          href="/onboarding"
+          onClick={() => setMenuOpen(false)}
+          className="text-[32px] font-medium text-white underline underline-offset-4"
+        >
+          Start for your family
+        </Link>
       </div>
 
       {/* ------------------------------------------------ Hero section */}
       <section className="relative z-[1] flex h-screen flex-col justify-end overflow-hidden pb-12 md:justify-center md:pb-0">
-        <div className="relative z-10 max-w-xl">
+        <div className="relative z-10 max-w-xl px-1 sm:px-0 md:px-10 lg:px-0">
           {/* 1. Blurred intro label */}
           <p
             className="pointer-events-none mb-5 select-none sm:mb-6"
             style={{
               fontSize: 'clamp(18px, 4vw, 26px)',
-              lineHeight: 1.3,
+              lineHeight: 1.35,
               fontWeight: 400,
               color: '#fff',
               filter: 'blur(4px)',
               fontFamily: 'var(--mf-body)',
             }}
           >
-            Hey there, meet A.R.I.A,
+            Hey there, meet Khayaal —
             <br />
-            Mainframe's Adaptive Response Interface Agent
+            a silent guardian for parents who live alone
           </p>
 
-          {/* 2. Typewriter */}
+          {/* 2. Typewriter — min-height fits the full copy at every clamp size */}
           <p
             className="mb-5 text-white sm:mb-6"
             style={{
               fontSize: 'clamp(18px, 4vw, 26px)',
-              lineHeight: 1.35,
+              lineHeight: 1.4,
               fontWeight: 400,
-              minHeight: '54px',
+              minHeight: 'clamp(100px, 15vw, 118px)',
               fontFamily: 'var(--mf-body)',
+              textWrap: 'balance',
             }}
           >
             {displayed}
@@ -228,14 +246,14 @@ export default function Hero() {
               transform: pillsVisible ? 'translateY(0px)' : 'translateY(8px)',
             }}
           >
-            {PILL_LABELS.map((label) => (
-              <button
-                key={label}
-                type="button"
+            {PILL_LINKS.map((p) => (
+              <Link
+                key={p.label}
+                href={p.href}
                 className="mx-[0.2em] mb-[0.4em] inline-flex items-center justify-center whitespace-nowrap rounded-full border border-black/10 bg-white px-4 py-[0.3em] text-[13px] text-black transition-colors duration-200 hover:bg-black hover:text-white sm:px-5 sm:text-[15px]"
               >
-                {label}
-              </button>
+                {p.label}
+              </Link>
             ))}
             <button
               type="button"
