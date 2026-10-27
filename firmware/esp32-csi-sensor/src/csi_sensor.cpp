@@ -81,9 +81,9 @@ void CsiSensor::rxCallback(void *ctx, void *opaque) {
 
   portENTER_CRITICAL_ISR(reinterpret_cast<portMUX_TYPE *>(&self->mux_));
   self->window_[self->head_] = meanAmplitude;
-  self->head_ = (self->head_ + 1) % KH_CSI_WINDOW;
-  if (self->count_ < KH_CSI_WINDOW) self->count_++;
-  self->totalPackets_++;
+  self->head_ = static_cast<uint16_t>((self->head_ + 1) % KH_CSI_WINDOW);
+  if (self->count_ < KH_CSI_WINDOW) self->count_ = self->count_ + 1;
+  self->totalPackets_ = self->totalPackets_ + 1;
   portEXIT_CRITICAL_ISR(reinterpret_cast<portMUX_TYPE *>(&self->mux_));
 }
 
