@@ -23,5 +23,7 @@ apps/android/.gradle/
 apps/android/**/build/
 apps/android/local.properties
 apps/android/app/release/
+apps/web/public/khayaal-debug.apk
 .tools/
 
+apps/web/.session-secret

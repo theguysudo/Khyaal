@@ -3,6 +3,7 @@ import type {
   Household,
   HouseholdEvent,
   HouseholdState,
+  KhayaalUser,
   Signal,
   Source,
 } from '@khayaal/shared';
@@ -20,6 +21,11 @@ export interface Store {
   getHouseholdByPairingCode(code: string): Promise<Household | null>;
   listHouseholds(): Promise<Household[]>;
   updateHousehold(id: string, patch: Partial<Household>): Promise<Household | null>;
+
+  // users (family sign-ins)
+  getUser(sub: string): Promise<KhayaalUser | null>;
+  upsertUser(user: KhayaalUser): Promise<void>;
+  linkHouseholdToUser(sub: string, householdId: string): Promise<void>;
 
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
@@ -59,6 +65,7 @@ interface MemoryDb {
   events: Map<string, HouseholdEvent[]>;
   sources: Map<string, Source[]>;
   baselines: Map<string, Baseline>;
+  users: Map<string, KhayaalUser>;
 }
 
 const g = globalThis as unknown as { __khayaalDb?: MemoryDb };
@@ -72,6 +79,7 @@ function db(): MemoryDb {
       events: new Map(),
       sources: new Map(),
       baselines: new Map(),
+      users: new Map(),
     };
   }
   return g.__khayaalDb;
@@ -97,6 +105,26 @@ export class MemoryStore implements Store {
     const next = { ...cur, ...patch };
     db().households.set(id, next);
     return next;
+  }
+
+  async getUser(sub: string): Promise<KhayaalUser | null> {
+    return db().users.get(sub) ?? null;
+  }
+  async upsertUser(user: KhayaalUser): Promise<void> {
+    db().users.set(user.sub, { ...user });
+  }
+  async linkHouseholdToUser(sub: string, householdId: string): Promise<void> {
+    const user = db().users.get(sub);
+    if (!user) return;
+    if (!user.householdIds.includes(householdId)) {
+      db().users.set(sub, { ...user, householdIds: [...user.householdIds, householdId] });
+    }
+    const hh = db().households.get(householdId);
+    if (hh) {
+      const ownerSubs = new Set(hh.ownerSubs ?? []);
+      ownerSubs.add(sub);
+      db().households.set(householdId, { ...hh, ownerSubs: [...ownerSubs] });
+    }
   }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {

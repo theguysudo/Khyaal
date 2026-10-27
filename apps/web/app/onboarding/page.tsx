@@ -66,8 +66,8 @@ export default function OnboardingPage() {
             <span className="font-heading text-lg tracking-tight text-ink">Khayaal</span>
             <span className="text-clay">✳︎</span>
           </Link>
-          <Link href="/demo" className="text-sm text-ink/50 transition-opacity hover:opacity-70">
-            just exploring? try the demo →
+          <Link href="/login" className="text-sm text-ink/50 transition-opacity hover:opacity-70">
+            already set up? sign in →
           </Link>
         </header>
 
@@ -166,6 +166,15 @@ export default function OnboardingPage() {
                       The app pre-fills <span className="font-mono">10.0.2.2:3100</span> — that only works on the
                       Android emulator. On her physical phone, replace it with the address above
                       (phone and this computer on the same Wi-Fi).
+                    </p>
+                    <a
+                      href="/khayaal-debug.apk"
+                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-paper transition-opacity hover:opacity-90"
+                    >
+                      ⬇ Install the app on this phone
+                    </a>
+                    <p className="mt-2 text-[11px] leading-relaxed text-ink/40">
+                      Open this page in her phone's browser → tap install → allow "unknown apps".
                     </p>
                   </>
                 )}

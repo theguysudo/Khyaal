@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createHousehold, ensureDemoHousehold, makePairingCode } from '@/lib/server/runtime';
 import { getStore } from '@/lib/server/store';
+import { sessionFromRequest } from '@/lib/server/session';
 
 /**
  * POST /api/v1/pair
  *  { action: 'create', parentName, childName, wakeHour?, chargeStartHour?, quietStart?, quietEnd? }
  *  { action: 'join',   code }            — a parent device pairing in
  *  { action: 'demo' }                    — demo quick-start
+ * Creating while signed in with Google links the household to the account.
  */
 export async function POST(req: Request) {
   const store = getStore();
+  const session = sessionFromRequest(req);
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -26,6 +29,7 @@ export async function POST(req: Request) {
       chargeStartHour: num(body.chargeStartHour),
       quietStart: num(body.quietStart),
       quietEnd: num(body.quietEnd),
+      ownerSub: session?.sub,
     });
     return NextResponse.json({ household: hh });
   }

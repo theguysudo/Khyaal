@@ -54,6 +54,18 @@ export interface Household {
   /** Before this (sim) timestamp the engine deliberately scores nothing. */
   learningUntilTs: number;
   createdAtTs: number;
+  /** Google-account subjects linked to this family (the child side). */
+  ownerSubs?: string[];
+}
+
+/** A signed-in family member (Google OIDC profile + linked households). */
+export interface KhayaalUser {
+  sub: string; // Google subject id
+  email: string;
+  name: string;
+  picture?: string;
+  householdIds: string[];
+  createdAtTs: number;
 }
 
 export const TIER_THRESHOLDS = { 1: 35, 2: 55, 3: 72 } as const;

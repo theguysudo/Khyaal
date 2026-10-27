@@ -131,6 +131,8 @@ export interface CreateHouseholdInput {
   chargeStartHour?: number;
   quietStart?: number;
   quietEnd?: number;
+  /** Google subject of the signed-in family member, when there is one. */
+  ownerSub?: string;
 }
 
 export async function createHousehold(input: CreateHouseholdInput): Promise<Household> {
@@ -152,8 +154,10 @@ export async function createHousehold(input: CreateHouseholdInput): Promise<Hous
     // seeds a prior, so scoring can start gently right away.
     learningUntilTs: nowTs + 12 * HOUR,
     createdAtTs: nowTs,
+    ownerSubs: input.ownerSub ? [input.ownerSub] : [],
   };
   await store.createHousehold(hh);
+  if (input.ownerSub) await store.linkHouseholdToUser(input.ownerSub, hh.id);
   await store.setBaseline(hh.id, {
     wakeHour: input.wakeHour ?? 7.25,
     chargingStartHour: input.chargeStartHour ?? 22.5,
@@ -170,6 +174,35 @@ export async function createHousehold(input: CreateHouseholdInput): Promise<Hous
     lastSeenTs: null,
   });
   return hh;
+}
+
+/** Households a signed-in family member can see, newest first. */
+export async function householdsForUser(sub: string): Promise<Household[]> {
+  const store = getStore();
+  const user = await store.getUser(sub);
+  if (!user) return [];
+  const out: Household[] = [];
+  for (const id of user.householdIds) {
+    const hh = await store.getHousehold(id);
+    if (hh) out.push(hh);
+  }
+  return out.reverse();
+}
+
+/**
+ * Attach an existing (previously set up) household to a signed-in account by
+ * its pairing code. Deliberately does NOT rotate the code — the parent's
+ * phone may already be paired with it.
+ */
+export async function claimHouseholdByCode(
+  sub: string,
+  code: string,
+): Promise<Household | null> {
+  const store = getStore();
+  const hh = await store.getHouseholdByPairingCode(code.trim());
+  if (!hh) return null;
+  await store.linkHouseholdToUser(sub, hh.id);
+  return store.getHousehold(hh.id);
 }
 
 // ---------------------------------------------------------------------------
