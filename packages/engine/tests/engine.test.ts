@@ -77,7 +77,7 @@ describe('risk scenarios', () => {
       ...dayOfSignals(0, { motionUntilHour: 8.5, signalsEndHour: 9 }),
       // unlock happened, then silence of movement
       { sourceId: 'src_phone', type: 'screen_event', value: 'unlock', ts: dayAt(0, 7.1) },
-    ];
+    ] satisfies Signal[];
     const r = risk(signals, now);
     const motion = r.contributions.find((c) => c.signal === 'motion');
     expect(motion).toBeDefined();
@@ -108,7 +108,7 @@ describe('risk scenarios', () => {
       ...dayOfSignals(0, { motionUntilHour: 9 }),
       { sourceId: 'src_phone', type: 'screen_event', value: 'unlock', ts: dayAt(0, 7.1) },
       { sourceId: 'src_phone', type: 'location_zone', value: 'away', ts: dayAt(0, 10) },
-    ];
+    ] satisfies Signal[];
     const r = risk(signals, now);
     const explanation = r.contributions.find((c) => c.signal === 'location_zone');
     expect(explanation).toBeDefined();

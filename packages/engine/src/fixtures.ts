@@ -2,6 +2,7 @@ import type {
   Baseline,
   EscalationConfig,
   Household,
+  HouseholdState,
   QuietHours,
   Signal,
   Source,
@@ -97,7 +98,7 @@ export function presenceLost(daysFromBase: number, afterHour: number): Signal[] 
   ];
 }
 
-export const emptyState = (nowTs: number) => ({
+export const emptyState = (nowTs: number): HouseholdState => ({
   score: null,
   tier: 0 as const,
   status: '',
