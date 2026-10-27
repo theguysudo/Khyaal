@@ -150,6 +150,13 @@ staggered fact rows and a side rail, an anime.js score gauge, and a
 full-viewport frosted-wordmark footer. All animation respects
 `prefers-reduced-motion`.
 
+## Free-tier guarantee
+
+Everything runs on free tiers by design: Google OAuth (free), OpenRouter /
+NVIDIA free LLM models for behaviour analysis and the assistant, Firebase
+Spark tier for FCM/Firestore when you connect them, GitHub Actions for CI,
+and a self-hosted server. No paid service is wired in anywhere.
+
 ## Known limits / next steps
 
 - Firestore adapter (interface ready, needs a Firebase project to verify).

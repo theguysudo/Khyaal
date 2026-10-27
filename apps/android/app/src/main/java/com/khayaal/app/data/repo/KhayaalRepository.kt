@@ -1,6 +1,9 @@
 package com.khayaal.app.data.repo
 
 import com.khayaal.app.data.api.ApiClient
+import com.khayaal.app.data.api.AssistantMessageDto
+import com.khayaal.app.data.api.AssistantRequest
+import com.khayaal.app.data.api.CommandAckRequest
 import com.khayaal.app.data.api.IngestRequest
 import com.khayaal.app.data.api.PairRequest
 import com.khayaal.app.data.api.SnoozeRequest
@@ -159,6 +162,30 @@ class KhayaalRepository(
     suspend fun snooze(minutes: Long): Result<StateBundleDto> = runCatching {
         val pairing = requireNotNull(store.current()) { "Not paired yet" }
         apiClient.api(pairing.baseUrl).snooze(pairing.householdId, SnoozeRequest(minutes.coerceIn(1, 720)))
+    }
+
+    // -- Commands channel -------------------------------------------------------
+
+    /** Confirms one family command reached her phone. Best-effort by design. */
+    suspend fun ackCommand(commandId: String): Result<Unit> = runCatching {
+        val pairing = requireNotNull(store.current()) { "Not paired yet" }
+        apiClient.api(pairing.baseUrl).ackCommand(pairing.householdId, CommandAckRequest(commandId))
+        Unit
+    }
+
+    // -- Ask Khayaal --------------------------------------------------------------
+
+    /**
+     * One turn of the assistant chat. The app never holds an API key — the
+     * conversation goes to the backend, which proxies to the LLM and replies
+     * with `{reply}`.
+     */
+    suspend fun askAssistant(messages: List<AssistantMessageDto>): Result<String> = runCatching {
+        val pairing = requireNotNull(store.current()) { "Not paired yet" }
+        val response = apiClient.api(pairing.baseUrl)
+            .assistant(pairing.householdId, AssistantRequest(messages))
+        response.reply?.takeIf { it.isNotBlank() }
+            ?: error(response.error ?: "The assistant had no reply")
     }
 }
 

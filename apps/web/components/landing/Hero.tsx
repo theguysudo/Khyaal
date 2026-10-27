@@ -153,14 +153,17 @@ export default function Hero() {
             ))}
           </nav>
 
-          <div className="hidden md:block">
-            <Link
-              href="/onboarding"
-              className="rounded-full bg-white/95 px-4 py-1.5 text-[14px] font-medium text-black transition-colors duration-200 hover:bg-white"
-            >
-              Start for your family
-            </Link>
-          </div>
+            <div className="hidden items-center gap-3 md:flex">
+              <Link href="/login" className="text-[15px] text-white/80 underline-offset-2 transition-opacity hover:opacity-70 hover:underline">
+                Sign in
+              </Link>
+              <Link
+                href="/onboarding"
+                className="rounded-full bg-white/95 px-4 py-1.5 text-[14px] font-medium text-black transition-colors duration-200 hover:bg-white"
+              >
+                Start for your family
+              </Link>
+            </div>
 
           {/* Mobile hamburger */}
           <button

@@ -12,6 +12,36 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { postJSON } from '@/lib/api';
 
+function AuthButtons() {
+  const [me, setMe] = useState<{ name: string } | null>(null);
+  useEffect(() => {
+    fetch('/api/v1/my/households', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => setMe(d.user))
+      .catch(() => {});
+  }, []);
+  if (me) {
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <span className="hidden text-ink/50 sm:inline">signed in as {me.name.split(' ')[0]}</span>
+        <Link href="/login" className="rounded-full border border-ink/15 bg-white px-4 py-1.5 text-ink/70 transition-colors hover:bg-mist">
+          Your families
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <a href="/api/auth/google/start?mode=signup" className="rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-paper transition-opacity hover:opacity-90">
+        Sign up
+      </a>
+      <a href="/api/auth/google/start" className="rounded-full border border-ink/15 bg-white px-4 py-1.5 text-sm text-ink/70 transition-colors hover:bg-mist">
+        Login
+      </a>
+    </div>
+  );
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<'form' | 'done'>('form');
@@ -66,9 +96,8 @@ export default function OnboardingPage() {
             <span className="font-heading text-lg tracking-tight text-ink">Khayaal</span>
             <span className="text-clay">✳︎</span>
           </Link>
-          <Link href="/login" className="text-sm text-ink/50 transition-opacity hover:opacity-70">
-            already set up? sign in →
-          </Link>
+          {/* Sign up / Login — offered before anyone registers a family */}
+          <AuthButtons />
         </header>
 
         {step === 'form' ? (

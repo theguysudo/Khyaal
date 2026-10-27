@@ -14,6 +14,7 @@ export async function GET(req: Request) {
     return NextResponse.redirect(`${origin}/login?google=not-configured`);
   }
   const state = crypto.randomBytes(16).toString('hex');
+  const mode = new URL(req.url).searchParams.get('mode') === 'signup';
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: `${origin}/api/auth/google/callback`,
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
     scope: 'openid email profile',
     state,
     access_type: 'online',
-    prompt: 'select_account',
+    prompt: mode ? 'consent select_account' : 'select_account',
   });
   const res = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   res.headers.append(

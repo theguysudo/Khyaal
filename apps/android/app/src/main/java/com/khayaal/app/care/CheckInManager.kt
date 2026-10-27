@@ -29,6 +29,7 @@ object CheckInManager {
     const val CHANNEL_CARE = "khayaal-care"
     const val CHANNEL_URGENT = "khayaal-urgent"
     const val TIER_NOTIFICATION_ID = 2001
+    const val REQUEST_CODE_CALL_FAMILY = 2203
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -140,6 +141,20 @@ object CheckInManager {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setFullScreenIntent(fullScreen, true)
             .setAutoCancel(true)
+            // The dialer, not a call — no CALL_PHONE permission, she presses call.
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    R.drawable.ic_stat_khayaal,
+                    context.getString(R.string.notification_action_call_family),
+                    PendingIntent.getActivity(
+                        context,
+                        REQUEST_CODE_CALL_FAMILY,
+                        FamilyCall.dialIntent(null),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                ).build(),
+            )
+            .addAction(checkInAction(context))
             .build()
     }
 
@@ -148,7 +163,8 @@ object CheckInManager {
             .setSmallIcon(R.drawable.ic_stat_khayaal)
             .setOnlyAlertOnce(false)
 
-    private fun checkInAction(context: Context): NotificationCompat.Action {
+    /** Shared by the tier-2 nudge and the commands channel's "request check-in". */
+    fun checkInAction(context: Context): NotificationCompat.Action {
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             CheckInActionReceiver.REQUEST_CODE_CHECK_IN,
@@ -178,7 +194,8 @@ object CheckInManager {
         ).build()
     }
 
-    private fun canPostNotifications(context: Context): Boolean {
+    /** True when the app may post; the commands channel checks before every post. */
+    fun canPostNotifications(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
         return ContextCompat.checkSelfPermission(
             context,

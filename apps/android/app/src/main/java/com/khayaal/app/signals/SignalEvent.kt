@@ -27,6 +27,23 @@ data class SignalEvent(
         const val MANUAL_CHECKIN = "manual_checkin"
         const val STEPS = "steps"
         const val PRESENCE = "presence"
+        const val SLEEP_EVENT = "sleep_event"
+        const val SOUND_EVENT = "sound_event"
+    }
+
+    /** sleep_event values: on-device classification only, never audio. */
+    object SleepValues {
+        const val ASLEEP = "asleep"
+        const val AWAKE = "awake"
+        const val RESTLESS = "restless"
+        const val WOKE = "woke"
+    }
+
+    /** sound_event values: three loudness buckets. */
+    object SoundValues {
+        const val QUIET = "quiet"
+        const val NOISE = "noise"
+        const val LOUD = "loud"
     }
 
     companion object {
@@ -48,5 +65,15 @@ data class SignalEvent(
 
         fun manualCheckIn(nowMs: Long = System.currentTimeMillis()) =
             SignalEvent(Types.MANUAL_CHECKIN, JsonPrimitive(true), nowMs)
+
+        /** Steps taken so far today (the daily delta); [absolute] reports the raw counter. */
+        fun steps(today: Long, nowMs: Long = System.currentTimeMillis()) =
+            SignalEvent(Types.STEPS, JsonPrimitive(today), nowMs)
+
+        fun sleepEvent(value: String, nowMs: Long = System.currentTimeMillis()) =
+            SignalEvent(Types.SLEEP_EVENT, JsonPrimitive(value), nowMs)
+
+        fun soundEvent(value: String, nowMs: Long = System.currentTimeMillis()) =
+            SignalEvent(Types.SOUND_EVENT, JsonPrimitive(value), nowMs)
     }
 }
