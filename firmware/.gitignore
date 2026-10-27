@@ -1,0 +1,5 @@
+# PlatformIO / Python build artifacts
+.pio/
+.tools/
+__pycache__/
+*.pyc

@@ -18,3 +18,10 @@ firmware/.venv/
 firmware/tunnel/__pycache__/
 firmware/tunnel/config.json
 
+# android build outputs + local config
+apps/android/.gradle/
+apps/android/**/build/
+apps/android/local.properties
+apps/android/app/release/
+.tools/
+

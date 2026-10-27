@@ -10,6 +10,9 @@
  * perturbs the channel faster than a still room, so the variance of the
  * window rises. Privacy: only this one scalar ever leaves the device — raw
  * CSI never does.
+ *
+ * Single instance per device (the ESP32 has one Wi-Fi radio); the rolling
+ * window lives in csi_sensor.cpp.
  */
 #pragma once
 
@@ -32,18 +35,4 @@ class CsiSensor {
   void onWifiDisconnected();
   /** Refresh stats; false when there is not enough data yet. */
   bool readStats(Stats *out);
-
- private:
-  static void rxCallback(void *ctx, void *info);  // wifi_csi_info_t*, opaque
-
-  float window_[KH_CSI_WINDOW];
-  uint32_t mux_;                    // portMUX_TYPE, kept opaque for the header
-  volatile uint16_t count_ = 0;
-  volatile uint16_t head_ = 0;
-  volatile uint32_t totalPackets_ = 0;
-  uint32_t lastStatsTotal_ = 0;
-  uint32_t lastStatsMs_ = 0;
-  bool haveRateSample_ = false;
-  uint8_t bssid_[6];
-  bool bssidKnown_ = false;
 };

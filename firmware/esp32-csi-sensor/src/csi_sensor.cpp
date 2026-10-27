@@ -2,11 +2,11 @@
  * @file csi_sensor.cpp
  * @brief CSI capture + rolling amplitude-variance, ported from esp-csi.
  *
- * ESP32 classic (IDF 4.4, what the Arduino espressif32 platform ships today):
- * each CSI record's buf[] holds interleaved int8 I/Q pairs, optionally with
- * the first word invalid (first_word_invalid). The IDF 5.x struct gained
- * extra fields but the ones we use are unchanged, so the same code builds on
- * both — only the enable call differs.
+ * Works on the Arduino-esp32 cores built on both IDF 4.x and IDF 5.x: only
+ * the enable call differs (esp_wifi_set_csi_en vs esp_wifi_set_csi), and the
+ * wifi_csi_info_t fields used here (mac, first_word_invalid, buf, len) exist
+ * in both. The rolling window lives in file-static storage — one Wi-Fi
+ * radio, one sensor.
  */
 #include "csi_sensor.h"
 
@@ -26,48 +26,28 @@ extern "C" {
 #define KH_CSI_ENABLE(en) esp_wifi_set_csi_en(en)
 #endif
 
-// portMUX_TYPE expands to a struct; hide that from the header by overlaying
-// a uint32_t of the same size (single word spinlock on Xtensa).
-static_assert(sizeof(portMUX_TYPE) == sizeof(uint32_t),
-              "assumed single-word portMUX on ESP32");
+namespace {
 
-void CsiSensor::begin() {
-  count_ = head_ = 0;
-  totalPackets_ = 0;
-  haveRateSample_ = false;
-  bssidKnown_ = false;
+// ----------------------------------------------------------- rolling window
+portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
+float s_window[KH_CSI_WINDOW];
+volatile uint16_t s_count = 0;
+volatile uint16_t s_head = 0;
+volatile uint32_t s_total = 0;
+uint32_t s_lastStatsTotal = 0;
+uint32_t s_lastStatsMs = 0;
+bool s_haveRateSample = false;
+uint8_t s_bssid[6];
+volatile bool s_bssidKnown = false;
 
-  // Enable CSI on the Wi-Fi driver. LTF merge + channel filter mirror the
-  // esp-csi defaults: cleaner subcarriers, stable length.
-  wifi_csi_config_t csiConfig = {};
-  csiConfig.ltf_merge_en = true;
-  csiConfig.channel_filter_en = true;
-  csiConfig.manu_scale = false;
-  csiConfig.shift = 0;
-  esp_wifi_set_csi_config(&csiConfig);
-  esp_wifi_set_csi_rx_cb(&CsiSensor::rxCallback, this);
-  KH_CSI_ENABLE(true);
-}
-
-void CsiSensor::onWifiConnected(const uint8_t bssid[6]) {
-  memcpy(bssid_, bssid, 6);
-  bssidKnown_ = true;
-}
-
-void CsiSensor::onWifiDisconnected() { bssidKnown_ = false; }
-
-void CsiSensor::rxCallback(void *ctx, void *opaque) {
-  wifi_csi_info_t *info = static_cast<wifi_csi_info_t *>(opaque);
-  CsiSensor *self = static_cast<CsiSensor *>(ctx);
+void csiRxCallback(void *ctx, wifi_csi_info_t *info) {
   if (info == nullptr || info->buf == nullptr || info->len < 2) return;
 
-#if KH_CSI_FILTER_AP_BSSID
   // Only frames from the associated AP: ties the statistic to the link that
   // crosses the room being sensed, and ignores phones/laptops on other links.
-  if (self->bssidKnown_ && memcmp(info->mac, self->bssid_, 6) != 0) return;
-#endif
+  if (s_bssidKnown && memcmp(info->mac, s_bssid, 6) != 0) return;
 
-  int start = info->first_word_invalid ? 2 : 0;  // skip the invalid first word
+  const int start = info->first_word_invalid ? 2 : 0;  // invalid first word
   float sum = 0.0f;
   int subcarriers = 0;
   for (int i = start; i + 1 < info->len; i += 2) {
@@ -79,42 +59,74 @@ void CsiSensor::rxCallback(void *ctx, void *opaque) {
   if (subcarriers == 0) return;
   const float meanAmplitude = sum / static_cast<float>(subcarriers);
 
-  portENTER_CRITICAL_ISR(reinterpret_cast<portMUX_TYPE *>(&self->mux_));
-  self->window_[self->head_] = meanAmplitude;
-  self->head_ = static_cast<uint16_t>((self->head_ + 1) % KH_CSI_WINDOW);
-  if (self->count_ < KH_CSI_WINDOW) self->count_ = self->count_ + 1;
-  self->totalPackets_ = self->totalPackets_ + 1;
-  portEXIT_CRITICAL_ISR(reinterpret_cast<portMUX_TYPE *>(&self->mux_));
+  portENTER_CRITICAL_ISR(&s_mux);
+  s_window[s_head] = meanAmplitude;
+  s_head = static_cast<uint16_t>((s_head + 1) % KH_CSI_WINDOW);
+  if (s_count < KH_CSI_WINDOW) s_count = s_count + 1;
+  s_total = s_total + 1;
+  portEXIT_CRITICAL_ISR(&s_mux);
 }
 
+}  // namespace
+
+// ---------------------------------------------------------------- public API
+
+void CsiSensor::begin() {
+  portENTER_CRITICAL(&s_mux);
+  s_count = 0;
+  s_head = 0;
+  portEXIT_CRITICAL(&s_mux);
+  s_total = 0;
+  s_haveRateSample = false;
+  s_bssidKnown = false;
+
+  // Enable CSI on the Wi-Fi driver. LTF merge + channel filter mirror the
+  // esp-csi defaults: cleaner subcarriers, stable length.
+  wifi_csi_config_t csiConfig = {};
+  csiConfig.ltf_merge_en = true;
+  csiConfig.channel_filter_en = true;
+  csiConfig.manu_scale = false;
+  csiConfig.shift = 0;
+  esp_wifi_set_csi_config(&csiConfig);
+  esp_wifi_set_csi_rx_cb(&csiRxCallback, nullptr);
+  KH_CSI_ENABLE(true);
+}
+
+void CsiSensor::onWifiConnected(const uint8_t bssid[6]) {
+  memcpy(s_bssid, bssid, 6);
+  s_bssidKnown = true;
+}
+
+void CsiSensor::onWifiDisconnected() { s_bssidKnown = false; }
+
 bool CsiSensor::readStats(Stats *out) {
-  uint32_t now = millis();
-  portENTER_CRITICAL(reinterpret_cast<portMUX_TYPE *>(&mux_));
-  const size_t n = count_;
+  const uint32_t now = millis();
+  portENTER_CRITICAL(&s_mux);
+  const uint16_t n = s_count;
   if (n < KH_CSI_MIN_SAMPLES) {
-    portEXIT_CRITICAL(reinterpret_cast<portMUX_TYPE *>(&mux_));
+    portEXIT_CRITICAL(&s_mux);
     return false;
   }
   float sum = 0.0f, sumSq = 0.0f;
-  for (size_t i = 0; i < n; i++) {
-    const float v = window_[i];
+  for (uint16_t i = 0; i < n; i++) {
+    const float v = s_window[i];
     sum += v;
     sumSq += v * v;
   }
-  const uint32_t total = totalPackets_;
-  portEXIT_CRITICAL(reinterpret_cast<portMUX_TYPE *>(&mux_));
+  const uint32_t total = s_total;
+  portEXIT_CRITICAL(&s_mux);
 
   const float mean = sum / static_cast<float>(n);
   const float variance = sumSq / static_cast<float>(n) - mean * mean;
 
   float rate = 0.0f;
-  if (haveRateSample_ && now > lastStatsMs_) {
-    rate = static_cast<float>(total - lastStatsTotal_) * 1000.0f /
-           static_cast<float>(now - lastStatsMs_);
+  if (s_haveRateSample && now > s_lastStatsMs) {
+    rate = static_cast<float>(total - s_lastStatsTotal) * 1000.0f /
+           static_cast<float>(now - s_lastStatsMs);
   }
-  lastStatsTotal_ = total;
-  lastStatsMs_ = now;
-  haveRateSample_ = true;
+  s_lastStatsTotal = total;
+  s_lastStatsMs = now;
+  s_haveRateSample = true;
 
   out->variance = variance;
   out->mean = mean;
