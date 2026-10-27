@@ -304,6 +304,20 @@ export class FirestoreStore implements Store {
     return rows.map((r) => r.data.sub);
   }
 
+  async queueDeviceAction(householdId: string, sourceId: string, action: string): Promise<void> {
+    await call(`documents/sources/${encodeURIComponent(sourceId)}/actions`, {
+      method: 'POST',
+      body: toDoc({ action, queuedTs: Date.now() }),
+    });
+  }
+  async drainDeviceActions(sourceId: string): Promise<string[]> {
+    const rows = await listDocs(`sources/${encodeURIComponent(sourceId)}/actions`, 50);
+    await Promise.all(
+      rows.map((r) => deleteDoc(`sources/${encodeURIComponent(sourceId)}/actions/${r.id}`).catch(() => undefined)),
+    );
+    return rows.map((r) => String(r.data.action)).filter(Boolean);
+  }
+
   async appendSignal(householdId: string, signal: Signal): Promise<void> {
     const res = await call(`documents/${sub(householdId, 'signals')}`, {
       method: 'POST',

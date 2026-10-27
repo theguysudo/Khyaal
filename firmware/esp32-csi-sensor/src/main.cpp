@@ -69,6 +69,7 @@ char sealedJson[1024] = "";
 uint32_t lastSenseMs = 0;
 uint32_t lastStatusMs = 0;
 uint32_t lastHeartbeatMs = 0;
+uint32_t lastDevicePollMs = 0;
 
 // ------------------------------------------------------------------ logging
 // Every log line starts with "[<ms>] " — deliberately not JSON, so the
@@ -247,6 +248,40 @@ void runCalibration(uint32_t nowMs) {
     klog("cal t=%.1fs waiting for CSI frames...", (nowMs - cal.startMs) / 1000.0f);
   }
   if (nowMs - cal.startMs >= kCalDurationMs) finishCalibration();
+}
+
+// ---------------------------------------------------------------- dashboard
+// LAN mode: poll the backend every KH_DEVICE_POLL_MS for dashboard-queued
+// actions (x-kh-household/x-kh-source/x-kh-key — the same credentials as
+// ingest). Response {"actions":["falltest", ...]} — the list is drained by
+// the server, so each action runs once. GET only; any failure just skips a
+// poll cycle, and the 3 s timeout keeps the loop breathing.
+void pollDeviceActions(uint32_t nowMs) {
+  if (cfg.transport != TRANSPORT_LAN || !wifiUp ||
+      cfg.host[0] == '\0' || cfg.householdId[0] == '\0' ||
+      cfg.sourceId[0] == '\0' || cfg.apiKey[0] == '\0') {
+    return;
+  }
+  if (nowMs - lastDevicePollMs < KH_DEVICE_POLL_MS) return;
+  lastDevicePollMs = nowMs;
+
+  String url = String(cfg.host) + "/api/v1/device/actions";
+  WiFiClient client;
+  HTTPClient http;
+  if (!http.begin(client, url)) return;
+  http.addHeader("x-kh-household", cfg.householdId);
+  http.addHeader("x-kh-source", cfg.sourceId);
+  http.addHeader("x-kh-key", cfg.apiKey);
+  http.setTimeout(3000);
+  const int code = http.GET();
+  if (code == 200) {
+    const String body = http.getString();
+    if (body.indexOf("falltest") >= 0) {
+      klog("dashboard requested falltest");
+      emitPresence("fall");
+    }
+  }
+  http.end();
 }
 
 // ------------------------------------------------------------------- cli
@@ -484,5 +519,6 @@ void loop() {
     emitPresence(presenceValue(sm.state()));
   }
 
+  pollDeviceActions(nowMs);
   flushLan(nowMs);
 }

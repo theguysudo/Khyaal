@@ -46,6 +46,10 @@ export interface Store {
   addWebPushSubscriber(householdId: string, sub: unknown): Promise<void>;
   getWebPushSubscribers(householdId: string): Promise<unknown[]>;
 
+  // device actions (dashboard → sensor control, e.g. 'falltest')
+  queueDeviceAction(householdId: string, sourceId: string, action: string): Promise<void>;
+  drainDeviceActions(sourceId: string): Promise<string[]>;
+
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
   getSignals(householdId: string, sinceTs: number): Promise<Signal[]>;
@@ -88,6 +92,7 @@ interface MemoryDb {
   commands: Map<string, AppCommand[]>;
   deviceTokens: Map<string, string[]>;
   webPushSubs: Map<string, unknown[]>;
+  deviceActions: Map<string, string[]>; // keyed by sourceId
 }
 
 const g = globalThis as unknown as { __khayaalDb?: MemoryDb };
@@ -105,6 +110,7 @@ function db(): MemoryDb {
       commands: new Map(),
       deviceTokens: new Map(),
       webPushSubs: new Map(),
+      deviceActions: new Map(),
     };
   }
   return g.__khayaalDb;
@@ -198,6 +204,16 @@ export class MemoryStore implements Store {
   }
   async getWebPushSubscribers(householdId: string): Promise<unknown[]> {
     return db().webPushSubs.get(householdId) ?? [];
+  }
+
+  async queueDeviceAction(householdId: string, sourceId: string, action: string): Promise<void> {
+    const list = db().deviceActions.get(sourceId) ?? [];
+    db().deviceActions.set(sourceId, [...list, action].slice(-10));
+  }
+  async drainDeviceActions(sourceId: string): Promise<string[]> {
+    const list = db().deviceActions.get(sourceId) ?? [];
+    db().deviceActions.set(sourceId, []);
+    return list;
   }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {

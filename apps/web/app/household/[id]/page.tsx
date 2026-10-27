@@ -638,6 +638,7 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
   const [host, setHost] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testedSrc, setTestedSrc] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/server-info').then((r) => r.json()).then((i) => setHost(i.lanBaseUrl ?? 'http://localhost:3100')).catch(() => {});
@@ -660,6 +661,17 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
     }
   };
 
+  const fallTest = async (sourceId: string) => {
+    setError(null);
+    try {
+      await postJSON(`/api/v1/household/${id}/sources/${sourceId}/actions`, { action: 'falltest' });
+      setTestedSrc(sourceId);
+      setTimeout(() => setTestedSrc(null), 6000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
   const serialBlock = created
     ? [
         `mode lan`,
@@ -676,11 +688,20 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {bundle.sources.map((s) => {
           const fresh = s.lastSeenTs && bundle.simNowTs - s.lastSeenTs < 30 * 60_000;
+          const isEsp = s.type === 'esp32';
           return (
             <span key={s.id} className="inline-flex items-center gap-2 rounded-full border border-ink/10 bg-paper px-4 py-2 text-sm text-ink/80">
               <span className="h-2 w-2 rounded-full" style={{ background: fresh ? '#4c7a4f' : '#c9b8a0' }} />
               {s.label}
               <span className="text-xs text-ink/40">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
+              {isEsp && (
+                <button
+                  onClick={() => fallTest(s.id)}
+                  className="rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
+                >
+                  {testedSrc === s.id ? 'firing…' : 'fall test'}
+                </button>
+              )}
             </span>
           );
         })}

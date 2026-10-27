@@ -61,6 +61,10 @@
 // Heartbeat ("idle"/"motion" re-emission) interval.
 #define KH_HEARTBEAT_MS 30000u
 
+// How often the sensor asks the backend for dashboard-queued actions
+// (e.g. 'falltest') in LAN mode. 5 s keeps the demo snappy.
+#define KH_DEVICE_POLL_MS 5000u
+
 // -------------------------------------------------------------------- fall
 // Fall heuristic on the same variance stream (no extra hardware):
 //   1. a sharp spike — variance >= KH_FALL_SPIKE_RATIO x the rolling mean
