@@ -125,7 +125,7 @@ export default function DashboardPage() {
           <CircleCard id={id} bundle={bundle} />
           <PushCard id={id} />
           <EventsCard bundle={bundle} />
-          <SourcesCard bundle={bundle} />
+          <SourcesCard id={id} bundle={bundle} />
         </div>
 
         <p className="mt-10 text-center text-xs leading-relaxed text-ink/40">
@@ -633,12 +633,47 @@ function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
   );
 }
 
-function SourcesCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  const [created, setCreated] = useState<{ id: string; apiKey: string } | null>(null);
+  const [host, setHost] = useState<string>('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/server-info').then((r) => r.json()).then((i) => setHost(i.lanBaseUrl ?? 'http://localhost:3100')).catch(() => {});
+  }, []);
+
   if (!bundle) return null;
+  const addSensor = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const src = await postJSON<{ id: string; apiKey: string }>(`/api/v1/household/${id}/sources`, {
+        type: 'esp32',
+        label: 'Room sensor (ESP32)',
+      });
+      setCreated({ id: src.id, apiKey: src.apiKey });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const serialBlock = created
+    ? [
+        `mode lan`,
+        `host ${host}`,
+        `hh ${id}`,
+        `src ${created.id}`,
+        `key ${created.apiKey}`,
+      ].join('\n')
+    : null;
+
   return (
     <BentoCard label="Sources" className="col-span-12">
       <CardTitle note="never a feed, never a map">The watchers</CardTitle>
-      <div className="mt-4 flex flex-wrap gap-2.5">
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {bundle.sources.map((s) => {
           const fresh = s.lastSeenTs && bundle.simNowTs - s.lastSeenTs < 30 * 60_000;
           return (
@@ -649,7 +684,25 @@ function SourcesCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>[
             </span>
           );
         })}
+        <button
+          onClick={addSensor}
+          disabled={busy}
+          className="rounded-full border border-dashed border-ink/25 px-4 py-2 text-sm text-ink/55 transition-colors hover:bg-paper disabled:opacity-40"
+        >
+          {busy ? 'Pairing…' : '+ Add room sensor (ESP32)'}
+        </button>
       </div>
+      {error && <p className="mt-3 text-sm text-[#b23a2f]">{error}</p>}
+      {serialBlock && (
+        <div className="mt-4 rounded-2xl border border-ink/10 bg-paper/70 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink/40">Paste into the sensor's serial monitor (115200) — the key is shown once</p>
+          <pre className="mt-2 overflow-x-auto whitespace-pre text-[12.5px] leading-relaxed text-ink/80">{serialBlock}</pre>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink/40">
+            Flash first with <code>bash firmware/test-pipeline.sh flash</code>. The sensor seals its traffic with
+            AES-256-GCM under this key — <code>show</code> should say state=idle, wifi=up, encrypt=on.
+          </p>
+        </div>
+      )}
     </BentoCard>
   );
 }
