@@ -11,6 +11,7 @@ import com.khayaal.app.data.repo.KhayaalRepository
 import com.khayaal.app.signals.SignalCollector
 import com.khayaal.app.signals.SignalRecorder
 import com.khayaal.app.signals.WorkScheduler
+import com.khayaal.app.talkback.TalkbackManager
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -36,7 +37,11 @@ class KhayaalApp : Application() {
         runBlocking {
             runCatching {
                 container.pairingStore.current()?.let { pairing ->
-                    container.apiClient.deviceCredentials = pairing.sourceId to pairing.apiKey
+                    container.apiClient.deviceCredentials = com.khayaal.app.data.api.DeviceCredentials(
+                        householdId = pairing.householdId,
+                        sourceId = pairing.sourceId,
+                        apiKey = pairing.apiKey,
+                    )
                 }
             }
         }
@@ -59,4 +64,5 @@ class AppContainer(context: android.content.Context) {
     val signalCollector = SignalCollector(appContext, pairingStore, signalRecorder)
     val ttsSpeaker = TtsSpeaker(appContext)
     val commandCoordinator = CommandCoordinator(appContext, pairingStore, repository, ttsSpeaker)
+    val talkbackManager = TalkbackManager(appContext, repository)
 }

@@ -55,13 +55,27 @@ keys exist — otherwise that channel is a silent no-op.
 |---|---|---|
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Sign up / Login with Google | Google Cloud console → OAuth client (Web). Redirect URI must be exactly `http://localhost:3100/api/auth/google/callback` (localhost only — IP URIs are rejected by Google). |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Browser push to the dashboard | `npx web-push generate-vapid-keys` (subject = `mailto:you@example.com`). |
-| `OPENROUTER_API_KEY` or `NVIDIA_API_KEY` | LLM behaviour analysis + "Ask Khayaal" | free-tier keys from openrouter.ai / build.nvidia.com |
+| `NVIDIA_API_KEY` | LLM behaviour analysis + "Ask Khayaal", served by `minimaxai/minimax-m3.1-flash` on NVIDIA NIM | build.nvidia.com → API key (free tier). One key covers both the MiniMax and the Nemotron models. |
+| `OPENROUTER_API_KEY` | The same, as a second provider | openrouter.ai/keys. Optional — the server falls back to NVIDIA NIM and then to OpenRouter, so a missing key never breaks the assistant. |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` (or `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`) | Firestore persistence (instead of in-memory) + FCM push to the Android app | Firebase console → project → service account → JSON |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | care-circle email on tier 3 | any free mailbox with SMTP (e.g. Gmail app password) |
 
 After editing `.env.local`, restart the server (`Ctrl-C`, `npm start`).
 Households live in memory unless Firestore is configured — **a restart clears
 them**, so re-create (2 minutes, see step 2).
+
+> **After any server restart, re-register the room sensor before testing it.**
+> The sensor's household id, source id and API key are minted by the server,
+> and a restart invalidates all three. Without this, the assistant answers
+> "Household not found", the Wi-Fi scan never comes back and the relay logs
+> 403s — three symptoms of one cause:
+>
+> ```bash
+> python3 firmware/tunnel/register_source.py --server http://localhost:3100
+> ```
+>
+> That rewrites `firmware/tunnel/config.json`. Restart the relay afterwards so
+> it picks the new credentials up (it caches the config at startup).
 
 ### Create a family
 

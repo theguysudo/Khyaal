@@ -357,6 +357,18 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
   ../../.tools/gradle-8.10.2/bin/gradle assembleDebug
 ```
 
+If you have no Homebrew JDK 17, Android Studio ships a working one:
+
+```bash
+cd apps/android
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+  ../../.tools/gradle-8.10.2/bin/gradle assembleDebug
+```
+
+> **A build that fails with a bare `25.0.1` and no file or line is a JDK
+> problem, not a code problem.** That is the Kotlin compiler choking on
+> JDK 25. Set `JAVA_HOME` as above and it builds.
+
 The APK lands at `apps/android/app/build/outputs/apk/debug/app-debug.apk`.
 Copy it to `apps/web/public/khayaal-debug.apk` and the onboarding page offers
 it as a direct download on her phone.

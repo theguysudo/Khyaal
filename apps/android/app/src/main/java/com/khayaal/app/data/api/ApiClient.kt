@@ -13,15 +13,16 @@ import java.util.concurrent.TimeUnit
 /**
  * Builds and caches one Retrofit instance per base URL, so the base URL stays
  * configurable at runtime (Settings) without an app restart. While a pairing
- * record exists, every request carries `x-kh-source` / `x-kh-key` — the
- * server accepts those on her-device routes (state, commands, check-in) the
+ * record exists, every request carries the device credentials —
+ * `x-kh-household` / `x-kh-source` / `x-kh-key` — the server accepts those
+ * on her-device routes (state, assistant, talkback, commands, check-in) the
  * same way the ESP32 uses them in LAN mode.
  */
 class ApiClient {
 
-    /** sourceId to apiKey of the current pairing; null when unpaired. */
+    /** The credentials of the current pairing; null when unpaired. */
     @Volatile
-    var deviceCredentials: Pair<String, String>? = null
+    var deviceCredentials: DeviceCredentials? = null
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -51,8 +52,9 @@ class ApiClient {
             val creds = deviceCredentials
             val request = if (creds != null) {
                 chain.request().newBuilder()
-                    .header("x-kh-source", creds.first)
-                    .header("x-kh-key", creds.second)
+                    .header("x-kh-household", creds.householdId)
+                    .header("x-kh-source", creds.sourceId)
+                    .header("x-kh-key", creds.apiKey)
                     .build()
             } else {
                 chain.request()
@@ -61,7 +63,9 @@ class ApiClient {
         }
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            // The talkback chunk poll is held open by the server for up to 15 s,
+            // so the read timeout has to be comfortably longer than that.
+            .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(auth)
             .addInterceptor(logging)
@@ -84,3 +88,15 @@ class ApiClient {
         }
     }
 }
+
+/**
+ * The device credentials the server checks on every household route: which
+ * household this phone belongs to, which source it is, and that source's
+ * key. They travel in headers on household routes and in the body on
+ * /api/v1/ingest — the one endpoint the firmware also speaks.
+ */
+data class DeviceCredentials(
+    val householdId: String,
+    val sourceId: String,
+    val apiKey: String,
+)

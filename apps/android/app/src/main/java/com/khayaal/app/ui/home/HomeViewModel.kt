@@ -9,6 +9,8 @@ import com.khayaal.app.data.api.CallPlanDto
 import com.khayaal.app.data.api.CommandDto
 import com.khayaal.app.data.api.StateDto
 import com.khayaal.app.data.datastore.CallChainState
+import com.khayaal.app.data.datastore.ChecklistItem
+import com.khayaal.app.data.datastore.GpsState
 import com.khayaal.app.data.datastore.SleepMilestone
 import com.khayaal.app.signals.WorkScheduler
 import com.khayaal.app.sleep.SleepWatchManager
@@ -52,6 +54,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // Small daily texture.
         val stepsToday: Long = 0,
         val lastSleep: SleepMilestone? = null,
+        // The movement summary from the phone's own GPS — a zone word and a
+        // few numbers, never a place.
+        val gpsState: GpsState = GpsState(),
+        // Her own to-do list, edited on this phone.
+        val checklist: List<ChecklistItem> = emptyList(),
+        // Who she can call, cached from the family's call order.
+        val callOrder: List<CallChainState.Entry> = emptyList(),
         // Family→app commands (Reminders screen).
         val commands: List<CommandDto> = emptyList(),
         // The armed tier-3 call chain (cancellable from the alarm).
@@ -122,6 +131,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             container.pairingStore.callChainFlow.collect { chain ->
                 _ui.update { it.copy(callChain = chain) }
+            }
+        }
+        viewModelScope.launch {
+            container.pairingStore.gpsStateFlow.collect { gps ->
+                _ui.update { it.copy(gpsState = gps) }
+            }
+        }
+        viewModelScope.launch {
+            container.pairingStore.checklistFlow.collect { items ->
+                _ui.update { it.copy(checklist = items) }
+            }
+        }
+        viewModelScope.launch {
+            container.pairingStore.callOrderCacheFlow.collect { order ->
+                _ui.update { it.copy(callOrder = order) }
             }
         }
         viewModelScope.launch {
@@ -230,6 +254,53 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 com.khayaal.app.care.CallChainNotifier.cancel(appContext)
             }
         }
+    }
+
+    // -- Her to-do list ------------------------------------------------------------------
+
+    /** Adds a line to her list. The list never leaves the phone. */
+    fun addChecklistItem(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val current = container.pairingStore.currentChecklist()
+            val item = ChecklistItem(
+                id = "chk_${System.currentTimeMillis()}_${current.size}",
+                text = trimmed,
+                done = false,
+                createdTs = System.currentTimeMillis(),
+            )
+            container.pairingStore.saveChecklist(current + item)
+        }
+    }
+
+    /** Ticks a line off (or unticks it). */
+    fun toggleChecklistItem(item: ChecklistItem) {
+        viewModelScope.launch {
+            val current = container.pairingStore.currentChecklist()
+            container.pairingStore.saveChecklist(
+                current.map { if (it.id == item.id) it.copy(done = !it.done) else it },
+            )
+        }
+    }
+
+    /** Throws a line away. */
+    fun deleteChecklistItem(item: ChecklistItem) {
+        viewModelScope.launch {
+            val current = container.pairingStore.currentChecklist()
+            container.pairingStore.saveChecklist(current.filterNot { it.id == item.id })
+        }
+    }
+
+    // -- Location ------------------------------------------------------------------
+
+    /**
+     * The GPS listener only works once the location permission exists. This
+     * is called when the permission is granted and whenever the daily view
+     * opens, so the movement segment fills in without any other ceremony.
+     */
+    fun refreshLocation() {
+        container.signalCollector.startGps()
     }
 
     // -- Settings --------------------------------------------------------------------

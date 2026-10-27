@@ -6,9 +6,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Passive signal collection. Never ACCESS_FINE_LOCATION, never GPS. -->
+    <!-- Passive signal collection. Wi-Fi presence gives "home / away"; the GPS
+         collector below adds movement. Neither ever shares a coordinate. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Movement sensing (product request). COARSE only: the phone only ever
+         needs to know "home or away" and "has she moved" — never a street.
+         ACCESS_FINE_LOCATION is deliberately not requested. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Care notifications, kept alive across reboots, full-screen for tier 3. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -89,6 +95,11 @@
         <!-- Call-chain notification's Cancel button. -->
         <receiver
             android:name=".care.CallChainActionReceiver"
+            android:exported="false" />
+
+        <!-- A reminder she set for herself, by talking to Khayaal. -->
+        <receiver
+            android:name=".commands.LocalReminderReceiver"
             android:exported="false" />
 
         <!-- FCM stub: instant tier pushes on top of the 10-minute poll. -->

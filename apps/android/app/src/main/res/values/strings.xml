@@ -155,4 +155,102 @@
     <!-- Accessibility -->
     <string name="a11y_code_input">Six digit pairing code</string>
     <string name="a11y_im_ok_button">Tell your family you are okay</string>
+
+    <!-- Talkback (the walkie-talkie) -->
+    <string name="talkback_title">Talkback</string>
+    <string name="talkback_idle">Press and hold the big button to talk. They have to allow it first.</string>
+    <string name="talkback_hold_to_talk">Hold to talk</string>
+    <string name="talkback_talking">You are talking</string>
+    <string name="talkback_listening">They are talking</string>
+    <string name="talkback_quiet">Quiet</string>
+    <string name="talkback_hang_up">End the call</string>
+    <string name="talkback_call_family">Call the family</string>
+    <string name="talkback_privacy_note">The microphone only opens after the other side says yes.</string>
+    <string name="talkback_incoming_title">Someone wants to talk</string>
+    <string name="talkback_incoming_body">%1$s is asking to talk to you.</string>
+    <string name="talkback_incoming_body_generic">Someone is asking to talk to you.</string>
+    <string name="talkback_incoming_privacy">Your microphone will stay off until you press Allow.</string>
+    <string name="talkback_allow">Allow</string>
+    <string name="talkback_not_now">Not now</string>
+
+    <!-- Segments -->
+    <string name="segment_today">Today</string>
+    <string name="segment_family">Family</string>
+    <string name="segment_health">Health</string>
+    <string name="segment_movement">Movement</string>
+    <string name="segment_night">Night</string>
+
+    <!-- Time and date widget -->
+    <string name="widget_time_label">The time now</string>
+    <string name="widget_date_format">EEEE, d MMMM</string>
+
+    <!-- Checklist widget -->
+    <string name="widget_checklist_title">Things to do</string>
+    <string name="widget_checklist_empty">Nothing yet. Tap Add to write something down.</string>
+    <string name="widget_checklist_add">Add</string>
+    <string name="widget_checklist_hint">What do you need to do?</string>
+    <string name="widget_checklist_delete_desc">Delete this item</string>
+    <string name="widget_checklist_done_desc">Tick this item off</string>
+    <string name="widget_checklist_undo_desc">Untick this item</string>
+
+    <!-- Family segment -->
+    <string name="family_title">Call your family</string>
+    <string name="family_no_contacts">No family numbers yet. They will appear here after the first sync.</string>
+    <string name="family_call">Call %1$s</string>
+    <string name="family_open_dialer">Open the phone</string>
+
+    <!-- Health and safety segment -->
+    <string name="health_title">Health and safety</string>
+    <string name="health_emergency">Call for help</string>
+    <string name="health_checkin">I\'m OK</string>
+    <string name="health_checkin_done">Thank you — we let them know.</string>
+    <string name="health_medicine_title">Medicine reminders</string>
+    <string name="health_medicine_empty">No medicine reminders yet.</string>
+    <string name="health_medicine_next">Next: %1$s</string>
+
+    <!-- Movement segment -->
+    <string name="movement_title">Movement</string>
+    <string name="movement_at_home">At home</string>
+    <string name="movement_away">Out of the house</string>
+    <string name="movement_unknown">Khayaal is still learning</string>
+    <string name="movement_not_reporting">Not reporting yet</string>
+    <string name="movement_moving">moving</string>
+    <string name="movement_still">still</string>
+    <string name="movement_steps">%1$s steps today</string>
+    <string name="movement_steps_unknown">Steps are not known yet today</string>
+    <string name="movement_privacy">Khayaal never records where you go — only whether you are moving.</string>
+
+    <!-- Night segment -->
+    <string name="night_title">Night watch</string>
+    <string name="night_sleep_asleep">You slept</string>
+    <string name="night_sleep_awake">You were awake</string>
+    <string name="night_sleep_restless">Restless</string>
+    <string name="night_sleep_woke">You woke up</string>
+    <string name="night_sleep_none">No sleep events yet tonight.</string>
+    <string name="night_last_event">Last night event · %1$s</string>
+
+    <!-- Today segment -->
+    <string name="today_next_reminder">Next reminder</string>
+    <string name="today_no_reminder">No reminders waiting.</string>
+    <string name="today_summary">%1$s today so far.</string>
+
+    <!-- Self-set reminders -->
+    <string name="channel_local_reminders_name">Your reminders</string>
+    <string name="channel_local_reminders_description">Reminders you set by talking to Khayaal</string>
+    <string name="local_reminder_title">A reminder from Khayaal</string>
+
+    <!-- Assistant answers -->
+    <string name="assistant_reply_checkin">That\'s lovely — I\'ve told them you are okay. You don\'t need to do anything else now.</string>
+    <string name="assistant_reply_checkin_offline">I can\'t reach home right now, but I\'ve noted that you are okay. I\'ll tell them as soon as the network is back.</string>
+    <string name="assistant_reply_call">I\'m opening the phone for you now. The number is on the screen — just press the green button.</string>
+    <string name="assistant_reply_call_named">I\'m opening the phone for you now. The number is on the screen — just press the green button.</string>
+    <string name="assistant_reply_status">%1$s</string>
+    <string name="assistant_reply_status_unknown">I don\'t know how things are right this second, but I am still keeping an eye on things for you.</string>
+    <string name="assistant_reply_steps">You have taken %1$s steps today. That is a good amount of moving about.</string>
+    <string name="assistant_reply_steps_none">I don\'t have a step count for today yet — the phone is still counting.</string>
+    <string name="assistant_reply_medicine_none">There is no medicine reminder waiting for you right now.</string>
+    <string name="assistant_reply_medicine_next">Your next reminder is: %1$s. I\'ll speak it out when it is time.</string>
+    <string name="assistant_reply_reminder_set">All right — I\'ll remind you to %1$s at %2$s. I\'ll speak it out then.</string>
+    <string name="assistant_reply_reminder_no_time">I can set that reminder for you, but I need to know when. Try “remind me to %1$s in 20 minutes”.</string>
+    <string name="assistant_reply_offline">I can\'t reach home just now, so I answered from what this phone knows. Try again in a little while and I\'ll ask the family for you.</string>
 </resources>

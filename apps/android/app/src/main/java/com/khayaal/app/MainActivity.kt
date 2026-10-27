@@ -22,6 +22,8 @@ import com.khayaal.app.ui.assistant.AssistantScreen
 import com.khayaal.app.ui.home.HomeScreen
 import com.khayaal.app.ui.pairing.PairingScreen
 import com.khayaal.app.ui.reminders.RemindersScreen
+import com.khayaal.app.ui.talkback.TalkbackConsentOverlay
+import com.khayaal.app.ui.talkback.TalkbackScreen
 import com.khayaal.app.ui.theme.KhayaalTheme
 import com.khayaal.app.ui.theme.Paper
 import kotlinx.coroutines.flow.map
@@ -50,6 +52,7 @@ private object Routes {
     const val HOME = "home"
     const val ASSISTANT = "assistant"
     const val REMINDERS = "reminders"
+    const val TALKBACK = "talkback"
 }
 
 private sealed interface PairingUi {
@@ -85,6 +88,16 @@ private fun KhayaalRoot() {
         }
     }
 
+    // The talkback poll runs for as long as the phone is paired — an incoming
+    // request must reach her even if she is on another screen.
+    LaunchedEffect(pairingUi is PairingUi.Paired) {
+        if (pairingUi is PairingUi.Paired) {
+            container.talkbackManager.start()
+        } else {
+            container.talkbackManager.stop()
+        }
+    }
+
     if (pairingUi == PairingUi.Loading) {
         // One quiet paper frame while DataStore wakes up.
         Box(Modifier.fillMaxSize().background(Paper))
@@ -103,6 +116,7 @@ private fun KhayaalRoot() {
             HomeScreen(
                 onAskKhayaal = { navController.navigate(Routes.ASSISTANT) },
                 onReminders = { navController.navigate(Routes.REMINDERS) },
+                onTalkback = { navController.navigate(Routes.TALKBACK) },
             )
         }
         composable(Routes.ASSISTANT) {
@@ -117,5 +131,22 @@ private fun KhayaalRoot() {
                 onBack = { navController.popBackStack() },
             )
         }
+        composable(Routes.TALKBACK) {
+            TalkbackScreen(
+                manager = container.talkbackManager,
+                onBack = { navController.popBackStack() },
+            )
+        }
+    }
+
+    // The consent popup sits above everything: when the family asks to talk,
+    // it must reach her no matter which screen she is on.
+    val talkbackUi by container.talkbackManager.ui.collectAsStateWithLifecycle()
+    if (talkbackUi.incomingPending) {
+        TalkbackConsentOverlay(
+            requesterName = talkbackUi.session?.requesterName.orEmpty(),
+            onAllow = { container.talkbackManager.answer(allow = true) },
+            onDecline = { container.talkbackManager.answer(allow = false) },
+        )
     }
 }

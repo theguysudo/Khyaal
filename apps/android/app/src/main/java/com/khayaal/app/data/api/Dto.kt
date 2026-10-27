@@ -86,6 +86,13 @@ data class IngestRequest(
     val value: JsonElement,
     val ts: Long,
     val apiKey: String,
+    /**
+     * Optional primitive detail bag (the backend's `meta`). Only numbers,
+     * strings and booleans — the server sanitises it again. GPS uses it for
+     * distanceM / speedKmh / moving / accuracyM; every other signal leaves it
+     * out entirely.
+     */
+    val meta: Map<String, JsonPrimitive>? = null,
 )
 
 @Serializable
@@ -178,14 +185,27 @@ data class AssistantMessageDto(
     val content: String,
 )
 
+/**
+ * The body of POST /household/{id}/assistant. The server reads
+ * `{messages:[{role,content}]}` and ignores everything else; the app never
+ * sends an API key — the backend holds the LLM key.
+ */
 @Serializable
 data class AssistantRequest(
     val messages: List<AssistantMessageDto>,
 )
 
+/**
+ * The server's answer: `{reply, provider, providerLabel, model}`. Any
+ * non-blank `reply` is a successful answer — including the server's own
+ * friendly fallback sentence when no LLM provider could be reached.
+ */
 @Serializable
 data class AssistantResponse(
     val reply: String? = null,
+    val provider: String? = null,
+    val providerLabel: String? = null,
+    val model: String? = null,
     val error: String? = null,
 )
 

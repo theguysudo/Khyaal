@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.khayaal.app.BuildConfig
 import com.khayaal.app.commands.CommandBook
+import com.khayaal.app.commands.LocalReminder
 import com.khayaal.app.data.api.CommandDto
 import com.khayaal.app.data.crypto.PairingCipher
 import com.khayaal.app.signals.SignalEvent
@@ -31,6 +32,14 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  * One DataStore, clearly grouped.
  */
 class PairingStore(private val context: Context) {
+
+    companion object {
+        /** A to-do list longer than this is clutter, not help. */
+        const val MAX_CHECKLIST = 40
+
+        /** How many self-set reminders the phone keeps. */
+        const val MAX_LOCAL_REMINDERS = 30
+    }
 
     private object Keys {
         val BASE_URL = stringPreferencesKey("base_url")
@@ -86,6 +95,35 @@ class PairingStore(private val context: Context) {
         // The callOrder contacts, cached on every state poll so voice commands
         // ("call Aditya") and the alarm can dial without a network round-trip.
         val CALL_ORDER_CACHE = stringPreferencesKey("call_order_cache")
+
+        // GPS home geofence — learned on the phone, never shared. The centre
+        // and the radius stay in this DataStore; only "home" / "away" ever
+        // leaves the device.
+        val HOME_LAT = doublePreferencesKey("home_lat")
+        val HOME_LON = doublePreferencesKey("home_lon")
+        val HOME_RADIUS_M = doublePreferencesKey("home_radius_m")
+        val HOME_LEARN_COUNT = intPreferencesKey("home_learn_count")
+        val HOME_LEARN_LAT_SUM = doublePreferencesKey("home_learn_lat_sum")
+        val HOME_LEARN_LON_SUM = doublePreferencesKey("home_learn_lon_sum")
+        val HOME_LEARN_SPREAD_M = doublePreferencesKey("home_learn_spread_m")
+
+        // The last GPS fix, kept so "distance since the last fix" survives a
+        // process death. Again: local only.
+        val GPS_LAST_LAT = doublePreferencesKey("gps_last_lat")
+        val GPS_LAST_LON = doublePreferencesKey("gps_last_lon")
+        val GPS_LAST_TS = longPreferencesKey("gps_last_ts")
+        val GPS_ZONE = stringPreferencesKey("gps_zone")
+        val GPS_MOVING = booleanPreferencesKey("gps_moving")
+        val GPS_SPEED_KMH = doublePreferencesKey("gps_speed_kmh")
+        val GPS_DISTANCE_M = doublePreferencesKey("gps_distance_m")
+        val GPS_ACCURACY_M = doublePreferencesKey("gps_accuracy_m")
+        val GPS_DISTANCE_TOTAL_M = doublePreferencesKey("gps_distance_total_m")
+
+        // Her own to-do list — edited on the phone, never uploaded.
+        val CHECKLIST_ITEMS = stringPreferencesKey("checklist_items")
+
+        // Reminders she sets for herself by talking to Khayaal.
+        val LOCAL_REMINDERS = stringPreferencesKey("local_reminders")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -494,6 +532,167 @@ class PairingStore(private val context: Context) {
     }
 
     suspend fun currentCallOrder(): List<CallChainState.Entry> = callOrderCacheFlow.first()
+
+    // -- GPS: the learned home geofence and the last movement summary ----------
+    // Everything in this section stays on the phone. The server only ever sees
+    // the words "home" / "away" and a handful of movement numbers.
+
+    /** The learned geofence, or null while the phone is still learning it. */
+    val homeGeofenceFlow: Flow<HomeGeofence?> = context.dataStore.data.map { prefs ->
+        val lat = prefs[Keys.HOME_LAT]
+        val lon = prefs[Keys.HOME_LON]
+        val radius = prefs[Keys.HOME_RADIUS_M]
+        if (lat == null || lon == null || radius == null) null
+        else HomeGeofence(centerLat = lat, centerLon = lon, radiusM = radius)
+    }
+
+    suspend fun currentHomeGeofence(): HomeGeofence? = homeGeofenceFlow.first()
+
+    suspend fun setHomeGeofence(geofence: HomeGeofence) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.HOME_LAT] = geofence.centerLat
+            prefs[Keys.HOME_LON] = geofence.centerLon
+            prefs[Keys.HOME_RADIUS_M] = geofence.radiusM
+        }
+    }
+
+    /** The running totals used while the geofence is still being learned. */
+    suspend fun homeLearningState(): HomeLearningState {
+        val prefs = context.dataStore.data.first()
+        return HomeLearningState(
+            samples = prefs[Keys.HOME_LEARN_COUNT] ?: 0,
+            latSum = prefs[Keys.HOME_LEARN_LAT_SUM] ?: 0.0,
+            lonSum = prefs[Keys.HOME_LEARN_LON_SUM] ?: 0.0,
+            spreadM = prefs[Keys.HOME_LEARN_SPREAD_M] ?: 0.0,
+        )
+    }
+
+    suspend fun setHomeLearningState(state: HomeLearningState) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.HOME_LEARN_COUNT] = state.samples
+            prefs[Keys.HOME_LEARN_LAT_SUM] = state.latSum
+            prefs[Keys.HOME_LEARN_LON_SUM] = state.lonSum
+            prefs[Keys.HOME_LEARN_SPREAD_M] = state.spreadM
+        }
+    }
+
+    /** The previous fix, so the next one can report the distance walked. */
+    suspend fun lastGpsFix(): GpsFix? {
+        val prefs = context.dataStore.data.first()
+        val lat = prefs[Keys.GPS_LAST_LAT] ?: return null
+        val lon = prefs[Keys.GPS_LAST_LON] ?: return null
+        val ts = prefs[Keys.GPS_LAST_TS] ?: return null
+        return GpsFix(lat = lat, lon = lon, ts = ts)
+    }
+
+    suspend fun setLastGpsFix(fix: GpsFix) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.GPS_LAST_LAT] = fix.lat
+            prefs[Keys.GPS_LAST_LON] = fix.lon
+            prefs[Keys.GPS_LAST_TS] = fix.ts
+        }
+    }
+
+    /** The movement summary the UI shows: zone, moving, speed, accuracy. */
+    val gpsStateFlow: Flow<GpsState> = context.dataStore.data.map { prefs ->
+        GpsState(
+            zone = prefs[Keys.GPS_ZONE],
+            moving = prefs[Keys.GPS_MOVING] ?: false,
+            speedKmh = prefs[Keys.GPS_SPEED_KMH] ?: 0.0,
+            distanceM = prefs[Keys.GPS_DISTANCE_M] ?: 0.0,
+            accuracyM = prefs[Keys.GPS_ACCURACY_M] ?: 0.0,
+            totalDistanceM = prefs[Keys.GPS_DISTANCE_TOTAL_M] ?: 0.0,
+            lastFixTs = prefs[Keys.GPS_LAST_TS] ?: 0L,
+        )
+    }
+
+    suspend fun setGpsState(state: GpsState) {
+        context.dataStore.edit { prefs ->
+            if (state.zone == null) prefs.remove(Keys.GPS_ZONE) else prefs[Keys.GPS_ZONE] = state.zone
+            prefs[Keys.GPS_MOVING] = state.moving
+            prefs[Keys.GPS_SPEED_KMH] = state.speedKmh
+            prefs[Keys.GPS_DISTANCE_M] = state.distanceM
+            prefs[Keys.GPS_ACCURACY_M] = state.accuracyM
+            prefs[Keys.GPS_DISTANCE_TOTAL_M] = state.totalDistanceM
+        }
+    }
+
+    // -- Her to-do list ------------------------------------------------------------
+
+    val checklistFlow: Flow<List<ChecklistItem>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.CHECKLIST_ITEMS]?.let { raw ->
+            runCatching {
+                json.decodeFromString(ListSerializer(ChecklistItem.serializer()), raw)
+            }.getOrDefault(emptyList())
+        } ?: emptyList()
+    }
+
+    suspend fun currentChecklist(): List<ChecklistItem> = checklistFlow.first()
+
+    suspend fun saveChecklist(items: List<ChecklistItem>) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.CHECKLIST_ITEMS] =
+                json.encodeToString(ListSerializer(ChecklistItem.serializer()), items.take(MAX_CHECKLIST))
+        }
+    }
+
+    // -- Reminders she sets for herself ------------------------------------------
+
+    val localRemindersFlow: Flow<List<LocalReminder>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LOCAL_REMINDERS]?.let { raw ->
+            runCatching {
+                json.decodeFromString(ListSerializer(LocalReminder.serializer()), raw)
+            }.getOrDefault(emptyList())
+        } ?: emptyList()
+    }
+
+    suspend fun currentLocalReminders(): List<LocalReminder> = localRemindersFlow.first()
+
+    /** Adds or replaces one reminder. */
+    suspend fun upsertLocalReminder(reminder: LocalReminder) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.LOCAL_REMINDERS]?.let { raw ->
+                runCatching {
+                    json.decodeFromString(ListSerializer(LocalReminder.serializer()), raw)
+                }.getOrDefault(emptyList())
+            } ?: emptyList()
+            val merged = (current.filterNot { it.id == reminder.id } + reminder)
+                .sortedBy { it.atMs }
+                .take(MAX_LOCAL_REMINDERS)
+            prefs[Keys.LOCAL_REMINDERS] =
+                json.encodeToString(ListSerializer(LocalReminder.serializer()), merged)
+        }
+    }
+
+    /** Marks one reminder as delivered, so it does not come back. */
+    suspend fun markLocalReminderFired(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.LOCAL_REMINDERS]?.let { raw ->
+                runCatching {
+                    json.decodeFromString(ListSerializer(LocalReminder.serializer()), raw)
+                }.getOrDefault(emptyList())
+            } ?: emptyList()
+            prefs[Keys.LOCAL_REMINDERS] = json.encodeToString(
+                ListSerializer(LocalReminder.serializer()),
+                current.map { if (it.id == id) it.copy(fired = true) else it },
+            )
+        }
+    }
+
+    /** Removes one reminder. */
+    suspend fun deleteLocalReminder(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.LOCAL_REMINDERS]?.let { raw ->
+                runCatching {
+                    json.decodeFromString(ListSerializer(LocalReminder.serializer()), raw)
+                }.getOrDefault(emptyList())
+            } ?: emptyList()
+            prefs[Keys.LOCAL_REMINDERS] = json.encodeToString(
+                ListSerializer(LocalReminder.serializer()),
+                current.filterNot { it.id == id },
+            )
+        }
+    }
 }
 
 /** The phone's identity inside one household. */
@@ -512,6 +711,57 @@ data class StepsState(
     val day: String?,
     val dayTotal: Long,
     val lastCumulative: Double,
+)
+
+/**
+ * The learned home circle. It lives only in this phone's DataStore: the
+ * coordinates are used to answer "is she home?", and the answer that leaves
+ * the device is the single word "home" or "away".
+ */
+data class HomeGeofence(
+    val centerLat: Double,
+    val centerLon: Double,
+    val radiusM: Double,
+)
+
+/** The running totals of the geofence learning phase. */
+data class HomeLearningState(
+    val samples: Int = 0,
+    val latSum: Double = 0.0,
+    val lonSum: Double = 0.0,
+    /** The widest distance seen from the running centre so far. */
+    val spreadM: Double = 0.0,
+)
+
+/** One previous GPS fix — kept locally so distance can be measured. */
+data class GpsFix(
+    val lat: Double,
+    val lon: Double,
+    val ts: Long,
+)
+
+/**
+ * What the Movement segment shows: a zone, whether she is moving right now,
+ * how fast, how far since the previous fix and how sure the phone is. No
+ * coordinates — those never existed outside [GpsFix] and the geofence.
+ */
+data class GpsState(
+    val zone: String? = null,
+    val moving: Boolean = false,
+    val speedKmh: Double = 0.0,
+    val distanceM: Double = 0.0,
+    val accuracyM: Double = 0.0,
+    val totalDistanceM: Double = 0.0,
+    val lastFixTs: Long = 0L,
+)
+
+/** One line of her own to-do list. Edited on the phone, never uploaded. */
+@kotlinx.serialization.Serializable
+data class ChecklistItem(
+    val id: String,
+    val text: String,
+    val done: Boolean = false,
+    val createdTs: Long = 0L,
 )
 
 /**

@@ -17,6 +17,13 @@ data class SignalEvent(
     val value: JsonElement,
     /** Epoch milliseconds on the phone; the batch poster adds the demo time offset. */
     val ts: Long,
+    /**
+     * Optional detail bag — primitives only (string / number / boolean), at
+     * most a handful of keys. The backend sanitises it again before it is
+     * stored, so nothing free-form and nothing nested can ever ride along.
+     * Coordinates never go in here: GPS is summarised on-device first.
+     */
+    val meta: Map<String, JsonPrimitive> = emptyMap(),
 ) {
     object Types {
         const val SCREEN_EVENT = "screen_event"
@@ -29,6 +36,9 @@ data class SignalEvent(
         const val PRESENCE = "presence"
         const val SLEEP_EVENT = "sleep_event"
         const val SOUND_EVENT = "sound_event"
+
+        /** GPS-derived movement — distance / speed / accuracy, never coordinates. */
+        const val GPS_MOTION = "gps_motion"
     }
 
     /** sleep_event values: on-device classification only, never audio. */
@@ -75,5 +85,32 @@ data class SignalEvent(
 
         fun soundEvent(value: String, nowMs: Long = System.currentTimeMillis()) =
             SignalEvent(Types.SOUND_EVENT, JsonPrimitive(value), nowMs)
+
+        /**
+         * One GPS summary, computed entirely on the phone. [zone] is "home" or
+         * "away" — a word, not a place. The numbers are movement facts: how far
+         * she has walked since the previous fix, how fast, whether she is
+         * moving at all, and how sure the phone is. The latitude and longitude
+         * themselves are never part of this event.
+         */
+        fun gpsMotion(
+            zone: String,
+            distanceM: Double,
+            speedKmh: Double,
+            moving: Boolean,
+            accuracyM: Double,
+            nowMs: Long = System.currentTimeMillis(),
+        ): SignalEvent = SignalEvent(
+            type = Types.GPS_MOTION,
+            value = JsonPrimitive(zone),
+            ts = nowMs,
+            meta = mapOf(
+                "zone" to JsonPrimitive(zone),
+                "distanceM" to JsonPrimitive(distanceM),
+                "speedKmh" to JsonPrimitive(speedKmh),
+                "moving" to JsonPrimitive(moving),
+                "accuracyM" to JsonPrimitive(accuracyM),
+            ),
+        )
     }
 }

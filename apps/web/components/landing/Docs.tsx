@@ -51,7 +51,7 @@ const STACK = [
   },
   {
     group: 'Engine',
-    items: ['Pure TypeScript', 'Vitest (20 tests)', 'Rule-based scoring', 'Dwell timers, quiet hours', 'Idempotent escalation'],
+    items: ['Pure TypeScript', 'Vitest (25 tests)', 'Rule-based scoring', 'Dwell timers, quiet hours', 'Idempotent escalation'],
   },
   {
     group: 'Android',

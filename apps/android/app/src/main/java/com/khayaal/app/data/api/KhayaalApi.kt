@@ -5,6 +5,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * The Khayaal backend contract. Every route here exists in apps/web under
@@ -64,4 +65,51 @@ interface KhayaalApi {
         @Path("id") householdId: String,
         @Body body: DeviceTokenRequest,
     ): DeviceTokenResponse
+
+    // -- Talkback (the walkie-talkie) --------------------------------------------
+    // Every route authenticates with the same pairing headers the interceptor
+    // already attaches (x-kh-source + x-kh-key); the server derives our role
+    // from that credential, so a client can never claim to be the other side.
+
+    /** Opens a talkback request. The other side sees a consent popup. */
+    @POST("api/v1/household/{id}/talkback/request")
+    suspend fun talkbackRequest(
+        @Path("id") householdId: String,
+        @Body body: TalkbackRequestBody,
+    ): TalkbackSessionResponse
+
+    /** The live session, whichever side is asking. Polled every few seconds. */
+    @GET("api/v1/household/{id}/talkback/session")
+    suspend fun talkbackSession(
+        @Path("id") householdId: String,
+    ): TalkbackSessionResponse
+
+    /** The consent decision — only the side being called may answer. */
+    @POST("api/v1/household/{id}/talkback/answer")
+    suspend fun talkbackAnswer(
+        @Path("id") householdId: String,
+        @Body body: TalkbackAnswerBody,
+    ): TalkbackSessionResponse
+
+    /** Posts one ~250 ms audio slice. The server stamps seq and from. */
+    @POST("api/v1/household/{id}/talkback/chunk")
+    suspend fun talkbackChunk(
+        @Path("id") householdId: String,
+        @Body body: TalkbackChunkBody,
+    ): TalkbackOkResponse
+
+    /** Long-polls for new audio slices (the server holds the request ~15 s). */
+    @GET("api/v1/household/{id}/talkback/chunks")
+    suspend fun talkbackChunks(
+        @Path("id") householdId: String,
+        @Query("after") after: Long,
+        @Query("sessionId") sessionId: String,
+    ): TalkbackChunksResponse
+
+    /** Either side may hang up; the audio slices are dropped with the session. */
+    @POST("api/v1/household/{id}/talkback/end")
+    suspend fun talkbackEnd(
+        @Path("id") householdId: String,
+        @Body body: TalkbackEndBody,
+    ): TalkbackOkResponse
 }
