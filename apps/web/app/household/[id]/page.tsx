@@ -605,6 +605,32 @@ function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
   );
 }
 
+/**
+ * The scan comes back in one of a few shapes depending on which server wrote
+ * it: a bare array (the original), or {networks, count, error}. Rather than
+ * guess, read every shape the API has ever produced and normalise to the
+ * list plus the reason it might be empty.
+ */
+function readScan(payload: unknown): { list: { ssid: string; rssi: number; secure: boolean }[] | null; error: string | null } {
+  const isList = (v: unknown): v is { ssid: string; rssi: number; secure: boolean }[] => Array.isArray(v);
+  const body = (payload ?? {}) as Record<string, unknown>;
+  const scan = body.scan ?? body;
+  if (isList(scan)) return { list: scan, error: null };
+  if (scan && typeof scan === 'object') {
+    const inner = (scan as Record<string, unknown>).networks;
+    if (isList(inner)) {
+      const err = (scan as Record<string, unknown>).error;
+      return { list: inner, error: typeof err === 'string' ? err : null };
+    }
+  }
+  // The wrapper itself may carry the list, when the server stores it flat.
+  if (isList(body.networks)) {
+    const err = body.error;
+    return { list: body.networks, error: typeof err === 'string' ? err : null };
+  }
+  return { list: null, error: null };
+}
+
 function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   const [networks, setNetworks] = useState<{ ssid: string; rssi: number; secure: boolean }[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -617,14 +643,14 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   const refresh = async () => {
     try {
       const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
-      // Older servers stored a bare array; newer ones store {networks, error}.
-      const scan = r.scan ?? r;
-      const list = Array.isArray(scan) ? scan : (scan?.networks ?? null);
+      const { list, error } = readScan(r);
       setNetworks(list);
-      setScanError(Array.isArray(scan) ? null : (scan?.error ?? null));
+      setScanError(error);
       setStatus(r.status ?? null);
+      return list;
     } catch {
       /* panel stays with what it has */
+      return null;
     }
   };
   useEffect(() => {
@@ -639,18 +665,21 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
       if (action === 'wifi_scan') {
         setNote('Scanning — the USB relay types it to the sensor and waits for the list…');
         // The scan is a serial round-trip: give it room, then report honestly.
-        for (let i = 0; i < 12; i++) {
+        // The list may land after the window closes (the relay posts when the
+        // sensor finishes), so the final refresh below is what decides whether
+        // we saw something — not the loop.
+        for (let i = 0; i < 15; i++) {
           await new Promise((r) => setTimeout(r, 2000));
           const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
-          const scan = r.scan ?? r;
-          const list = Array.isArray(scan) ? scan : scan?.networks;
+          const { list, error } = readScan(r);
           if (list) {
             setNetworks(list);
-            setScanError(Array.isArray(scan) ? null : (scan?.error ?? null));
+            setScanError(error);
             setNote(null);
             break;
           }
         }
+        await refresh();
       } else if (action === 'wifi_connect' || action === 'wififorget') {
         setNote('Applying — checking in ~12 s…');
         for (let i = 0; i < 8; i++) {
