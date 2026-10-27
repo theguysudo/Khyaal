@@ -1,4 +1,5 @@
 import type {
+  AppCommand,
   Baseline,
   Household,
   HouseholdEvent,
@@ -7,12 +8,14 @@ import type {
   Signal,
   Source,
 } from '@khayaal/shared';
+import { decrypt, encrypt } from './crypto-box';
 
 /**
  * One storage interface, two implementations:
  *  - MemoryStore: default, zero-config — powers the local demo instantly.
  *  - FirestoreStore: activates when FIREBASE_* env vars are set (see lib/server/firestore.ts).
  * The Android client (Phase 2) never talks to storage directly — only to /api/v1.
+ * Stored signals are AES-256-GCM encrypted at rest (lib/server/crypto-box.ts).
  */
 export interface Store {
   // households
@@ -26,6 +29,12 @@ export interface Store {
   getUser(sub: string): Promise<KhayaalUser | null>;
   upsertUser(user: KhayaalUser): Promise<void>;
   linkHouseholdToUser(sub: string, householdId: string): Promise<void>;
+
+  // commands (family → app nudges)
+  addCommand(householdId: string, command: AppCommand): Promise<void>;
+  getCommands(householdId: string, limit?: number): Promise<AppCommand[]>;
+  ackCommand(householdId: string, commandId: string, ackTs: number): Promise<void>;
+  clearCommands(householdId: string): Promise<void>;
 
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
@@ -60,12 +69,13 @@ export interface Store {
 
 interface MemoryDb {
   households: Map<string, Household>;
-  signals: Map<string, Signal[]>;
+  signals: Map<string, string[]>; // AES-256-GCM envelopes, never plaintext
   states: Map<string, HouseholdState>;
   events: Map<string, HouseholdEvent[]>;
   sources: Map<string, Source[]>;
   baselines: Map<string, Baseline>;
   users: Map<string, KhayaalUser>;
+  commands: Map<string, AppCommand[]>;
 }
 
 const g = globalThis as unknown as { __khayaalDb?: MemoryDb };
@@ -80,6 +90,7 @@ function db(): MemoryDb {
       sources: new Map(),
       baselines: new Map(),
       users: new Map(),
+      commands: new Map(),
     };
   }
   return g.__khayaalDb;
@@ -127,15 +138,47 @@ export class MemoryStore implements Store {
     }
   }
 
+  async addCommand(householdId: string, command: AppCommand): Promise<void> {
+    const list = db().commands.get(householdId) ?? [];
+    db().commands.set(householdId, [...list, command].slice(-50));
+  }
+  async getCommands(householdId: string, limit = 50): Promise<AppCommand[]> {
+    return (db().commands.get(householdId) ?? []).slice(-limit);
+  }
+  async ackCommand(householdId: string, commandId: string, ackTs: number): Promise<void> {
+    const list = db().commands.get(householdId) ?? [];
+    db().commands.set(
+      householdId,
+      list.map((c) => (c.id === commandId ? { ...c, ackTs } : c)),
+    );
+  }
+  async clearCommands(householdId: string): Promise<void> {
+    db().commands.set(householdId, []);
+  }
+
   async appendSignal(householdId: string, signal: Signal): Promise<void> {
     const list = db().signals.get(householdId) ?? [];
-    list.push(signal);
+    // AES-256-GCM at rest — the heap only ever holds ciphertext envelopes.
+    list.push(encrypt(JSON.stringify(signal)));
     // Retain ~7 days.
     const cutoff = signal.ts - 7 * 24 * 3600_000;
-    db().signals.set(householdId, list.filter((s) => s.ts >= cutoff).slice(-5000));
+    db().signals.set(
+      householdId,
+      list
+        .filter((env) => {
+          const plain = decrypt(env);
+          return plain ? (JSON.parse(plain) as Signal).ts >= cutoff : false;
+        })
+        .slice(-5000),
+    );
   }
   async getSignals(householdId: string, sinceTs: number): Promise<Signal[]> {
-    return (db().signals.get(householdId) ?? []).filter((s) => s.ts >= sinceTs);
+    return (db().signals.get(householdId) ?? [])
+      .map((env) => {
+        const plain = decrypt(env);
+        return plain ? (JSON.parse(plain) as Signal) : null;
+      })
+      .filter((s): s is Signal => s !== null && s.ts >= sinceTs);
   }
   async clearSignals(householdId: string): Promise<void> {
     db().signals.set(householdId, []);

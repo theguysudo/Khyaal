@@ -15,7 +15,9 @@ export type SignalType =
   | 'app_usage' // an app was opened (name only, never content)
   | 'location_zone' // 'home' | 'away' — presence, never a trail
   | 'presence' // ESP32 Wi-Fi sensing: 'motion' | 'idle' | 'lost'
-  | 'manual_checkin'; // parent tapped "I'm OK"
+  | 'manual_checkin' // parent tapped "I'm OK"
+  | 'sleep_event' // on-device classifier: 'asleep' | 'awake' | 'restless' | 'woke'
+  | 'sound_event'; // on-device loudness: 'quiet' | 'noise' | 'loud' — never audio
 
 export type SignalValue = number | string | boolean;
 
@@ -56,6 +58,28 @@ export interface Household {
   createdAtTs: number;
   /** Google-account subjects linked to this family (the child side). */
   ownerSubs?: string[];
+  /** Neighbours & family who can check in — tier 3 alerts them too. */
+  careCircle?: CareCircleMember[];
+  /** Escalation extras: call the elder, then loop in the circle. */
+  callPlan?: { callElderAfterMin: number; alertCircleAfterMin: number };
+  /** Last saved LLM behaviour analysis. */
+  lastAnalysis?: { ts: number; model: string; text: string };
+}
+
+export interface CareCircleMember {
+  name: string;
+  email: string;
+  role: 'family' | 'neighbor';
+  addedTs: number;
+}
+
+/** A one-way family→app nudge composed on the dashboard. */
+export interface AppCommand {
+  id: string;
+  ts: number;
+  type: 'message' | 'reminder' | 'tts' | 'request_checkin';
+  text: string;
+  ackTs: number | null;
 }
 
 /** A signed-in family member (Google OIDC profile + linked households). */
@@ -166,6 +190,8 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
   'location_zone',
   'presence',
   'manual_checkin',
+  'sleep_event',
+  'sound_event',
 ];
 
 export function isSignalType(v: unknown): v is SignalType {

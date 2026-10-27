@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * The child dashboard as a calm bento. Privacy by construction: this screen
- * never receives raw signals from the API — a status, a score trend, a
- * last-active time and plain-language explanations. If the API ever tried to
- * send a location trail, there is nothing here to draw it with.
+ * The child dashboard — calm bento, richer controls. Dignity-first by
+ * construction: this screen never receives raw signals from the API, only
+ * aggregates (per-hour counts), a status, plain-language explanations and the
+ * family's own actions. Everything the family composes here (messages, voice
+ * reminders, check-in requests) rides the commands channel to her phone.
  */
 
 import Link from 'next/link';
@@ -12,7 +13,7 @@ import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { useState } from 'react';
 import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/dashboard/bento';
-import { fmtAgo, fmtClock, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
+import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
 
 export default function DashboardPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,8 +26,8 @@ export default function DashboardPage() {
         <div className="max-w-sm rounded-3xl border border-ink/10 bg-white p-8 text-center shadow-sm">
           <p className="font-heading text-xl text-ink">We couldn't reach this household</p>
           <p className="mt-2 text-sm text-ink/60">{error}</p>
-          <Link href="/onboarding" className="mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm text-paper">
-            Set up a household
+          <Link href="/login" className="mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm text-paper">
+            Your families
           </Link>
         </div>
       </main>
@@ -43,6 +44,7 @@ export default function DashboardPage() {
   const { state, household: hh } = bundle;
   const meta = TIER_META[state.tier];
   const isAlert = state.tier === 3;
+  const circle = hh.careCircle ?? [];
 
   const ack = async () => {
     setAcking(true);
@@ -61,7 +63,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-5xl">
         {/* header */}
         <header className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/login" className="flex items-center gap-2">
             <span className="font-heading text-lg tracking-tight text-ink">Khayaal</span>
             <span className="text-clay">✳︎</span>
           </Link>
@@ -81,170 +83,53 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#b23a2f]">Needs attention</p>
-                <p className="mt-1.5 font-heading text-xl text-ink">
-                  {hh.parentName} hasn't responded to the nudge or the check-in.
-                </p>
+                <p className="mt-1.5 font-heading text-xl text-ink">{hh.parentName} hasn't responded to the nudge or the check-in.</p>
                 <p className="mt-1 text-sm text-ink/60">
                   {state.ack
                     ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
-                    : 'Last-known signals are in "Why this score" below. A call is usually the right next step.'}
+                    : hh.callPlan
+                      ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
+                      : 'A call is usually the right next step.'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2.5">
-                <a
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                  title="Wire your number in settings — this demo cannot place calls"
-                  className="rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                >
+                <a href="#" onClick={(e) => e.preventDefault()} title="Wire your number in settings — this demo cannot place calls" className="rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90">
                   📞 Call {hh.parentName}
                 </a>
-                <button
-                  onClick={ack}
-                  disabled={acking}
-                  className="rounded-full border border-[#b23a2f]/40 px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/60 disabled:opacity-50"
-                >
+                <button onClick={ack} disabled={acking} className="rounded-full border border-[#b23a2f]/40 px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/60 disabled:opacity-50">
                   {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
                 </button>
-                <button
-                  onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
-                  className="rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:bg-paper"
-                >
+                <button onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })} className="rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:bg-paper">
                   Snooze 1 h
                 </button>
               </div>
             </div>
+            {circle.length > 0 && (
+              <p className="mt-3 border-t border-[#b23a2f]/15 pt-3 text-xs text-ink/50">
+                Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
+              </p>
+            )}
           </section>
         )}
 
         {/* the bento */}
         <div className="mt-6 grid grid-cols-12 gap-4">
-          {/* status */}
-          <BentoCard label="Current status" className={`col-span-12 lg:col-span-5`}>
-            <div className="flex h-full flex-col">
-              <CardTitle note={state.learning ? undefined : `confidence ${Math.round(state.confidence * 100)}%`}>
-                {meta.label}
-              </CardTitle>
-              <div className="mt-4 flex items-end gap-2">
-                {state.score === null ? (
-                  <span className="font-heading text-[56px] leading-none text-ink/30">···</span>
-                ) : (
-                  <span className="font-heading text-[56px] leading-none" style={{ color: meta.color }}>
-                    <CountUp value={state.score} />
-                  </span>
-                )}
-                <span className="pb-1.5 text-sm text-ink/45">/ 100 wellbeing</span>
-              </div>
-              <p className="mt-4 font-heading text-[22px] leading-snug text-ink">
-                {state.learning ? `Learning ${hh.parentName}'s rhythm…` : state.status}
-              </p>
-              <p className="mt-auto pt-5 text-sm leading-relaxed text-ink/55">
-                Last activity {fmtAgo(state.lastActiveTs, bundle.simNowTs)}
-                {state.lastActiveTs ? ` — around ${fmtClock(state.lastActiveTs)}` : ''}.
-                {state.snoozeUntilTs && state.snoozeUntilTs > bundle.simNowTs && (
-                  <> Quiet until {fmtClock(state.snoozeUntilTs)}.</>
-                )}
-              </p>
-            </div>
-          </BentoCard>
-
-          {/* trend */}
-          <BentoCard label="24 hour score trend" className="col-span-12 lg:col-span-7">
-            <CardTitle note="last 24 h">The day so far</CardTitle>
-            <TrendChart trend={state.scoreTrend} nowTs={bundle.simNowTs} />
-          </BentoCard>
-
-          {/* ladder */}
-          <BentoCard label="Escalation ladder" className="col-span-12 lg:col-span-5">
-            <CardTitle note="most days, step 3 never comes">Where things stand</CardTitle>
-            <div className="mt-5 space-y-2.5">
-              {[
-                ['Quiet observation', 'signals only — nobody is contacted', 0],
-                ['Gentle nudge', 'on her phone; nothing has left the house', 1],
-                ['Check-in asked', 'one clear question, one tap to answer', 2],
-                ['Family alerted', 'with last-known signals attached', 3],
-              ].map(([label, desc, t], i) => {
-                const active = state.tier >= (t as number);
-                return (
-                  <div key={label as string} className="flex items-center gap-3">
-                    <span
-                      className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold transition-colors duration-500"
-                      style={{ background: active ? (i === 3 ? '#b23a2f' : i === 0 ? '#4c7a4f' : '#c98a2b') : '#efe9de', color: active ? '#fff' : '#a2988a' }}
-                    >
-                      {i}
-                    </span>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-medium ${active ? 'text-ink' : 'text-ink/40'}`}>{label as string}</p>
-                      <p className="truncate text-xs text-ink/40">{desc as string}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </BentoCard>
-
-          {/* explainability */}
-          <BentoCard label="Why this score" className="col-span-12 lg:col-span-7">
-            <CardTitle note="plain language, always">Why this score</CardTitle>
-            <div className="mt-5 space-y-3.5">
-              {state.learning && (
-                <p className="text-sm text-ink/60">Khayaal is still learning — nothing is being scored yet.</p>
-              )}
-              {!state.learning && state.contributions.length === 0 && (
-                <p className="text-sm text-ink/60">Everything we look for is present and ordinary. Nothing to explain.</p>
-              )}
-              {state.contributions.map((c, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="mt-1.5 h-2 w-24 flex-none overflow-hidden rounded-full bg-ink/10">
-                    <div
-                      className="h-full rounded-full transition-[width] duration-700"
-                      style={{ width: `${Math.min(100, (c.effect / 30) * 100)}%`, background: meta.color }}
-                    />
-                  </div>
-                  <p className="text-sm leading-relaxed text-ink/75">{c.reason}</p>
-                </div>
-              ))}
-              {!state.learning && (
-                <p className="pt-1 text-xs leading-relaxed text-ink/40">
-                  A missing source lowers confidence — it never raises the score on its own. Signals are scored, then discarded.
-                </p>
-              )}
-            </div>
-          </BentoCard>
-
-          {/* sources + events */}
-          <BentoCard label="Recent events" className="col-span-12 lg:col-span-5">
-            <CardTitle note="audit trail">Quiet log</CardTitle>
-            <ul className="mt-4 space-y-2.5">
-              {bundle.events.slice(-6).reverse().map((e) => (
-                <li key={e.id} className="flex items-baseline gap-3 text-sm">
-                  <span className="flex-none text-xs tabular-nums text-ink/40">{fmtClock(e.ts)}</span>
-                  <span className="text-ink/75">{e.meta ?? (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}</span>
-                </li>
-              ))}
-              {bundle.events.length === 0 && <li className="text-sm text-ink/40">A quiet day. Nothing to report.</li>}
-            </ul>
-          </BentoCard>
-
-          <BentoCard label="Sources" className="col-span-12">
-            <CardTitle note="never a feed, never a map">The watchers</CardTitle>
-            <div className="mt-4 flex flex-wrap gap-2.5">
-              {bundle.sources.map((s) => {
-                const fresh = s.lastSeenTs && bundle.simNowTs - s.lastSeenTs < 30 * 60_000;
-                return (
-                  <span key={s.id} className="inline-flex items-center gap-2 rounded-full border border-ink/10 bg-paper px-4 py-2 text-sm text-ink/80">
-                    <span className="h-2 w-2 rounded-full" style={{ background: fresh ? '#4c7a4f' : '#c9b8a0' }} />
-                    {s.label}
-                    <span className="text-xs text-ink/40">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
-                  </span>
-                );
-              })}
-            </div>
-          </BentoCard>
+          <StatusCard bundle={bundle} />
+          <TrendCard bundle={bundle} />
+          <CommandsCard id={id} bundle={bundle} />
+          <RhythmCard bundle={bundle} />
+          <LadderCard tier={state.tier} />
+          <ExplainCard bundle={bundle} />
+          <SleepSoundCard bundle={bundle} />
+          <AnalysisCard id={id} bundle={bundle} />
+          <CircleCard id={id} bundle={bundle} />
+          <EventsCard bundle={bundle} />
+          <SourcesCard bundle={bundle} />
         </div>
 
         <p className="mt-10 text-center text-xs leading-relaxed text-ink/40">
-          Khayaal never shows a feed, a map or a recording — this page only ever sees what you see.
+          Khayaal never shows a feed, a map or a recording — this page only ever sees what you see. Signals are
+          AES-256-GCM encrypted at rest and discarded after 7 days.
         </p>
       </div>
     </main>
@@ -252,6 +137,429 @@ export default function DashboardPage() {
 }
 
 // ---------------------------------------------------------------------------
+
+function StatusCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  if (!bundle) return null;
+  const { state, household: hh } = bundle;
+  const meta = TIER_META[state.tier];
+  return (
+    <BentoCard label="Current status" className="col-span-12 lg:col-span-5">
+      <div className="flex h-full flex-col">
+        <CardTitle note={state.learning ? undefined : `confidence ${Math.round(state.confidence * 100)}%`}>{meta.label}</CardTitle>
+        <div className="mt-4 flex items-end gap-2">
+          {state.score === null ? (
+            <span className="font-heading text-[56px] leading-none text-ink/30">···</span>
+          ) : (
+            <span className="font-heading text-[56px] leading-none" style={{ color: meta.color }}>
+              <CountUp value={state.score} />
+            </span>
+          )}
+          <span className="pb-1.5 text-sm text-ink/45">/ 100 wellbeing</span>
+        </div>
+        <p className="mt-4 font-heading text-[22px] leading-snug text-ink">
+          {state.learning ? `Learning ${hh.parentName}'s rhythm…` : state.status}
+        </p>
+        <p className="mt-auto pt-5 text-sm leading-relaxed text-ink/55">
+          Last activity {fmtAgo(state.lastActiveTs, bundle.simNowTs)}
+          {state.lastActiveTs ? ` — around ${fmtClock(state.lastActiveTs)}` : ''}.
+          {state.snoozeUntilTs && state.snoozeUntilTs > bundle.simNowTs && <> Quiet until {fmtClock(state.snoozeUntilTs)}.</>}
+        </p>
+      </div>
+    </BentoCard>
+  );
+}
+
+function TrendCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  if (!bundle) return null;
+  return (
+    <BentoCard label="24 hour score trend" className="col-span-12 lg:col-span-7">
+      <CardTitle note="last 24 h">The day so far</CardTitle>
+      <TrendChart trend={bundle.state.scoreTrend} nowTs={bundle.simNowTs} />
+    </BentoCard>
+  );
+}
+
+function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  const [type, setType] = useState<'message' | 'reminder' | 'tts' | 'request_checkin'>('message');
+  const [text, setText] = useState('');
+  const [sent, setSent] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!bundle) return null;
+
+  const send = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    try {
+      await postJSON(`/api/v1/household/${id}/commands`, { type, text: text.trim() });
+      setSent(text.trim());
+      setText('');
+      setTimeout(() => setSent(null), 2500);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pending = bundle.commands;
+
+  return (
+    <BentoCard label="Reach her phone" className="col-span-12 lg:col-span-7">
+      <CardTitle note={pending.length > 0 ? `${pending.length} awaiting her phone` : 'delivered over the commands channel'}>
+        Reach her phone
+      </CardTitle>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {(
+          [
+            ['message', '💬 Message'],
+            ['reminder', '⏰ Reminder'],
+            ['tts', '🗣 Voice (spoken aloud)'],
+            ['request_checkin', '🌼 Ask for check-in'],
+          ] as const
+        ).map(([t, label]) => (
+          <button
+            key={t}
+            onClick={() => setType(t)}
+            className={`rounded-full border px-4 py-1.5 text-[13px] transition-colors ${type === t ? 'border-clay bg-clay/10 text-claydeep' : 'border-ink/15 text-ink/60 hover:bg-paper'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value.slice(0, 280))}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
+          placeholder={
+            type === 'tts'
+              ? 'Will be spoken aloud on her phone…'
+              : type === 'reminder'
+                ? 'Take your blood pressure pill at 8'
+                : 'A short, warm message…'
+          }
+          className="flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-clay"
+        />
+        <button onClick={send} disabled={busy || !text.trim()} className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40">
+          {busy ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+      {sent && <p className="mt-2 text-xs text-[#4c7a4f]">Sent ✓ — her phone picks it up on the next poll.</p>}
+      {pending.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {pending.slice(-3).map((c) => (
+            <li key={c.id} className="truncate text-xs text-ink/45">
+              pending · {c.type}: “{c.text}”
+            </li>
+          ))}
+        </ul>
+      )}
+    </BentoCard>
+  );
+}
+
+function RhythmCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  if (!bundle) return null;
+  const activity = bundle.hourlyActivity;
+  const max = Math.max(1, ...activity);
+  const nowHour = new Date(bundle.simNowTs).getHours();
+  return (
+    <BentoCard label="Rhythm map" className="col-span-12 lg:col-span-5">
+      <CardTitle note="today, hour by hour">Rhythm map</CardTitle>
+      <div className="mt-4 flex h-20 items-end gap-[3px]">
+        {activity.map((v, h) => (
+          <div key={h} className="group relative flex-1">
+            <div
+              className="w-full rounded-t transition-all duration-500"
+              style={{
+                height: `${Math.max(4, (v / max) * 76)}px`,
+                background: h === nowHour ? '#b95c38' : v === 0 ? '#e7e0d3' : '#7d8c6f',
+                opacity: h > nowHour ? 0.35 : 1,
+              }}
+            />
+            <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-ink px-1.5 py-0.5 text-[10px] text-paper group-hover:block">
+              {h}:00 · {v}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-ink/45">
+        Signal counts per hour — her ordinary day, drawn from harmless aggregates. No content, no location.
+      </p>
+    </BentoCard>
+  );
+}
+
+function LadderCard({ tier }: { tier: number }) {
+  return (
+    <BentoCard label="Escalation ladder" className="col-span-12 lg:col-span-5">
+      <CardTitle note="most days, step 3 never comes">Where things stand</CardTitle>
+      <div className="mt-4 space-y-2.5">
+        {[
+          ['Quiet observation', 'signals only — nobody is contacted', 0],
+          ['Gentle nudge', 'on her phone; nothing has left the house', 1],
+          ['Check-in asked', 'one clear question, one tap to answer', 2],
+          ['Family alerted', 'with last-known signals attached', 3],
+        ].map(([label, desc, t], i) => {
+          const active = tier >= (t as number);
+          return (
+            <div key={label as string} className="flex items-center gap-3">
+              <span
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold transition-colors duration-500"
+                style={{ background: active ? (i === 3 ? '#b23a2f' : i === 0 ? '#4c7a4f' : '#c98a2b') : '#efe9de', color: active ? 'white' : '#a2988a' }}
+              >
+                {i}
+              </span>
+              <div className="min-w-0">
+                <p className={`text-sm font-medium ${active ? 'text-ink' : 'text-ink/40'}`}>{label as string}</p>
+                <p className="truncate text-xs text-ink/40">{desc as string}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </BentoCard>
+  );
+}
+
+function ExplainCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  if (!bundle) return null;
+  const { state } = bundle;
+  const meta = TIER_META[state.tier];
+  return (
+    <BentoCard label="Why this score" className="col-span-12 lg:col-span-7">
+      <CardTitle note="plain language, always">Why this score</CardTitle>
+      <div className="mt-5 space-y-3.5">
+        {state.learning && <p className="text-sm text-ink/60">Khayaal is still learning — nothing is being scored yet.</p>}
+        {!state.learning && state.contributions.length === 0 && (
+          <p className="text-sm text-ink/60">Everything we look for is present and ordinary. Nothing to explain.</p>
+        )}
+        {state.contributions.map((c, i) => (
+          <div key={i} className="flex items-start gap-3">
+            <div className="mt-1.5 h-2 w-24 flex-none overflow-hidden rounded-full bg-ink/10">
+              <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, (c.effect / 30) * 100)}%`, background: meta.color }} />
+            </div>
+            <p className="text-sm leading-relaxed text-ink/75">{c.reason}</p>
+          </div>
+        ))}
+        {!state.learning && (
+          <p className="pt-1 text-xs leading-relaxed text-ink/40">
+            A missing source lowers confidence — it never raises the score on its own. Signals are AES-256-GCM encrypted
+            at rest and discarded after 7 days.
+          </p>
+        )}
+      </div>
+    </BentoCard>
+  );
+}
+
+function SleepSoundCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  if (!bundle) return null;
+  const events = bundle.sleepSound;
+  return (
+    <BentoCard label="Night watch" className="col-span-12 lg:col-span-5">
+      <CardTitle note="on-device · nothing recorded">Night watch</CardTitle>
+      <ul className="mt-4 space-y-2 text-sm">
+        {events.length === 0 && (
+          <li className="text-ink/45">
+            No night events yet. Her phone can watch over the night opt-in — it listens for loud sounds only, on-device,
+            and shares just the classification.
+          </li>
+        )}
+        {events.slice().reverse().map((s, i) => (
+          <li key={i} className="flex items-baseline gap-3">
+            <span className="flex-none text-xs tabular-nums text-ink/40">{fmtClock(s.ts)}</span>
+            <span className="text-ink/75">
+              {s.type === 'sleep_event'
+                ? s.value === 'asleep'
+                  ? '🌙 Sleeping peacefully'
+                  : s.value === 'woke'
+                    ? '☀️ Awake this morning'
+                    : s.value === 'restless'
+                      ? '😕 Restless night stretch'
+                      : '🌅 Up for the day'
+                : s.value === 'loud'
+                  ? '📢 A loud sound was heard'
+                  : s.value === 'noise'
+                    ? '🔉 Some noise nearby'
+                    : '🔇 All quiet'}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </BentoCard>
+  );
+}
+
+function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [provider, setProvider] = useState<'openrouter' | 'nvidia'>('openrouter');
+  const [apiKey, setApiKey] = useState('');
+  const [text, setText] = useState<string | null>(bundle?.household.lastAnalysis?.text ?? null);
+  const [model, setModel] = useState<string | null>(bundle?.household.lastAnalysis?.model ?? null);
+  if (!bundle) return null;
+
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await postJSON<{ analysis: { text: string; model: string } }>(`/api/v1/household/${id}/analysis`, {
+        provider,
+        apiKey: apiKey || undefined,
+      });
+      setText(r.analysis.text);
+      setModel(r.analysis.model);
+      setApiKey('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Analysis failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <BentoCard label="AI behaviour analysis" className="col-span-12 lg:col-span-7">
+      <CardTitle note={model ? `last: ${model}` : 'OpenRouter · NVIDIA'}>
+        Behaviour analysis, read by an LLM
+      </CardTitle>
+      <p className="mt-2 text-xs leading-relaxed text-ink/45">
+        Only privacy-safe aggregates leave the house: score trend, tier changes, hourly shape, recurring reasons.
+        Never content — there is none.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select value={provider} onChange={(e) => setProvider(e.target.value as 'openrouter' | 'nvidia')} className="rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none">
+          <option value="openrouter">OpenRouter</option>
+          <option value="nvidia">NVIDIA NIM</option>
+        </select>
+        <input
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="API key (or set env on the server)"
+          className="min-w-[180px] flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay"
+        />
+        <button onClick={run} disabled={busy} className="rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40">
+          {busy ? 'Reading the week…' : 'Run analysis'}
+        </button>
+      </div>
+      {error && <p className="mt-2 text-sm text-[#b23a2f]">{error}</p>}
+      {text && (
+        <div className="mt-4 whitespace-pre-wrap rounded-2xl bg-paper/80 p-4 text-[13.5px] leading-relaxed text-ink/80">{text}</div>
+      )}
+    </BentoCard>
+  );
+}
+
+function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'family' | 'neighbor'>('neighbor');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!bundle) return null;
+  const circle = bundle.household.careCircle ?? [];
+
+  const manage = async (action: 'add' | 'remove', memberEmail?: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await postJSON(`/api/v1/household/${id}/circle`, { action, name, email: memberEmail ?? email, role });
+      setName('');
+      setEmail('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <BentoCard label="Care circle" className="col-span-12 lg:col-span-5">
+      <CardTitle note="neighbours who can check in">Care circle</CardTitle>
+      <ul className="mt-4 space-y-2">
+        {circle.length === 0 && (
+          <li className="rounded-xl border border-dashed border-ink/20 p-3 text-xs leading-relaxed text-ink/45">
+            Add family and trusted neighbours — when a real alert fires, they're notified too and can visit.
+          </li>
+        )}
+        {circle.map((m) => (
+          <li key={m.email} className="flex items-center justify-between rounded-xl border border-ink/10 bg-paper px-3.5 py-2.5 text-sm">
+            <span>
+              {m.name} <span className="text-xs text-ink/40">({m.role})</span>
+            </span>
+            <button onClick={() => manage('remove', m.email)} disabled={busy} className="text-xs text-ink/40 transition-colors hover:text-[#b23a2f]">
+              remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 space-y-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (they sign in with Google)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
+        <div className="flex items-center justify-between gap-2">
+          <select value={role} onChange={(e) => setRole(e.target.value as 'family' | 'neighbor')} className="rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none">
+            <option value="neighbor">Neighbour</option>
+            <option value="family">Family</option>
+          </select>
+          <button onClick={() => manage('add')} disabled={busy || !email.includes('@')} className="rounded-full bg-ink px-4 py-2 text-sm text-paper transition-opacity hover:opacity-90 disabled:opacity-40">
+            Add to circle
+          </button>
+        </div>
+        {error && <p className="text-xs text-[#b23a2f]">{error}</p>}
+        <p className="text-[11px] leading-relaxed text-ink/40">
+          Circle members sign in at /login and claim this household with its pairing code. On a real alert they are
+          notified alongside the family — a neighbour can be the fastest help there is.
+        </p>
+      </div>
+    </BentoCard>
+  );
+}
+
+function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  if (!bundle) return null;
+  return (
+    <BentoCard label="Recent events" className="col-span-12 lg:col-span-5">
+      <CardTitle note="audit trail">Quiet log</CardTitle>
+      <ul className="mt-4 space-y-2 text-sm">
+        {bundle.events.slice(-6).reverse().map((e) => (
+          <li key={e.id} className="flex items-baseline gap-3 text-sm">
+            <span className="flex-none text-xs tabular-nums text-ink/40">{fmtClock(e.ts)}</span>
+            <span className="text-ink/75">{e.meta ?? (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}</span>
+          </li>
+        ))}
+        {bundle.events.length === 0 && <li className="text-sm text-ink/40">A quiet day. Nothing to report.</li>}
+      </ul>
+    </BentoCard>
+  );
+}
+
+function SourcesCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
+  if (!bundle) return null;
+  return (
+    <BentoCard label="Sources" className="col-span-12">
+      <CardTitle note="never a feed, never a map">The watchers</CardTitle>
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        {bundle.sources.map((s) => {
+          const fresh = s.lastSeenTs && bundle.simNowTs - s.lastSeenTs < 30 * 60_000;
+          return (
+            <span key={s.id} className="inline-flex items-center gap-2 rounded-full border border-ink/10 bg-paper px-4 py-2 text-sm text-ink/80">
+              <span className="h-2 w-2 rounded-full" style={{ background: fresh ? '#4c7a4f' : '#c9b8a0' }} />
+              {s.label}
+              <span className="text-xs text-ink/40">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
+            </span>
+          );
+        })}
+      </div>
+    </BentoCard>
+  );
+}
+
+function useReducedMotionSafe() {
+  const [reduce, setReduce] = useState(false);
+  React.useEffect(() => {
+    const m = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduce(m.matches);
+  }, []);
+  return reduce;
+}
 
 function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; nowTs: number }) {
   const [ref, { w: W, h: H }] = useSize();
@@ -286,15 +594,14 @@ function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; 
     <div ref={ref} className="relative mt-3 min-h-[150px] flex-1">
       {W > 0 && (
         <svg width={W} height={CH} className="block" role="img" aria-label="Wellbeing score over the last 24 hours">
-          {/* tier bands */}
           <rect x="0" y={Y(100)} width={W} height={Y(72) - Y(100)} fill="#f6dcd8" opacity="0.5" />
           <rect x="0" y={Y(72)} width={W} height={Y(55) - Y(72)} fill="#f8e3d5" opacity="0.45" />
-          <rect x="0" y={Y(55)} width={W} height={Y(35) - Y(55)} fill="#f7ecd7" opacity="0.55" />
+          <rect x="0" y={Y(55)} width={W} height={Y(35) - Y(55)} fill="#f7ecd7" opacity="0.6" />
           <rect x="0" y={Y(35)} width={W} height={Y(0) - Y(35)} fill="#e6efe2" opacity="0.5" />
           {[0, 35, 55, 72].map((b) => (
             <line key={b} x1="0" x2={W} y1={Y(b)} y2={Y(b)} className="stroke-ink/10" strokeWidth="1" strokeDasharray="3 4" />
           ))}
-          <path d={`${d}L${last[0]},${CH}L${P[0][0]},${CH}Z`} fill="#7d8c6f" opacity="0.1" />
+          <path d={`${d}L${last[0]},${CH}L${P[0][0]},${CH}Z`} fill="#7d8c6f" opacity="0.12" />
           <path
             d={d}
             pathLength={1}
@@ -302,11 +609,7 @@ function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; 
             stroke="#5f7053"
             strokeWidth="2.5"
             strokeLinecap="round"
-            style={{
-              strokeDasharray: 1,
-              strokeDashoffset: drawn || reduce ? 0 : 1,
-              transition: reduce ? 'none' : 'stroke-dashoffset 1.4s cubic-bezier(.3,.8,.2,1) .2s',
-            }}
+            style={{ strokeDasharray: 1, strokeDashoffset: drawn || reduce ? 0 : 1, transition: reduce ? 'none' : 'stroke-dashoffset 1.4s cubic-bezier(.3,.8,.2,1) .2s' }}
           />
           <circle cx={last[0]} cy={last[1]} r="4.5" fill="#5f7053" className="stroke-white" strokeWidth="2" />
           <text x={W - 4} y={Y(72) - 5} textAnchor="end" fontSize="10" className="fill-ink/40">
@@ -318,11 +621,4 @@ function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; 
   );
 }
 
-function useReducedMotionSafe() {
-  const [reduce, setReduce] = useState(false);
-  React.useEffect(() => {
-    const m = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduce(m.matches);
-  }, []);
-  return reduce;
-}
+void patchJSON;

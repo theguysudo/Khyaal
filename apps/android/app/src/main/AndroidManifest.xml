@@ -16,6 +16,13 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
+    <!-- Night watch (opt-in, default OFF): a microphone foreground service that
+         classifies loudness on-device. No audio ever leaves the phone or touches
+         disk — only the resulting event (quiet / noise / loud) is posted. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <!-- Optional app-open signals (package names only, never screen content).
          A protected AppOps permission — the user grants it in Settings. -->
     <uses-permission
@@ -60,6 +67,13 @@
         <receiver
             android:name=".care.CheckInActionReceiver"
             android:exported="false" />
+
+        <!-- Night watch: opt-in mic foreground service. Loudness is classified
+             on-device; nothing is recorded, stored or uploaded. -->
+        <service
+            android:name=".sleep.SleepWatchService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- FCM stub: instant tier pushes on top of the 10-minute poll. -->
         <service

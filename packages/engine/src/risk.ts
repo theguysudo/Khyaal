@@ -80,6 +80,8 @@ export function computeRisk(input: RiskInput): RiskResult {
   const zones = byType(signals, 'location_zone');
   const presences = byType(signals, 'presence');
   const checkins = byType(signals, 'manual_checkin');
+  const sleeps = byType(signals, 'sleep_event');
+  const sounds = byType(signals, 'sound_event');
 
   const last = (list: Signal[]): number | null => (list.length ? list[list.length - 1].ts : null);
 
@@ -192,6 +194,38 @@ export function computeRisk(input: RiskInput): RiskResult {
   } else {
     confidence -= CONFIDENCE_PENALTY.thinBaseline;
     notes.push('Very little history yet — treat the score gently.');
+  }
+
+  // --- 6. Night context: sleep marker softens the expected night quiet ----
+  const lastSleep = last(sleeps);
+  const markedAsleep =
+    lastSleep !== null &&
+    sleeps[sleeps.length - 1].value === 'asleep' &&
+    nowTs - lastSleep < 9 * HOUR &&
+    isQuietHours(input.household.quietHours, nowTs);
+  if (markedAsleep) {
+    for (const c of contributions) {
+      if (c.signal === 'silence' || c.signal === 'screen_event' || c.signal === 'motion') {
+        c.effect = Math.round(c.effect * 0.25 * 10) / 10;
+      }
+    }
+    notes.push('She is marked asleep — a quiet night is expected, not a risk.');
+  }
+
+  // A loud sound near her phone is the one presence-of-danger signal.
+  const lastSound = last(sounds);
+  if (
+    !away &&
+    lastSound !== null &&
+    nowTs - lastSound < 10 * MIN &&
+    sounds[sounds.length - 1].value === 'loud'
+  ) {
+    contributions.push({
+      signal: 'sound_event',
+      weight: 15,
+      effect: 15,
+      reason: 'A loud sound was detected near her phone moments ago.',
+    });
   }
 
   // --- Away overrides the absence signals --------------------------------

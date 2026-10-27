@@ -1,4 +1,5 @@
 import type {
+  AppCommand,
   Baseline,
   Household,
   HouseholdEvent,
@@ -31,6 +32,12 @@ export interface TickBundle {
   baseline: Baseline;
   simNowTs: number;
   realNowTs: number;
+  /** Family→app nudges awaiting the device. */
+  commands: AppCommand[];
+  /** Activity intensity per hour of the current day (counts, no content). */
+  hourlyActivity: number[];
+  /** Recent night-watch / sound events for the sleep card. */
+  sleepSound: Signal[];
 }
 
 function emptyState(nowTs: number): HouseholdState {
@@ -74,6 +81,20 @@ export async function tickHousehold(householdId: string): Promise<TickBundle | n
 
   const recentEvents = await store.getEvents(householdId, nowTs - 24 * HOUR, 60);
 
+  // Privacy-safe aggregates for the dashboard: per-hour signal counts today,
+  // recent night-watch events, and the pending command queue.
+  const hourlyActivity = new Array(24).fill(0) as number[];
+  const todayStart = dayStartOf(nowTs);
+  for (const s of signals) {
+    if (s.ts >= todayStart && s.ts <= nowTs) {
+      hourlyActivity[Math.min(23, Math.floor((s.ts - todayStart) / HOUR))]++;
+    }
+  }
+  const sleepSound = signals
+    .filter((s) => (s.type === 'sleep_event' || s.type === 'sound_event') && s.ts >= nowTs - 18 * HOUR)
+    .slice(-12);
+  const commands = (await store.getCommands(householdId)).filter((c) => c.ackTs === null);
+
   return {
     household,
     state,
@@ -82,6 +103,9 @@ export async function tickHousehold(householdId: string): Promise<TickBundle | n
     baseline,
     simNowTs: nowTs,
     realNowTs: Date.now(),
+    commands,
+    hourlyActivity,
+    sleepSound,
   };
 }
 

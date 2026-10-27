@@ -25,6 +25,9 @@ export interface Bundle {
   baseline: { wakeHour: number; chargingStartHour: number; sampleDays: number };
   simNowTs: number;
   realNowTs: number;
+  commands: { id: string; ts: number; type: string; text: string; ackTs: number | null }[];
+  hourlyActivity: number[];
+  sleepSound: { sourceId: string; type: string; value: string; ts: number }[];
 }
 
 export async function postJSON<T = unknown>(url: string, body?: unknown): Promise<T> {

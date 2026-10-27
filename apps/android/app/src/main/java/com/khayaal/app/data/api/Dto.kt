@@ -41,6 +41,24 @@ data class HouseholdDto(
     val simTimeOffsetMs: Long = 0,
     val learningUntilTs: Long? = null,
     val createdAtTs: Long? = null,
+    /** Who else is looking out for her — shown on the tier-3 alarm. Absent on older backends. */
+    val careCircle: List<CareCircleMemberDto> = emptyList(),
+    /** Escalation timing extras; absent on older backends. */
+    val callPlan: CallPlanDto? = null,
+)
+
+@Serializable
+data class CareCircleMemberDto(
+    val name: String = "",
+    val email: String = "",
+    val role: String = "",
+    val addedTs: Long? = null,
+)
+
+@Serializable
+data class CallPlanDto(
+    val callElderAfterMin: Long? = null,
+    val alertCircleAfterMin: Long? = null,
 )
 
 @Serializable
@@ -115,6 +133,50 @@ data class SourceDto(
     val lastSeenTs: Long? = null,
 )
 
+/** A one-way family→app nudge composed on the web dashboard. */
+@Serializable
+data class CommandDto(
+    val id: String = "",
+    val type: String = "",
+    val text: String = "",
+    val ts: Long = 0,
+    val ackTs: Long? = null,
+) {
+    object Types {
+        const val MESSAGE = "message"
+        const val REMINDER = "reminder"
+        const val TTS = "tts"
+        const val REQUEST_CHECKIN = "request_checkin"
+    }
+}
+
+@Serializable
+data class CommandAckRequest(val id: String)
+
+@Serializable
+data class CommandAckResponse(
+    val ok: Boolean? = null,
+    val error: String? = null,
+)
+
+/** One turn of the "Ask Khayaal" conversation. Roles: "user" | "assistant". */
+@Serializable
+data class AssistantMessageDto(
+    val role: String,
+    val content: String,
+)
+
+@Serializable
+data class AssistantRequest(
+    val messages: List<AssistantMessageDto>,
+)
+
+@Serializable
+data class AssistantResponse(
+    val reply: String? = null,
+    val error: String? = null,
+)
+
 /** GET/POST checkin/snooze all return the same "tick bundle" the dashboard polls. */
 @Serializable
 data class StateBundleDto(
@@ -123,6 +185,8 @@ data class StateBundleDto(
     val sources: List<SourceDto> = emptyList(),
     val simNowTs: Long? = null,
     val realNowTs: Long? = null,
+    /** Family→app commands channel; absent on backends that predate it. */
+    val commands: List<CommandDto> = emptyList(),
 )
 
 @Serializable

@@ -35,4 +35,18 @@ interface KhayaalApi {
         @Path("id") householdId: String,
         @Body body: SourceCreateRequest,
     ): SourceCreateResponse
+
+    /** Confirms a family command reached her phone. 404 on older backends — tolerate. */
+    @POST("api/v1/household/{id}/command-ack")
+    suspend fun ackCommand(
+        @Path("id") householdId: String,
+        @Body body: CommandAckRequest,
+    ): CommandAckResponse
+
+    /** "Ask Khayaal": the app sends the conversation, the backend holds the LLM key. */
+    @POST("api/v1/household/{id}/assistant")
+    suspend fun assistant(
+        @Path("id") householdId: String,
+        @Body body: AssistantRequest,
+    ): AssistantResponse
 }

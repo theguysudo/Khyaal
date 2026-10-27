@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHousehold, ensureDemoHousehold, makePairingCode } from '@/lib/server/runtime';
 import { getStore } from '@/lib/server/store';
 import { sessionFromRequest } from '@/lib/server/session';
+import { rateLimit } from '@/lib/server/rate-limit';
 
 /**
  * POST /api/v1/pair
@@ -11,6 +12,9 @@ import { sessionFromRequest } from '@/lib/server/session';
  * Creating while signed in with Google links the household to the account.
  */
 export async function POST(req: Request) {
+  if (!rateLimit(`pair:${req.headers.get('x-forwarded-for') ?? 'local'}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Slow down' }, { status: 429 });
+  }
   const store = getStore();
   const session = sessionFromRequest(req);
   let body: Record<string, unknown>;

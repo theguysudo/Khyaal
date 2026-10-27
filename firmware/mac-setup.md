@@ -248,3 +248,56 @@ Verified today (2026-10-23) against the live server on this Mac:
 - [ ] flashing — blocked only by the wedged CP2102 port; after a replug:
       `chip-id` → `erase-flash` → `pio run -t upload` → `pio device monitor`
       (expect the `Khayaal CSI room sensor v1.0.0` banner, then `wifi up …`)
+
+---
+
+## PERSONAL HOTSPOT DEMO (phone hotspot → ESP32 → laptop)
+
+The recommended demo topology: **the parent's phone is the hotspot**; the ESP32
+and the laptop both join it; the sensor posts straight to the laptop's
+Khayaal server. Nothing external is needed.
+
+### One-time prep (on the current Wi-Fi, before switching)
+
+1. Flash the firmware (§4) and open the serial monitor.
+2. Register a source on the server you'll run during the demo:
+   `curl -X POST http://localhost:3100/api/v1/household/<id>/sources -H 'Content-Type: application/json' -d '{"type":"esp32"}'`
+   — keep the returned `id` + `apiKey`.
+3. In the serial CLI, set everything EXCEPT the final host (you won't know the
+   hotspot IP yet):
+   ```
+   set ssid <PHONE-HOTSPOT-NAME>
+   set pass <PHONE-HOTSPOT-PASSWORD>
+   set hh hh_...
+   set src src_...
+   set key sk_...
+   ```
+
+### On demo day
+
+1. Phone: Settings → Personal Hotspot → **ON**, "Maximize Compatibility" ON
+   (forces 2.4 GHz — the ESP32 cannot see 5 GHz), WPA2 password set.
+2. Laptop: join the phone's hotspot. Find your new address:
+   `ipconfig getifaddr en0` (e.g. `172.20.10.5` on iPhone hotspots).
+3. Run the server on that interface (it listens on all of them):
+   `npm run dev` or `npm start` from the repo root.
+4. Tell the ESP32 the new host over serial:
+   ```
+   set host 172.20.10.5
+   restart
+   ```
+5. Watch the monitor: `Wi-Fi connected` → `presence motion|idle` heartbeats.
+   On the laptop: `curl http://localhost:3100/api/v1/household/<id>/state`
+   — the ESP32 source's `lastSeenTs` should keep updating.
+
+### Fallback: USB bridge mode (no Wi-Fi at all)
+
+Leave Wi-Fi unset; the firmware prints JSON lines over USB; the bridge posts them:
+`python3 tunnel/khayaal_serial_bridge.py --port /dev/cu.usbserial-0001`
+(config in tunnel/config.json — refresh identity with tunnel/register_source.py
+whenever the demo server restarted).
+
+### If the serial port refuses to open (tcsetattr EINVAL)
+
+The CP2102 driver instance is wedged. Unplug the board, count to five, replug.
+If it persists: `sudo pkill -f AppleUSBSLCOM` (needs your password) and replug.

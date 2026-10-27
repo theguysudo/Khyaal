@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server';
 import { parseIngest } from '@khayaal/shared';
 import { ingestSignal } from '@/lib/server/runtime';
+import { rateLimit } from '@/lib/server/rate-limit';
 
 /**
  * POST /api/v1/ingest
  * { householdId, sourceId, type, value, ts?, apiKey? }
  * The one endpoint every source speaks — her phone, the ESP32 room sensor,
  * the simulator. Auth: source must be paired; per-source key when provided.
+ * Rate-limited: 120 requests / minute / IP (devices batch, that's ample).
  */
 export async function POST(req: Request) {
+  if (!rateLimit(`ingest:${req.headers.get('x-forwarded-for') ?? 'local'}`, 120, 60_000)) {
+    return NextResponse.json({ error: 'Slow down' }, { status: 429 });
+  }
   let body: unknown;
   try {
     body = await req.json();
