@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Calm, warm, near-empty: the app theme mirrors the web paper palette. -->
+    <style name="Theme.Khayaal" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/khayaal_paper</item>
+        <item name="android:statusBarColor">@color/khayaal_paper</item>
+        <item name="android:navigationBarColor">@color/khayaal_paper</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

@@ -1,0 +1,20 @@
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.DS_Store
+.vercel
+serviceAccountKey.json
+
+# firmware tooling + build outputs
+firmware/.pio/
+firmware/.tools/
+firmware/**/build/
+firmware/.venv/
+firmware/tunnel/__pycache__/
+firmware/tunnel/config.json
+

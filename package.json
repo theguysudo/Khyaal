@@ -1,0 +1,13 @@
+{
+  "name": "khayaal",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Khayaal - passive, wearable-free wellbeing monitoring for elderly parents living alone",
+  "workspaces": ["apps/web", "packages/shared", "packages/engine"],
+  "scripts": {
+    "dev": "npm run dev --workspace @khayaal/web",
+    "build": "npm run build --workspace @khayaal/web",
+    "test": "npm run test --workspace @khayaal/engine",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

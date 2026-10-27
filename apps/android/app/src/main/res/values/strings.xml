@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Khayaal</string>
+
+    <!-- Pairing -->
+    <string name="pairing_title">Pair her phone.</string>
+    <string name="pairing_subtitle">Khayaal listens quietly for the small signs of an ordinary day. Enter the 6-digit code from your family dashboard.</string>
+    <string name="pairing_button">Pair her phone</string>
+    <string name="pairing_server_button">Server settings</string>
+    <string name="pairing_server_hint">Where Khayaal\'s home is (the backend address)</string>
+    <string name="pairing_error_code">That code didn\'t work — check it with your family.</string>
+    <string name="pairing_error_network">Couldn\'t reach home. Check the server address and the connection.</string>
+    <string name="pairing_error_generic">Something went wrong. Please try once more.</string>
+    <string name="pairing_success_title">Khayaal is watching over her — quietly.</string>
+    <string name="pairing_success_body">From now on, her phone shares only the gentle signals: unlocks, a little movement, the evening charge. Nothing else.</string>
+
+    <!-- Home -->
+    <string name="greeting_morning">Good morning,</string>
+    <string name="greeting_afternoon">Good afternoon,</string>
+    <string name="greeting_evening">Good evening,</string>
+    <string name="greeting_night">A quiet night to you,</string>
+    <string name="home_all_well">All is well</string>
+    <string name="home_last_checkin">Last check-in · %1$s</string>
+    <string name="home_no_checkin_yet">No check-in yet today</string>
+    <string name="home_learning">Khayaal is learning her rhythm — the first few days stay quiet.</string>
+    <string name="home_offline">Khayaal will keep trying quietly and sync when the network returns.</string>
+    <string name="home_ingest_error">Signals couldn\'t reach home — the pairing key may need a refresh.</string>
+    <string name="home_snoozed_until">Resting until %1$s</string>
+    <string name="home_im_ok">I\'m OK</string>
+    <string name="home_im_ok_done">Thank you — we let them know.</string>
+    <string name="home_snooze">Snooze for an hour</string>
+    <string name="home_settings">Settings</string>
+    <string name="home_settings_description">Open settings</string>
+
+    <!-- Nudge cards -->
+    <string name="nudge_tier1_title">Everything okay? 🌼</string>
+    <string name="nudge_tier1_body">Just a gentle hello. Tap I\'m OK whenever you like.</string>
+    <string name="nudge_tier2_title">Are you alright?</string>
+    <string name="nudge_tier2_body">Your family would love to hear from you — tap I\'m OK below.</string>
+    <string name="nudge_tier3_title">We\'re thinking of you</string>
+    <string name="nudge_tier3_body">Please tap I\'m OK, or call %1$s. There is no hurry.</string>
+
+    <!-- Settings dialog -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_base_url_label">Server address</string>
+    <string name="settings_home_ssid_label">Home Wi-Fi name</string>
+    <string name="settings_home_ssid_hint">e.g. Sharma Home — presence only, never a location trail</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_unpair">Unpair this phone</string>
+    <string name="settings_unpair_confirm">Yes, unpair</string>
+    <string name="settings_unpair_warning">Unpairing stops all signals. Khayaal will forget this household.</string>
+    <string name="settings_close">Close</string>
+
+    <!-- Notifications -->
+    <string name="channel_care_name">Gentle check-ins</string>
+    <string name="channel_care_description">Soft questions when things look unusual</string>
+    <string name="channel_urgent_name">Needs attention</string>
+    <string name="channel_urgent_description">A louder call when Khayaal is quite worried</string>
+    <string name="notification_tier1_title">Everything okay? 🌼</string>
+    <string name="notification_tier1_body">A gentle hello from Khayaal. Nothing is wrong.</string>
+    <string name="notification_tier2_title">Are you alright?</string>
+    <string name="notification_tier2_body">Please tap I\'m OK when you see this.</string>
+    <string name="notification_tier3_title">We\'re worried about you</string>
+    <string name="notification_tier3_body">Please tap I\'m OK, or ask %1$s for a call.</string>
+    <string name="notification_action_im_ok">I\'m OK</string>
+    <string name="notification_action_snooze">Snooze 1h</string>
+
+    <!-- Accessibility -->
+    <string name="a11y_code_input">Six digit pairing code</string>
+    <string name="a11y_im_ok_button">Tell your family you are okay</string>
+</resources>

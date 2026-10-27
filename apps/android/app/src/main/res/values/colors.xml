@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Khayaal design tokens — mirrors apps/web/tailwind.config.ts -->
+    <color name="khayaal_paper">#FAF6EF</color>
+    <color name="khayaal_ink">#2A241D</color>
+    <color name="khayaal_clay">#B95C38</color>
+    <color name="ic_launcher_background">#FAF6EF</color>
+</resources>
