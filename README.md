@@ -1,5 +1,7 @@
 # Khayaal
 
+[![CI](https://github.com/theguysudo/Khyaal/actions/workflows/ci.yml/badge.svg)](https://github.com/theguysudo/Khyaal/actions/workflows/ci.yml)
+
 **A silent guardian for elderly parents living alone.**
 Nothing to press. Nothing to wear. Nothing to remember.
 
