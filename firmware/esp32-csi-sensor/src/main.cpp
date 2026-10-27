@@ -58,8 +58,9 @@ struct Calibration {
   float values[kCalMaxSamples];
 } cal;
 
-// LAN mode: single-slot pending event with exponential backoff
-char pendingJson[224] = "";
+// LAN mode: single-slot pending event with exponential backoff. Sized for a
+// sealed envelope (up to ~1 KB), not just the plaintext event.
+char pendingJson[1100] = "";
 uint32_t pendingAttempts = 0;
 uint32_t nextLanAttemptMs = 0;
 

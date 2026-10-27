@@ -18,6 +18,8 @@
 #include <mbedtls/gcm.h>
 #include <mbedtls/md.h>
 
+#include <esp_random.h>
+
 #include <string.h>
 
 namespace {
@@ -98,8 +100,9 @@ bool sealIngestEvent(const char *apiKey, const char *householdId,
   int rc = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 256);
   if (rc == 0) {
     rc = mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, plainLen,
-                                   iv, sizeof(iv), aad, strlen(aad),
-                                   reinterpret_cast<const uint8_t *>(plainJson), ct,
+                                   iv, sizeof(iv),
+                                   reinterpret_cast<const unsigned char *>(aad), strlen(aad),
+                                   reinterpret_cast<const unsigned char *>(plainJson), ct,
                                    sizeof(tag), tag);
   }
   mbedtls_gcm_free(&gcm);

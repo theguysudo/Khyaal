@@ -174,21 +174,18 @@ PYEOF
 # -------------------------------------------------------------------- flash
 do_flash() {
   PORT="${PORT:-$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* 2>/dev/null | head -1)}"
-  BIN="esp32-csi-sensor/.pio/build/esp32dev/firmware.bin"
   if [[ -z "$PORT" ]]; then echo "no serial port — plug the board in"; exit 1; fi
-  if [[ ! -f "$BIN" ]]; then
-    echo "firmware.bin missing — build first:"
-    echo "  pip3 install platformio && pio run -d esp32-csi-sensor"
-    exit 1
+  export PATH="$HOME/Library/Python/3.12/bin:$PATH"
+  if command -v pio > /dev/null; then
+    echo "building + flashing via PlatformIO (knows the right offsets) …"
+    pio run -d esp32-csi-sensor -t erase 2>&1 | tail -2
+    pio run -d esp32-csi-sensor -t upload --upload-port "$PORT" 2>&1 | tail -6
+    echo "flashed. open the serial monitor (115200) and run: help"
+    return
   fi
-  echo "erasing $PORT …"
-  python3 -m esptool --port "$PORT" erase-flash || exit 1
-  echo "flashing $BIN …"
-  python3 -m esptool --port "$PORT" --baud 460800 write-flash 0x1000 \
-    esp32-csi-sensor/.pio/build/esp32dev/bootloader.bin 0x8000 \
-    esp32-csi-sensor/.pio/build/esp32dev/partitions.bin 0xe000 \
-    esp32-csi-sensor/.pio/build/esp32dev/boot_app0.bin 0x10000 "$BIN" || exit 1
-  echo "flashed. open the serial monitor and run: help"
+  echo "PlatformIO missing — install with: pip3 install platformio"
+  echo "(esptool-only flashing needs a fresh build; see SETUP_GUIDE.md)"
+  exit 1
 }
 
 LEVELS="${1:-all}"
