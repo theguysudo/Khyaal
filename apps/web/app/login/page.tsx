@@ -21,6 +21,8 @@ export default function LoginPage() {
   const [claimCode, setClaimCode] = useState('');
   const [claimError, setClaimError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [transferUrl, setTransferUrl] = useState<string | null>(null);
+  const [transferred, setTransferred] = useState(false);
 
   const load = useCallback(() => {
     fetch('/api/v1/my/households', { cache: 'no-store' })
@@ -32,13 +34,24 @@ export default function LoginPage() {
   useEffect(() => {
     load();
     const params = new URLSearchParams(window.location.search);
+    if (params.get('transferred') === '1') setTransferred(true);
     const google = params.get('google');
     if (google === 'not-configured') {
-      setGoogleNote('Google sign-in isn\u2019t configured on this server yet — add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to apps/web/.env.local, then restart.');
+      setGoogleNote('Google sign-in isn\u2019t configured on this server yet — add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to apps/web/.env.local, then restart. Register only the localhost redirect URI (Google bans IP addresses).');
     } else if (google) {
       setGoogleNote('Google sign-in failed (' + google + '). Please try again.');
     }
   }, [load]);
+
+  const mintTransfer = async () => {
+    setTransferUrl(null);
+    try {
+      const r = await postJSON<{ url: string }>('/api/auth/transfer');
+      setTransferUrl(r.url);
+    } catch {
+      setTransferUrl(null);
+    }
+  };
 
   const claim = async () => {
     setBusy(true);
@@ -101,6 +114,11 @@ export default function LoginPage() {
 
         {signedIn && (
           <div className="mt-8 space-y-4">
+            {transferred && (
+              <div className="rounded-2xl border border-[#4c7a4f]/30 bg-[#e6efe2] p-4 text-sm text-[#33512f]">
+                Signed in on this device — the families below now live here too.
+              </div>
+            )}
             <div className="flex items-center gap-3 rounded-2xl border border-ink/10 bg-white p-4">
               {data!.user!.picture ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -143,6 +161,35 @@ export default function LoginPage() {
                 <p className="text-sm font-medium text-claydeep">+ Set up another family</p>
                 <span className="text-clay">→</span>
               </Link>
+            </div>
+
+            <div className="rounded-2xl border border-ink/10 bg-white p-5">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+                Open on her phone (no Google needed there)
+              </p>
+              <p className="mt-1.5 text-xs leading-relaxed text-ink/50">
+                Google blocks IP addresses in its redirect rules, so the phone inherits this
+                session instead of signing in itself.
+              </p>
+              {transferUrl ? (
+                <div className="mt-3 space-y-2">
+                  <p className="cursor-pointer break-all rounded-lg bg-paper px-3 py-2 font-mono text-xs text-ink/80 transition-colors hover:bg-mist"
+                     title="Tap to copy"
+                     onClick={() => navigator.clipboard?.writeText(transferUrl)}>
+                    {transferUrl}
+                  </p>
+                  <p className="text-[11px] text-ink/40">
+                    One-time link, valid 5 minutes — open it in her phone's browser while both are on this Wi-Fi.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={mintTransfer}
+                  className="mt-3 rounded-full border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-paper"
+                >
+                  Generate one-time link
+                </button>
+              )}
             </div>
 
             <div className="rounded-2xl border border-ink/10 bg-white p-5">

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import * as os from 'node:os';
+import { getLanIp } from '@/lib/server/lan';
 
 /**
  * GET /api/v1/server-info
@@ -7,18 +7,7 @@ import * as os from 'node:os';
  * 10.0.2.2 (the emulator's loopback alias) never works on real hardware.
  */
 export async function GET() {
-  const nets = os.networkInterfaces();
-  let lanIp: string | null = null;
-  for (const addrs of Object.values(nets)) {
-    for (const a of addrs ?? []) {
-      if (a.family === 'IPv4' && !a.internal) {
-        // Prefer 192.168./10. addresses (home Wi-Fi) over anything exotic.
-        if (!lanIp || a.address.startsWith('192.168.') || a.address.startsWith('10.')) {
-          lanIp = a.address;
-        }
-      }
-    }
-  }
+  const lanIp = getLanIp();
   return NextResponse.json({
     lanIp,
     lanBaseUrl: lanIp ? `http://${lanIp}:3100/` : null,
