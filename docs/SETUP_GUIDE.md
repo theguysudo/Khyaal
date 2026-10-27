@@ -158,13 +158,26 @@ call-chain plan.
 (the AP's traffic is the sensing "illumination"). Personal hotspots work —
 on iPhone enable **Maximize Compatibility**; details in `firmware/mac-setup.md`.
 
+**Wi-Fi, laptop-style (from the dashboard):** household → **Sources** → the
+sensor chip → **Wi-Fi**. The panel shows connection status, **Scan networks**
+(a real scan from the device, signal-sorted), click a network → password →
+**Connect**, and **Forget Wi-Fi**. It works even when the sensor is offline
+because the Mac-side relay carries everything over the USB cable:
+
+```bash
+python3 firmware/tunnel/khayaal_serial_bridge.py    # the relay; keep it running
+```
+
+No reflashing is ever needed to change networks. Passwords travel
+family-session → server → USB relay only and are never stored server-side.
+
 **Tunnel alternative (no device HTTP at all):** leave the transport in the
-default `serial` mode and run the Mac-side bridge, which seals everything with
+default `serial` mode and run the bridge, which seals everything with
 AES-256-GCM before POSTing:
 
 ```bash
 python3 firmware/tunnel/register_source.py        # writes firmware/tunnel/config.json
-python3 firmware/tunnel/khayaal_serial_bridge.py  # forwards USB events, sealed
+python3 firmware/tunnel/khayaal_serial_bridge.py  # forwards + manages, sealed
 ```
 
 ---

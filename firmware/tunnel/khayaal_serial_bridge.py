@@ -193,19 +193,172 @@ def post_event(
     return False
 
 
+# ------------------------------------------------------------------ manage
+# Dashboard → device relay. The bridge polls the backend for queued actions
+# (falltest, wifi_scan, wifi_connect, wififorget) and runs them over the USB
+# serial link — which is exactly what makes Wi-Fi management work when the
+# sensor has no network at all. Results (scan lists, connection status) are
+# posted back to /api/v1/device/wifi.
+MANAGE_POLL_S = 3.0
+SCAN_COLLECT_S = 7.0
+CONNECT_SETTLE_S = 10.0
+
+
+def _read_for(ser: "serial.Serial", seconds: float) -> list[str]:
+    """Collect complete lines from the device for a bounded time."""
+    lines: list[str] = []
+    deadline = time.time() + seconds
+    buf = b""
+    while time.time() < deadline:
+        chunk = ser.read(256)
+        if chunk:
+            buf += chunk
+            while b"\n" in buf:
+                raw, buf = buf.split(b"\n", 1)
+                lines.append(raw.decode("utf-8", errors="replace").strip())
+        else:
+            time.sleep(0.05)
+    return lines
+
+
+def run_manage_action(
+    ser: "serial.Serial",
+    act: dict[str, Any],
+    endpoint_base: str,
+    household_id: str,
+    source_id: str,
+    api_key: str,
+) -> None:
+    """Execute one dashboard action against the device over USB."""
+    action = act.get("action", "")
+    log(f"manage: {action}")
+
+    if action == "falltest":
+        ser.write(b"falltest\n")  # device emits the fall line; forwarding carries it
+        return
+    if action == "wifi_scan":
+        ser.write(b"scan\n")
+        lines = _read_for(ser, SCAN_COLLECT_S)
+        networks = []
+        for line in lines:
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("scan") is True and obj.get("ssid"):
+                networks.append({"ssid": obj["ssid"], "rssi": obj.get("rssi"), "secure": obj.get("secure")})
+        _post_wifi(endpoint_base, {"kind": "scan", "networks": networks},
+                   household_id, source_id, api_key)
+        log(f"manage: scan -> {len(networks)} networks")
+        return
+    if action == "wifi_connect":
+        payload = act.get("payload") or {}
+        ssid = str(payload.get("ssid", ""))
+        password = str(payload.get("password", ""))
+        ser.write(f"ssid {ssid}\n".encode())
+        time.sleep(0.3)
+        ser.write(f"pass {password}\n".encode())
+        time.sleep(CONNECT_SETTLE_S)
+        ser.write(b"statusjson\n")
+        lines = _read_for(ser, 3.0)
+        for line in reversed(lines):
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("status") is True:
+                _post_wifi(endpoint_base, {"kind": "status", "status": obj},
+                           household_id, source_id, api_key)
+                log(f"manage: connect -> connected={obj.get('connected')}")
+                return
+        _post_wifi(endpoint_base, {"kind": "status", "status": {"connected": False, "ssid": ssid}},
+                   household_id, source_id, api_key)
+        return
+    if action == "wififorget":
+        ser.write(b"wififorget\n")
+        time.sleep(1.0)
+        ser.write(b"statusjson\n")
+        lines = _read_for(ser, 3.0)
+        for line in reversed(lines):
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("status") is True:
+                _post_wifi(endpoint_base, {"kind": "status", "status": obj},
+                           household_id, source_id, api_key)
+                return
+        return
+
+
+def _post_wifi(
+    endpoint_base: str,
+    body: dict[str, Any],
+    household_id: str,
+    source_id: str,
+    api_key: str,
+) -> None:
+    try:
+        requests.post(
+            f"{endpoint_base}/api/v1/device/wifi",
+            json=body,
+            headers={
+                "x-kh-household": household_id,
+                "x-kh-source": source_id,
+                "x-kh-key": api_key,
+            },
+            timeout=POST_TIMEOUT_S,
+        )
+    except requests.RequestException as exc:
+        log(f"manage: post wifi result failed: {exc}")
+
+
+def poll_manage(
+    ser: "serial.Serial",
+    endpoint_base: str,
+    household_id: str,
+    source_id: str,
+    api_key: str,
+) -> None:
+    """Drain dashboard-queued actions; returns quickly when the queue is empty."""
+    try:
+        resp = requests.get(
+            f"{endpoint_base}/api/v1/device/actions",
+            headers={
+                "x-kh-household": household_id,
+                "x-kh-source": source_id,
+                "x-kh-key": api_key,
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return
+        for act in resp.json().get("actions", []):
+            run_manage_action(ser, act, endpoint_base, household_id, source_id, api_key)
+    except (requests.RequestException, ValueError):
+        pass
+
+
 # ------------------------------------------------------------------ main loop
 def read_loop(
     port_name: str,
     baud: int,
     forward,  # Callable[[dict[str, Any]], bool]
+    manage: Optional[dict[str, str]] = None,
 ) -> None:
-    """Read JSON lines forever; reconnect on any serial error."""
+    """Read JSON lines forever; reconnect on any serial error.
+    `manage` (household/source/key + base) enables the dashboard relay."""
+    last_manage = 0.0
     while True:
         try:
             with serial.Serial(port_name, baud, timeout=READ_TIMEOUT_S) as ser:
                 log(f"connected to {port_name} @ {baud}")
                 buf = b""
                 while True:
+                    if manage and time.time() - last_manage > MANAGE_POLL_S:
+                        last_manage = time.time()
+                        poll_manage(ser, manage["base"], manage["householdId"],
+                                    manage["sourceId"], manage["apiKey"])
                     chunk = ser.read(256)
                     if not chunk:
                         continue
@@ -224,7 +377,9 @@ def read_loop(
                             log(f"bad JSON from device ({exc}): {line[:120]}")
                             continue
                         if event.get("type") != "presence":
-                            log(f"ignored non-presence event: {line[:120]}")
+                            # scan/status JSON and device log JSON stay local
+                            if not event.get("scan") and not event.get("status"):
+                                log(f"ignored non-presence event: {line[:120]}")
                             continue
                         if not forward(event):
                             log("forwarding failed; continuing to read")
@@ -329,8 +484,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         endpoint, household_id, source_id, api_key, args.dry_run,
         encrypt=args.encrypt,
     )
+    # Management base: same server root as the ingest endpoint.
+    manage_base = endpoint.rsplit("/api/", 1)[0]
+    manage = None
+    if not args.dry_run and household_id and source_id and api_key:
+        manage = {
+            "base": manage_base,
+            "householdId": household_id,
+            "sourceId": source_id,
+            "apiKey": api_key,
+        }
+        log("dashboard relay on (falltest + Wi-Fi management over USB)")
     try:
-        read_loop(port_name, args.baud, forwarder)
+        read_loop(port_name, args.baud, forwarder, manage=manage)
     except KeyboardInterrupt:
         log("stopped")
     return 0

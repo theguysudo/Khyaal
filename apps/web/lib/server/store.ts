@@ -1,6 +1,7 @@
 import type {
   AppCommand,
   Baseline,
+  DeviceAction,
   Household,
   HouseholdEvent,
   HouseholdState,
@@ -46,9 +47,15 @@ export interface Store {
   addWebPushSubscriber(householdId: string, sub: unknown): Promise<void>;
   getWebPushSubscribers(householdId: string): Promise<unknown[]>;
 
-  // device actions (dashboard → sensor control, e.g. 'falltest')
-  queueDeviceAction(householdId: string, sourceId: string, action: string): Promise<void>;
-  drainDeviceActions(sourceId: string): Promise<string[]>;
+  // device actions (dashboard → sensor control, e.g. 'falltest', 'wifi_connect')
+  queueDeviceAction(householdId: string, sourceId: string, action: DeviceAction): Promise<void>;
+  drainDeviceActions(sourceId: string): Promise<DeviceAction[]>;
+
+  // device-reported Wi-Fi data (scan results, connection status)
+  putDeviceScan(sourceId: string, networks: unknown): Promise<void>;
+  getDeviceScan(sourceId: string): Promise<unknown | null>;
+  putDeviceStatus(sourceId: string, status: unknown): Promise<void>;
+  getDeviceStatus(sourceId: string): Promise<unknown | null>;
 
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
@@ -92,7 +99,9 @@ interface MemoryDb {
   commands: Map<string, AppCommand[]>;
   deviceTokens: Map<string, string[]>;
   webPushSubs: Map<string, unknown[]>;
-  deviceActions: Map<string, string[]>; // keyed by sourceId
+  deviceActions: Map<string, DeviceAction[]>; // keyed by sourceId
+  deviceScan: Map<string, { data: unknown; ts: number }>;
+  deviceStatus: Map<string, { data: unknown; ts: number }>;
 }
 
 const g = globalThis as unknown as { __khayaalDb?: MemoryDb };
@@ -111,6 +120,8 @@ function db(): MemoryDb {
       deviceTokens: new Map(),
       webPushSubs: new Map(),
       deviceActions: new Map(),
+      deviceScan: new Map(),
+      deviceStatus: new Map(),
     };
   }
   return g.__khayaalDb;
@@ -206,14 +217,31 @@ export class MemoryStore implements Store {
     return db().webPushSubs.get(householdId) ?? [];
   }
 
-  async queueDeviceAction(householdId: string, sourceId: string, action: string): Promise<void> {
+  async queueDeviceAction(householdId: string, sourceId: string, action: DeviceAction): Promise<void> {
     const list = db().deviceActions.get(sourceId) ?? [];
     db().deviceActions.set(sourceId, [...list, action].slice(-10));
   }
-  async drainDeviceActions(sourceId: string): Promise<string[]> {
+  async drainDeviceActions(sourceId: string): Promise<DeviceAction[]> {
     const list = db().deviceActions.get(sourceId) ?? [];
     db().deviceActions.set(sourceId, []);
     return list;
+  }
+
+  async putDeviceScan(sourceId: string, networks: unknown): Promise<void> {
+    db().deviceScan.set(sourceId, { data: networks, ts: Date.now() });
+  }
+  async getDeviceScan(sourceId: string): Promise<unknown | null> {
+    const hit = db().deviceScan.get(sourceId);
+    if (!hit || Date.now() - hit.ts > 120_000) return null; // results go stale after 2 min
+    return hit.data;
+  }
+  async putDeviceStatus(sourceId: string, status: unknown): Promise<void> {
+    db().deviceStatus.set(sourceId, { data: status, ts: Date.now() });
+  }
+  async getDeviceStatus(sourceId: string): Promise<unknown | null> {
+    const hit = db().deviceStatus.get(sourceId);
+    if (!hit || Date.now() - hit.ts > 600_000) return null;
+    return hit.data;
   }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {

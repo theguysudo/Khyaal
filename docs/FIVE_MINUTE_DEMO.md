@@ -94,7 +94,8 @@ sensor → sealed tunnel → engine → escalation."*
 ## If something wobbles on stage
 - **Dashboard 404s:** the server restarted → redo prep steps 2–5 (5 min).
 - **falltest, nothing happens:** `show` in the monitor — if `wifi=down`, the
-  hotspot dropped; re-join and resend. If `encrypt=off`, re-paste the block.
+  hotspot dropped; use the dashboard **Wi-Fi** panel on the sensor chip to
+  re-join (or re-send via serial). If `encrypt=off`, re-paste the block.
 - **Phone app can't reach the server:** both devices must be on the same
   network; re-check the server address (`http://<mac-lan-ip>:3100`).
 - **Need a guaranteed tier-3 without hardware:** the `/demo` tab → Emergency

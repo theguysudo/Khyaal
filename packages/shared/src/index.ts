@@ -28,6 +28,12 @@ export interface Signal {
   ts: number; // epoch ms, already in simulation time
 }
 
+/** Dashboard → device control, relayed over the tunnel. */
+export interface DeviceAction {
+  action: 'falltest' | 'recheck' | 'wifi_scan' | 'wifi_connect' | 'wififorget';
+  payload?: Record<string, unknown>; // e.g. { ssid, password } for wifi_connect
+}
+
 // ---------------------------------------------------------------------------
 // Household & configuration
 // ---------------------------------------------------------------------------

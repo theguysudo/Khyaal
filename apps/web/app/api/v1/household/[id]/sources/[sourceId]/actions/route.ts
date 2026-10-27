@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server';
+import type { DeviceAction } from '@khayaal/shared';
 import { requireFamily, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
-const ACTIONS = new Set(['falltest', 'recheck']);
+const ACTIONS = new Set(['falltest', 'recheck', 'wifi_scan', 'wifi_connect', 'wififorget']);
 
 /**
- * POST /api/v1/household/{id}/sources/{sourceId}/actions { action }
- * Family-only dashboard control of a paired sensor. The sensor picks the
- * action up on its next poll (~5 s in LAN mode) — 'falltest' makes the real
- * hardware fire a fall event so the escalation path can be demonstrated
- * without anyone falling over.
+ * POST /api/v1/household/{id}/sources/{sourceId}/actions { action, ... }
+ * Family-only dashboard control of a paired sensor. The Mac-side bridge
+ * relays actions over the sensor's USB link (so Wi-Fi management works even
+ * when the sensor is offline): 'wifi_scan' scans, 'wifi_connect' carries
+ * { ssid, password }, 'wififorget' clears the stored network.
  */
 export async function POST(
   req: Request,
@@ -26,23 +27,46 @@ export async function POST(
     return NextResponse.json({ error: 'No paired room sensor with that id' }, { status: 404 });
   }
 
-  let action = 'falltest';
+  let body: Record<string, unknown> = {};
   try {
-    const body = await req.json();
-    if (typeof body?.action === 'string') action = body.action;
+    body = await req.json();
   } catch {
-    /* default */
+    /* defaults */
   }
+  const action = typeof body.action === 'string' ? (body.action as DeviceAction['action']) : 'falltest';
   if (!ACTIONS.has(action)) {
     return NextResponse.json({ error: `Unknown action — one of ${[...ACTIONS].join(', ')}` }, { status: 400 });
   }
 
-  await getStore().queueDeviceAction(id, sourceId, action);
+  let payload: Record<string, unknown> | undefined;
+  if (action === 'wifi_connect') {
+    const ssid = typeof body.ssid === 'string' ? body.ssid.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (!ssid || ssid.length > 32) {
+      return NextResponse.json({ error: 'A network name (max 32 chars) is required' }, { status: 400 });
+    }
+    if (password.length > 64) {
+      return NextResponse.json({ error: 'Password too long (max 64)' }, { status: 400 });
+    }
+    payload = { ssid, password };
+  }
+
+  await getStore().queueDeviceAction(id, sourceId, { action, ...(payload ? { payload } : {}) });
   await getStore().appendEvent(id, {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
     ts: Date.now() + (await getStore().getHousehold(id))!.simTimeOffsetMs,
     type: 'note',
-    meta: `Dashboard asked the room sensor to run ${action}.`,
+    meta:
+      action === 'wifi_scan' ? 'Dashboard asked the room sensor to scan Wi-Fi networks.'
+      : action === 'wifi_connect' ? `Dashboard asked the room sensor to join “${String(payload?.ssid)}”.`
+      : action === 'wififorget' ? 'Dashboard asked the room sensor to forget its Wi-Fi network.'
+      : `Dashboard asked the room sensor to run ${action}.`,
   });
-  return NextResponse.json({ ok: true, action, note: 'The sensor fires on its next poll (~5 s).' });
+  return NextResponse.json({
+    ok: true,
+    action,
+    note: action.startsWith('wifi') || action === 'wififorget'
+      ? 'The USB relay runs this within ~3 s.'
+      : 'The sensor fires on its next poll (~5 s).',
+  });
 }

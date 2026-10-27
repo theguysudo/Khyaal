@@ -111,6 +111,11 @@ void emitPresence(const char *value) {
   char json[sizeof(pendingJson)];
   buildEventJson(json, sizeof(json), value);
   if (cfg.transport == TRANSPORT_LAN) {
+    // Offline fallback: with no Wi-Fi the LAN path is dead, so also hand the
+    // event to USB — the Mac-side relay forwards (and seals) it. When Wi-Fi
+    // returns, flushLan may deliver it again; the engine treats a repeat as
+    // confirmation, not a new alarm.
+    if (!wifiUp) Serial.println(json);
     if (cfg.encrypt && cfg.apiKey[0] && cfg.householdId[0] && cfg.sourceId[0]) {
       // AES-256-GCM: the network sees identity + opaque ciphertext only.
       if (sealIngestEvent(cfg.apiKey, cfg.householdId, cfg.sourceId, json,
@@ -301,6 +306,9 @@ void printHelp() {
   Serial.println("  key <sk_...>    apiKey (LAN mode), saved");
   Serial.println("  mode <lan|serial>   transport, saved");
   Serial.println("  enc <on|off>    AES-256-GCM seal LAN ingest (on = default), saved");
+  Serial.println("  scan            scan Wi-Fi networks, print JSON lines (relay)");
+  Serial.println("  wififorget      clear stored Wi-Fi, disconnect");
+  Serial.println("  statusjson      one-line machine-readable status (relay)");
   Serial.println("  factory         clear NVS, back to compiled defaults");
   Serial.println("  falltest        emit one 'fall' event (demo/test hook)");
 }
@@ -403,6 +411,36 @@ void dispatchCli(char *line) {
   } else if (strcmp(line, "falltest") == 0) {
     klog("falltest: emitting one 'fall' presence event");
     emitPresence("fall");
+  } else if (strcmp(line, "scan") == 0) {
+    klog("scanning Wi-Fi networks (blocking ~3 s)...");
+    const int n = WiFi.scanNetworks();
+    for (int i = 0; i < n; i++) {
+      String ssid = WiFi.SSID(i);
+      ssid.replace("\\", "\\\\");
+      ssid.replace("\"", "\\\"");
+      // one JSON line per network — the Mac-side relay collects these
+      Serial.printf("{\"scan\":true,\"ssid\":\"%s\",\"rssi\":%d,\"secure\":%s}\n",
+                    ssid.c_str(), WiFi.RSSI(i),
+                    WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true");
+    }
+    Serial.println("{\"scanDone\":true}");
+    WiFi.scanDelete();
+  } else if (strcmp(line, "wififorget") == 0) {
+    store.saveSsid(&cfg, "");
+    store.savePassword(&cfg, "");
+    WiFi.disconnect(true, true);  // erase AP credentials too
+    klog("Wi-Fi forgotten — set a new network with ssid/pass");
+    printShow();
+  } else if (strcmp(line, "statusjson") == 0) {
+    if (wifiUp) {
+      Serial.printf("{\"status\":true,\"connected\":true,\"ssid\":\"%s\","
+                    "\"rssi\":%d,\"ip\":\"%s\",\"fw\":\"%s\"}\n",
+                    cfg.ssid, WiFi.RSSI(), WiFi.localIP().toString().c_str(),
+                    kFwVersion);
+    } else {
+      Serial.printf("{\"status\":true,\"connected\":false,\"ssid\":\"%s\","
+                    "\"fw\":\"%s\"}\n", cfg.ssid, kFwVersion);
+    }
   } else if (strcmp(line, "factory") == 0) {
     store.factoryReset(&cfg);
     klog("NVS cleared; compiled defaults restored");

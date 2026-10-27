@@ -633,12 +633,144 @@ function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
   );
 }
 
+function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
+  const [networks, setNetworks] = useState<{ ssid: string; rssi: number; secure: boolean }[] | null>(null);
+  const [status, setStatus] = useState<{ connected?: boolean; ssid?: string; rssi?: number; ip?: string } | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const refresh = async () => {
+    try {
+      const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
+      setNetworks(r.networks ?? null);
+      setStatus(r.status ?? null);
+    } catch {
+      /* panel stays with what it has */
+    }
+  };
+  useEffect(() => {
+    void refresh();
+  }, [id, sourceId]);
+
+  const queue = async (action: string, payload?: Record<string, unknown>) => {
+    setBusy(action);
+    setNote(null);
+    try {
+      await postJSON(`/api/v1/household/${id}/sources/${sourceId}/actions`, { action, ...payload });
+      if (action === 'wifi_scan') {
+        setNote('Scanning — the sensor reports back within ~10 s…');
+        for (let i = 0; i < 8; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
+          if (r.networks) {
+            setNetworks(r.networks);
+            setNote(null);
+            break;
+          }
+        }
+      } else if (action === 'wifi_connect' || action === 'wififorget') {
+        setNote('Applying — checking in ~12 s…');
+        for (let i = 0; i < 8; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
+          if (r.status && (action === 'wififorget' || (r.status.ts ?? true))) {
+            if (r.status) setStatus(r.status);
+            break;
+          }
+        }
+        setNote(null);
+        await refresh();
+      }
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const bars = (rssi: number) => (rssi > -55 ? '▮▮▮▮' : rssi > -65 ? '▮▮▮' : rssi > -75 ? '▮▮' : '▮');
+
+  return (
+    <div className="mt-3 rounded-2xl border border-ink/10 bg-paper/70 p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-ink/40">Wi-Fi, laptop-style — runs over the sensor's USB link</p>
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+        <span className={status?.connected ? 'text-ink/80' : 'text-[#b23a2f]'}>
+          {status?.connected
+            ? `Connected to ${status.ssid} · ${bars(status.rssi ?? -80)} ${status.rssi ?? ''} dBm${status.ip ? ` · ${status.ip}` : ''}`
+            : 'Not connected to any network'}
+        </span>
+        <button onClick={() => queue('wifi_scan')} disabled={busy !== null} className="rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-ink hover:text-paper disabled:opacity-40">
+          {busy === 'wifi_scan' ? 'Scanning…' : 'Scan networks'}
+        </button>
+        {status?.connected && (
+          <button onClick={() => queue('wififorget')} disabled={busy !== null} className="rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-[#b23a2f] hover:text-paper disabled:opacity-40">
+            Forget Wi-Fi
+          </button>
+        )}
+      </div>
+      {note && <p className="mt-2 text-xs text-ink/50">{note}</p>}
+      {networks && networks.length > 0 && (
+        <ul className="mt-3 divide-y divide-ink/5">
+          {networks
+            .slice()
+            .sort((a, b) => b.rssi - a.rssi)
+            .map((n) => (
+              <li key={n.ssid}>
+                <button
+                  onClick={() => {
+                    setSelected(n.ssid);
+                    setPassword('');
+                  }}
+                  className={`flex w-full items-center justify-between px-2 py-2 text-left text-sm transition-colors hover:bg-paper ${selected === n.ssid ? 'bg-paper' : ''}`}
+                >
+                  <span className="text-ink/80">
+                    {n.secure && <span className="mr-1.5 text-ink/40">🔒</span>}
+                    {n.ssid}
+                  </span>
+                  <span className="text-xs text-ink/40">{bars(n.rssi)}</span>
+                </button>
+              </li>
+            ))}
+        </ul>
+      )}
+      {selected && (
+        <div className="mt-3 flex gap-2">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && queue('wifi_connect', { ssid: selected, password })}
+            placeholder={`Password for ${selected}`}
+            className="flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none focus:border-clay"
+          />
+          <button
+            onClick={() => queue('wifi_connect', { ssid: selected, password })}
+            disabled={busy !== null || password.length < 8}
+            className="rounded-full bg-ink px-4 py-2 text-sm text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            {busy === 'wifi_connect' ? 'Joining…' : 'Connect'}
+          </button>
+        </div>
+      )}
+      <p className="mt-3 text-[11px] leading-relaxed text-ink/40">
+        Needs the sensor's USB cable plugged into this Mac with the relay running:
+        <code className="mx-1">python3 firmware/tunnel/khayaal_serial_bridge.py</code>
+        — the dashboard queues the action, the relay types it to the sensor over USB and posts the scan
+        results back. Passwords travel family-session → server → USB relay only; they are never stored.
+      </p>
+    </div>
+  );
+}
+
 function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
   const [created, setCreated] = useState<{ id: string; apiKey: string } | null>(null);
   const [host, setHost] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testedSrc, setTestedSrc] = useState<string | null>(null);
+  const [wifiOpenFor, setWifiOpenFor] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/server-info').then((r) => r.json()).then((i) => setHost(i.lanBaseUrl ?? 'http://localhost:3100')).catch(() => {});
@@ -695,12 +827,20 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
               {s.label}
               <span className="text-xs text-ink/40">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
               {isEsp && (
-                <button
-                  onClick={() => fallTest(s.id)}
-                  className="rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
-                >
-                  {testedSrc === s.id ? 'firing…' : 'fall test'}
-                </button>
+                <>
+                  <button
+                    onClick={() => fallTest(s.id)}
+                    className="rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
+                  >
+                    {testedSrc === s.id ? 'firing…' : 'fall test'}
+                  </button>
+                  <button
+                    onClick={() => setWifiOpenFor(wifiOpenFor === s.id ? null : s.id)}
+                    className="rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
+                  >
+                    Wi-Fi
+                  </button>
+                </>
               )}
             </span>
           );
@@ -714,6 +854,7 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
         </button>
       </div>
       {error && <p className="mt-3 text-sm text-[#b23a2f]">{error}</p>}
+      {wifiOpenFor && <WiFiPanel id={id} sourceId={wifiOpenFor} />}
       {serialBlock && (
         <div className="mt-4 rounded-2xl border border-ink/10 bg-paper/70 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-ink/40">Paste into the sensor's serial monitor (115200) — the key is shown once</p>

@@ -1,6 +1,7 @@
 import type {
   AppCommand,
   Baseline,
+  DeviceAction,
   Household,
   HouseholdEvent,
   HouseholdState,
@@ -304,18 +305,37 @@ export class FirestoreStore implements Store {
     return rows.map((r) => r.data.sub);
   }
 
-  async queueDeviceAction(householdId: string, sourceId: string, action: string): Promise<void> {
+  async queueDeviceAction(householdId: string, sourceId: string, action: DeviceAction): Promise<void> {
     await call(`documents/sources/${encodeURIComponent(sourceId)}/actions`, {
       method: 'POST',
-      body: toDoc({ action, queuedTs: Date.now() }),
+      body: toDoc({ ...action, queuedTs: Date.now() }),
     });
   }
-  async drainDeviceActions(sourceId: string): Promise<string[]> {
+  async drainDeviceActions(sourceId: string): Promise<DeviceAction[]> {
     const rows = await listDocs(`sources/${encodeURIComponent(sourceId)}/actions`, 50);
     await Promise.all(
       rows.map((r) => deleteDoc(`sources/${encodeURIComponent(sourceId)}/actions/${r.id}`).catch(() => undefined)),
     );
-    return rows.map((r) => String(r.data.action)).filter(Boolean);
+    return rows
+      .map((r) => ({ action: String(r.data.action) } as DeviceAction))
+      .filter((a) => a.action);
+  }
+
+  async putDeviceScan(sourceId: string, networks: unknown): Promise<void> {
+    await setDoc(`devicedata/${encodeURIComponent(sourceId)}-scan`, { data: networks, ts: Date.now() });
+  }
+  async getDeviceScan(sourceId: string): Promise<unknown | null> {
+    const doc = await getDoc<{ data: unknown; ts: number }>(`devicedata/${encodeURIComponent(sourceId)}-scan`);
+    if (!doc || Date.now() - doc.ts > 120_000) return null;
+    return doc.data;
+  }
+  async putDeviceStatus(sourceId: string, status: unknown): Promise<void> {
+    await setDoc(`devicedata/${encodeURIComponent(sourceId)}-status`, { data: status, ts: Date.now() });
+  }
+  async getDeviceStatus(sourceId: string): Promise<unknown | null> {
+    const doc = await getDoc<{ data: unknown; ts: number }>(`devicedata/${encodeURIComponent(sourceId)}-status`);
+    if (!doc || Date.now() - doc.ts > 600_000) return null;
+    return doc.data;
   }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {
