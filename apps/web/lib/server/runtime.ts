@@ -39,6 +39,26 @@ export interface TickBundle {
   hourlyActivity: number[];
   /** Recent night-watch / sound events for the sleep card. */
   sleepSound: Signal[];
+  /**
+   * Movement, summarised. The phone computes this on-device from GPS and
+   * sends only the numbers — the family never sees a coordinate or a trail.
+   */
+  movement: MovementSummary;
+}
+
+export interface MovementSummary {
+  /** 'home' | 'away' | null when GPS has not reported yet. */
+  zone: 'home' | 'away' | null;
+  /** Metres moved since the previous fix. */
+  distanceM: number | null;
+  /** Speed in km/h at the last fix. */
+  speedKmh: number | null;
+  /** Whether she was moving at the last fix. */
+  moving: boolean | null;
+  /** When the phone last reported movement. */
+  lastTs: number | null;
+  /** Steps today, when the phone's step counter has reported. */
+  stepsToday: number | null;
 }
 
 function emptyState(nowTs: number): HouseholdState {
@@ -119,6 +139,32 @@ export async function tickHousehold(householdId: string): Promise<TickBundle | n
     commands,
     hourlyActivity,
     sleepSound,
+    movement: movementSummary(signals, nowTs),
+  };
+}
+
+/**
+ * The movement card's whole world: a zone, some numbers and a time. No
+ * coordinates ever reach the server, so there is nothing here to leak.
+ */
+function movementSummary(signals: Signal[], nowTs: number): MovementSummary {
+  const gps = signals.filter((s) => s.type === 'gps_motion').sort((a, b) => a.ts - b.ts);
+  const lastGps = gps[gps.length - 1] ?? null;
+  const zones = signals.filter((s) => s.type === 'location_zone').sort((a, b) => a.ts - b.ts);
+  const lastZone = zones[zones.length - 1] ?? null;
+
+  const steps = signals
+    .filter((s) => s.type === 'steps' && s.ts >= nowTs - 24 * HOUR)
+    .sort((a, b) => a.ts - b.ts);
+  const lastSteps = steps[steps.length - 1] ?? null;
+
+  return {
+    zone: lastZone ? (lastZone.value === 'away' ? 'away' : 'home') : null,
+    distanceM: lastGps ? Number(lastGps.meta?.distanceM ?? 0) : null,
+    speedKmh: lastGps ? Number(lastGps.meta?.speedKmh ?? 0) : null,
+    moving: lastGps ? lastGps.meta?.moving === true : null,
+    lastTs: lastGps?.ts ?? null,
+    stepsToday: lastSteps ? Number(lastSteps.value) : null,
   };
 }
 

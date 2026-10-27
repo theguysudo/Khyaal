@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const access = await householdAccess(req, householdId);
   if (access.level === 'none') return NextResponse.json({ error: 'Unknown source' }, { status: 403 });
 
-  let body: { kind?: string; networks?: unknown; status?: unknown };
+  let body: { kind?: string; networks?: unknown; status?: unknown; count?: number; error?: string };
   try {
     body = await req.json();
   } catch {
@@ -37,7 +37,14 @@ export async function POST(req: Request) {
     if (!Array.isArray(body.networks)) {
       return NextResponse.json({ error: 'networks array required' }, { status: 400 });
     }
-    await getStore().putDeviceScan(sourceId, body.networks);
+    // Keep the count and the device's own error string: "no networks here"
+    // and "the sensor never answered" are very different problems, and the
+    // dashboard should be able to say which one it was.
+    await getStore().putDeviceScan(sourceId, {
+      networks: body.networks,
+      count: typeof body.count === 'number' ? body.count : body.networks.length,
+      error: typeof body.error === 'string' ? body.error : null,
+    });
     return NextResponse.json({ ok: true });
   }
   if (body.kind === 'status') {

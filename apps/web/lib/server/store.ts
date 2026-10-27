@@ -8,6 +8,8 @@ import type {
   KhayaalUser,
   Signal,
   Source,
+  TalkbackChunk,
+  TalkbackSession,
 } from '@khayaal/shared';
 import { decrypt, encrypt } from './crypto-box';
 import { FirestoreStore, firestoreConfigured } from './firestore';
@@ -49,13 +51,41 @@ export interface Store {
 
   // device actions (dashboard → sensor control, e.g. 'falltest', 'wifi_connect')
   queueDeviceAction(householdId: string, sourceId: string, action: DeviceAction): Promise<void>;
-  drainDeviceActions(sourceId: string): Promise<DeviceAction[]>;
+  /**
+   * Takes the queued actions this transport may run. `via` separates the two
+   * pollers: the sensor itself polls over Wi-Fi ('lan'), the Mac-side USB
+   * relay polls for the commands it types over serial ('usb'). Actions for the
+   * other channel stay queued.
+   */
+  drainDeviceActions(sourceId: string, via: 'lan' | 'usb'): Promise<DeviceAction[]>;
 
   // device-reported Wi-Fi data (scan results, connection status)
   putDeviceScan(sourceId: string, networks: unknown): Promise<void>;
   getDeviceScan(sourceId: string): Promise<unknown | null>;
   putDeviceStatus(sourceId: string, status: unknown): Promise<void>;
   getDeviceStatus(sourceId: string): Promise<unknown | null>;
+
+  // talkback (consent-first walkie-talkie between family and parent)
+  createTalkbackSession(session: TalkbackSession): Promise<TalkbackSession>;
+  getTalkbackSession(householdId: string, sessionId: string): Promise<TalkbackSession | null>;
+  /** The most recent session in the household, whatever its state. */
+  getLatestTalkbackSession(householdId: string): Promise<TalkbackSession | null>;
+  updateTalkbackSession(
+    householdId: string,
+    sessionId: string,
+    patch: Partial<TalkbackSession>,
+  ): Promise<TalkbackSession | null>;
+  /** Appends one audio slice; the store assigns the monotonic `seq`. */
+  appendTalkbackChunk(
+    householdId: string,
+    sessionId: string,
+    chunk: Omit<TalkbackChunk, 'seq'>,
+  ): Promise<TalkbackChunk>;
+  getTalkbackChunks(
+    householdId: string,
+    sessionId: string,
+    afterSeq: number,
+  ): Promise<TalkbackChunk[]>;
 
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
@@ -102,6 +132,8 @@ interface MemoryDb {
   deviceActions: Map<string, DeviceAction[]>; // keyed by sourceId
   deviceScan: Map<string, { data: unknown; ts: number }>;
   deviceStatus: Map<string, { data: unknown; ts: number }>;
+  talkbackSessions: Map<string, TalkbackSession>; // keyed by sessionId
+  talkbackChunks: Map<string, TalkbackChunk[]>; // keyed by sessionId
 }
 
 const g = globalThis as unknown as { __khayaalDb?: MemoryDb };
@@ -122,6 +154,8 @@ function db(): MemoryDb {
       deviceActions: new Map(),
       deviceScan: new Map(),
       deviceStatus: new Map(),
+      talkbackSessions: new Map(),
+      talkbackChunks: new Map(),
     };
   }
   return g.__khayaalDb;
@@ -230,10 +264,14 @@ export class MemoryStore implements Store {
     const list = db().deviceActions.get(sourceId) ?? [];
     db().deviceActions.set(sourceId, [...list, action].slice(-10));
   }
-  async drainDeviceActions(sourceId: string): Promise<DeviceAction[]> {
+  async drainDeviceActions(sourceId: string, via: 'lan' | 'usb'): Promise<DeviceAction[]> {
     const list = db().deviceActions.get(sourceId) ?? [];
-    db().deviceActions.set(sourceId, []);
-    return list;
+    // Actions without an explicit channel default to 'lan' (the sensor can
+    // run those itself). The other channel's actions stay queued.
+    const mine = list.filter((a) => (a.via ?? 'lan') === via);
+    const theirs = list.filter((a) => (a.via ?? 'lan') !== via);
+    db().deviceActions.set(sourceId, theirs);
+    return mine;
   }
 
   async putDeviceScan(sourceId: string, networks: unknown): Promise<void> {
@@ -251,6 +289,55 @@ export class MemoryStore implements Store {
     const hit = db().deviceStatus.get(sourceId);
     if (!hit || Date.now() - hit.ts > 600_000) return null;
     return hit.data;
+  }
+
+  // -- Talkback ---------------------------------------------------------------
+
+  async createTalkbackSession(session: TalkbackSession): Promise<TalkbackSession> {
+    db().talkbackSessions.set(session.id, { ...session });
+    db().talkbackChunks.set(session.id, []);
+    return { ...session };
+  }
+  async getTalkbackSession(householdId: string, sessionId: string): Promise<TalkbackSession | null> {
+    const hit = db().talkbackSessions.get(sessionId);
+    if (!hit || hit.householdId !== householdId) return null;
+    return { ...hit };
+  }
+  async getLatestTalkbackSession(householdId: string): Promise<TalkbackSession | null> {
+    const all = [...db().talkbackSessions.values()]
+      .filter((s) => s.householdId === householdId)
+      .sort((a, b) => b.createdTs - a.createdTs);
+    return all[0] ? { ...all[0] } : null;
+  }
+  async updateTalkbackSession(
+    householdId: string,
+    sessionId: string,
+    patch: Partial<TalkbackSession>,
+  ): Promise<TalkbackSession | null> {
+    const cur = db().talkbackSessions.get(sessionId);
+    if (!cur || cur.householdId !== householdId) return null;
+    const next = { ...cur, ...patch };
+    db().talkbackSessions.set(sessionId, next);
+    return { ...next };
+  }
+  async appendTalkbackChunk(
+    householdId: string,
+    sessionId: string,
+    chunk: Omit<TalkbackChunk, 'seq'>,
+  ): Promise<TalkbackChunk> {
+    const list = db().talkbackChunks.get(sessionId) ?? [];
+    const next = { ...chunk, seq: list.length + 1 };
+    // A conversation is short-lived; keep the last ~400 slices (≈100 s).
+    db().talkbackChunks.set(sessionId, [...list, next].slice(-400));
+    return next;
+  }
+  async getTalkbackChunks(
+    householdId: string,
+    sessionId: string,
+    afterSeq: number,
+  ): Promise<TalkbackChunk[]> {
+    const list = db().talkbackChunks.get(sessionId) ?? [];
+    return list.filter((c) => c.seq > afterSeq);
   }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {

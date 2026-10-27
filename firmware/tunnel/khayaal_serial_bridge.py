@@ -199,14 +199,24 @@ def post_event(
 # serial link — which is exactly what makes Wi-Fi management work when the
 # sensor has no network at all. Results (scan lists, connection status) are
 # posted back to /api/v1/device/wifi.
+#
+# The poll is channel-scoped (?via=usb): the sensor itself polls the same
+# endpoint over Wi-Fi and can only run what it can do over Wi-Fi. Without the
+# split the board drained the Wi-Fi actions and did nothing with them, so the
+# dashboard waited forever for a scan that had already been consumed.
 MANAGE_POLL_S = 3.0
-SCAN_COLLECT_S = 7.0
+SCAN_COLLECT_S = 20.0
 CONNECT_SETTLE_S = 10.0
 
 
-def _read_for(ser: "serial.Serial", seconds: float) -> list[str]:
-    """Collect complete lines from the device for a bounded time."""
-    lines: list[str] = []
+def _read_for(ser: "serial.Serial", seconds: float, stop_on: Optional[str] = None) -> list[dict[str, Any]]:
+    """Collect JSON objects from the device for a bounded time.
+
+    Returns the parsed JSON lines. Presence events seen in the window are
+    returned too — they must not be swallowed just because a dashboard action
+    happened to be running.
+    """
+    out: list[dict[str, Any]] = []
     deadline = time.time() + seconds
     buf = b""
     while time.time() < deadline:
@@ -215,10 +225,26 @@ def _read_for(ser: "serial.Serial", seconds: float) -> list[str]:
             buf += chunk
             while b"\n" in buf:
                 raw, buf = buf.split(b"\n", 1)
-                lines.append(raw.decode("utf-8", errors="replace").strip())
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line or not line.startswith("{"):
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                out.append(obj)
+                if stop_on and obj.get(stop_on) is True:
+                    return out
         else:
             time.sleep(0.05)
-    return lines
+    return out
+
+
+def _forward_presence(objects: list[dict[str, Any]], forward) -> None:
+    """Send any presence events collected during an action window."""
+    for obj in objects:
+        if obj.get("type") == "presence":
+            forward(obj)
 
 
 def run_manage_action(
@@ -228,6 +254,7 @@ def run_manage_action(
     household_id: str,
     source_id: str,
     api_key: str,
+    forward=None,
 ) -> None:
     """Execute one dashboard action against the device over USB."""
     action = act.get("action", "")
@@ -238,18 +265,26 @@ def run_manage_action(
         return
     if action == "wifi_scan":
         ser.write(b"scan\n")
-        lines = _read_for(ser, SCAN_COLLECT_S)
+        # The device prints one JSON line per network and then
+        # {"scanDone":true}. Stop on that marker rather than guessing a
+        # duration — a full 2.4 GHz scan can take longer than a few seconds.
+        objects = _read_for(ser, SCAN_COLLECT_S, stop_on="scanDone")
+        if forward:
+            _forward_presence(objects, forward)
         networks = []
-        for line in lines:
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        scan_error = None
+        for obj in objects:
             if obj.get("scan") is True and obj.get("ssid"):
                 networks.append({"ssid": obj["ssid"], "rssi": obj.get("rssi"), "secure": obj.get("secure")})
-        _post_wifi(endpoint_base, {"kind": "scan", "networks": networks},
+            elif obj.get("scanDone") is True and obj.get("error"):
+                scan_error = str(obj.get("error"))
+        if not any(o.get("scanDone") is True for o in objects):
+            scan_error = "the sensor did not answer the scan"
+        _post_wifi(endpoint_base, {"kind": "scan", "networks": networks,
+                                   "count": len(networks), "error": scan_error},
                    household_id, source_id, api_key)
-        log(f"manage: scan -> {len(networks)} networks")
+        log(f"manage: scan -> {len(networks)} networks"
+            + (f" ({scan_error})" if scan_error else ""))
         return
     if action == "wifi_connect":
         payload = act.get("payload") or {}
@@ -260,12 +295,10 @@ def run_manage_action(
         ser.write(f"pass {password}\n".encode())
         time.sleep(CONNECT_SETTLE_S)
         ser.write(b"statusjson\n")
-        lines = _read_for(ser, 3.0)
-        for line in reversed(lines):
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        objects = _read_for(ser, 5.0, stop_on="status")
+        if forward:
+            _forward_presence(objects, forward)
+        for obj in reversed(objects):
             if obj.get("status") is True:
                 _post_wifi(endpoint_base, {"kind": "status", "status": obj},
                            household_id, source_id, api_key)
@@ -278,12 +311,10 @@ def run_manage_action(
         ser.write(b"wififorget\n")
         time.sleep(1.0)
         ser.write(b"statusjson\n")
-        lines = _read_for(ser, 3.0)
-        for line in reversed(lines):
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        objects = _read_for(ser, 5.0, stop_on="status")
+        if forward:
+            _forward_presence(objects, forward)
+        for obj in reversed(objects):
             if obj.get("status") is True:
                 _post_wifi(endpoint_base, {"kind": "status", "status": obj},
                            household_id, source_id, api_key)
@@ -319,11 +350,16 @@ def poll_manage(
     household_id: str,
     source_id: str,
     api_key: str,
+    forward=None,
 ) -> None:
-    """Drain dashboard-queued actions; returns quickly when the queue is empty."""
+    """Drain dashboard-queued actions; returns quickly when the queue is empty.
+
+    Only the 'usb' channel is drained here — the sensor's own Wi-Fi poll takes
+    the 'lan' channel, and the two must not eat each other's work.
+    """
     try:
         resp = requests.get(
-            f"{endpoint_base}/api/v1/device/actions",
+            f"{endpoint_base}/api/v1/device/actions?via=usb",
             headers={
                 "x-kh-household": household_id,
                 "x-kh-source": source_id,
@@ -334,7 +370,7 @@ def poll_manage(
         if resp.status_code != 200:
             return
         for act in resp.json().get("actions", []):
-            run_manage_action(ser, act, endpoint_base, household_id, source_id, api_key)
+            run_manage_action(ser, act, endpoint_base, household_id, source_id, api_key, forward)
     except (requests.RequestException, ValueError):
         pass
 
@@ -358,7 +394,7 @@ def read_loop(
                     if manage and time.time() - last_manage > MANAGE_POLL_S:
                         last_manage = time.time()
                         poll_manage(ser, manage["base"], manage["householdId"],
-                                    manage["sourceId"], manage["apiKey"])
+                                    manage["sourceId"], manage["apiKey"], forward)
                     chunk = ser.read(256)
                     if not chunk:
                         continue

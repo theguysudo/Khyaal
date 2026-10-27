@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { requireHouseholdMember, unauthorized } from '@/lib/server/authz';
-import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
+import { chat, companionSystemPrompt, PROVIDER_LABELS } from '@/lib/server/llm';
+import type { LlmProvider } from '@khayaal/shared';
 
 const MAX_MESSAGE_CHARS = 2000;
+const FALLBACK_REPLY =
+  "I can't think right now — the AI service isn't set up yet. Try again later, everything else still works.";
 
 /**
  * POST /api/v1/household/{id}/assistant — the parent's "Ask Khayaal" helper,
@@ -11,6 +14,12 @@ const MAX_MESSAGE_CHARS = 2000;
  * warm companion: reminders, small help, no medical advice. Household
  * members only (her phone via source key, family via session); rate-limited
  * and size-capped because it is an LLM spend.
+ *
+ * Body: { messages: [{role, content}], provider?: 'openrouter'|'minimax'|'nvidia', model?, apiKey? }
+ * Reply: { reply, provider, model }
+ *
+ * The provider is a preference, not a promise: if that one has no key or
+ * fails, the other free providers are tried before giving up.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!rateLimit(`assistant:${req.headers.get('x-forwarded-for') ?? 'local'}`, 10, 60_000)) {
@@ -21,7 +30,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (guard instanceof Response) return guard;
   const hh = guard;
 
-  let body: { messages?: { role: string; content: string }[]; apiKey?: string; model?: string };
+  let body: {
+    messages?: { role: string; content: string }[];
+    apiKey?: string;
+    model?: string;
+    provider?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -29,41 +43,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   const messages = (Array.isArray(body.messages) ? body.messages.slice(-8) : [])
     .filter((m) => m && typeof m.content === 'string')
-    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MESSAGE_CHARS) }));
+    .map((m) => ({
+      role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+      content: m.content.slice(0, MAX_MESSAGE_CHARS),
+    }));
   if (messages.length === 0) return NextResponse.json({ error: 'messages required' }, { status: 400 });
 
-  const apiKey = (typeof body.apiKey === 'string' && body.apiKey.trim()) || process.env.OPENROUTER_API_KEY || '';
-  const model = (typeof body.model === 'string' && body.model.trim()) || 'meta-llama/llama-3.1-8b-instruct:free';
-  if (!apiKey) {
-    return NextResponse.json(
-      { reply: "I can't think right now — the AI service isn't set up yet. Try again later, everything else still works." },
-    );
-  }
+  const requested = (body.provider ?? '').toLowerCase();
+  const provider: LlmProvider | 'auto' =
+    requested === 'minimax' || requested === 'nvidia' || requested === 'openrouter'
+      ? requested
+      : 'auto';
 
-  try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        max_tokens: 220,
-        temperature: 0.7,
-        messages: [
-          {
-            role: 'system',
-            content: `You are Khayaal, a warm, unhurried companion for ${hh.parentName}, an elderly person living independently. Keep answers short (2-4 sentences), kind and practical. Reminders and gentle encouragement are welcome. Never give medical advice — suggest asking the doctor. You cannot call anyone; suggest tapping "Call family" for that.`,
-          },
-          ...messages,
-        ],
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!res.ok) {
-      return NextResponse.json({ reply: 'I lost my thoughts for a moment — ask me again in a minute.' });
-    }
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return NextResponse.json({ reply: data.choices?.[0]?.message?.content ?? '…' });
-  } catch {
-    return NextResponse.json({ reply: 'I lost my thoughts for a moment — ask me again in a minute.' });
+  const result = await chat(
+    [
+      { role: 'system', content: companionSystemPrompt(hh.parentName) },
+      ...messages,
+    ],
+    {
+      provider,
+      model: typeof body.model === 'string' ? body.model : undefined,
+      apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
+      maxTokens: 600,
+      temperature: 0.7,
+      timeoutMs: 45_000,
+    },
+  );
+
+  if (!result) {
+    return NextResponse.json({ reply: FALLBACK_REPLY, provider: null, model: null });
   }
+  return NextResponse.json({
+    reply: result.text,
+    provider: result.provider,
+    providerLabel: PROVIDER_LABELS[result.provider],
+    model: result.model,
+  });
 }

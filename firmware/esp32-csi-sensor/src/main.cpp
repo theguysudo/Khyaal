@@ -412,18 +412,29 @@ void dispatchCli(char *line) {
     klog("falltest: emitting one 'fall' presence event");
     emitPresence("fall");
   } else if (strcmp(line, "scan") == 0) {
-    klog("scanning Wi-Fi networks (blocking ~3 s)...");
-    const int n = WiFi.scanNetworks();
-    for (int i = 0; i < n; i++) {
-      String ssid = WiFi.SSID(i);
-      ssid.replace("\\", "\\\\");
-      ssid.replace("\"", "\\\"");
-      // one JSON line per network — the Mac-side relay collects these
-      Serial.printf("{\"scan\":true,\"ssid\":\"%s\",\"rssi\":%d,\"secure\":%s}\n",
-                    ssid.c_str(), WiFi.RSSI(i),
-                    WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true");
+    klog("scanning Wi-Fi networks (blocking, up to ~15 s)...");
+    // Bounded scan: the Mac-side relay waits for the scanDone marker, so the
+    // device must not hang here forever.
+    WiFi.setScanTimeout(15000);
+    const int n = WiFi.scanNetworks(false /* blocking */);
+    if (n > 0) {
+      for (int i = 0; i < n; i++) {
+        String ssid = WiFi.SSID(i);
+        ssid.replace("\\", "\\\\");
+        ssid.replace("\"", "\\\"");
+        // one JSON line per network — the Mac-side relay collects these
+        Serial.printf("{\"scan\":true,\"ssid\":\"%s\",\"rssi\":%d,\"secure\":%s}\n",
+                      ssid.c_str(), WiFi.RSSI(i),
+                      WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true");
+      }
+      Serial.printf("{\"scanDone\":true,\"count\":%d}\n", n);
+    } else {
+      // Say so plainly — "no networks here" and "the scan failed" are very
+      // different problems for whoever is debugging.
+      Serial.printf("{\"scanDone\":true,\"count\":0,\"error\":\"%s\"}\n",
+                    n == 0 ? "no networks found" : "scan failed");
+      klog("scan finished with no networks (n=%d)", n);
     }
-    Serial.println("{\"scanDone\":true}");
     WiFi.scanDelete();
   } else if (strcmp(line, "wififorget") == 0) {
     store.saveSsid(&cfg, "");

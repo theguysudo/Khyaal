@@ -14,6 +14,7 @@ export type SignalType =
   | 'charging' // phone on charger (true) or off (false)
   | 'app_usage' // an app was opened (name only, never content)
   | 'location_zone' // 'home' | 'away' — presence, never a trail
+  | 'gps_motion' // GPS-derived movement — distance/speed, never coordinates
   | 'presence' // ESP32 Wi-Fi sensing: 'motion' | 'idle' | 'lost' | 'fall'
   | 'manual_checkin' // parent tapped "I'm OK"
   | 'sleep_event' // on-device classifier: 'asleep' | 'awake' | 'restless' | 'woke'
@@ -26,12 +27,27 @@ export interface Signal {
   type: SignalType;
   value: SignalValue;
   ts: number; // epoch ms, already in simulation time
+  /**
+   * Optional privacy-safe detail bag — numbers, strings and booleans only.
+   * Used by signals that need a little more shape than a single primitive
+   * (gps_motion carries distance/speed/accuracy here). Never free-form
+   * content, never coordinates.
+   */
+  meta?: Record<string, string | number | boolean>;
 }
 
 /** Dashboard → device control, relayed over the tunnel. */
 export interface DeviceAction {
   action: 'falltest' | 'recheck' | 'wifi_scan' | 'wifi_connect' | 'wififorget';
   payload?: Record<string, unknown>; // e.g. { ssid, password } for wifi_connect
+  /**
+   * Which transport may run this action.
+   *  - 'lan'  → the sensor itself, over Wi-Fi (it polls /device/actions).
+   *  - 'usb'  → the Mac-side USB relay, which types the command over serial.
+   * Actions are channel-separated because two pollers share one queue: the
+   * board must not swallow a Wi-Fi action it cannot execute over Wi-Fi.
+   */
+  via?: 'lan' | 'usb';
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +117,51 @@ export interface KhayaalUser {
 }
 
 export const TIER_THRESHOLDS = { 1: 35, 2: 55, 3: 72 } as const;
+
+/** Which free LLM backend answers. All three speak the same chat shape. */
+export type LlmProvider = 'openrouter' | 'minimax' | 'nvidia';
+
+// ---------------------------------------------------------------------------
+// Talkback — a consent-first walkie-talkie between family and parent
+// ---------------------------------------------------------------------------
+
+/** Who is speaking. The two sides of a talkback session. */
+export type TalkbackRole = 'family' | 'parent';
+
+export type TalkbackState =
+  | 'pending' // request sent, waiting for the other side to allow
+  | 'active' // both sides allowed — audio flows
+  | 'declined' // the other side said no
+  | 'ended'; // finished by either side
+
+export interface TalkbackSession {
+  id: string;
+  householdId: string;
+  /** Who asked for the conversation. */
+  requester: TalkbackRole;
+  requesterName: string;
+  /** The side being asked — the consent popup lands here. */
+  callee: TalkbackRole;
+  state: TalkbackState;
+  createdTs: number;
+  answeredTs: number | null;
+  endedTs: number | null;
+  /** True once the callee has allowed the microphone to open. */
+  consentGiven: boolean;
+}
+
+/** One slice of a talkback conversation (~250 ms of compressed audio). */
+export interface TalkbackChunk {
+  /** Monotonic per session; the receiver asks for everything after its last seq. */
+  seq: number;
+  ts: number;
+  /** Audio mime, e.g. 'audio/webm;codecs=opus' or 'audio/l16;rate=16000'. */
+  mime: string;
+  /** Base64 payload. */
+  data: string;
+  /** Which side produced it. */
+  from: TalkbackRole;
+}
 
 // ---------------------------------------------------------------------------
 // Baseline — the learned "ordinary" for one parent
@@ -196,6 +257,7 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
   'charging',
   'app_usage',
   'location_zone',
+  'gps_motion',
   'presence',
   'manual_checkin',
   'sleep_event',
@@ -210,6 +272,27 @@ export function isSignalValue(v: unknown): v is SignalValue {
   return typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean';
 }
 
+/**
+ * Keeps the optional detail bag small and primitive. Anything else — nested
+ * objects, arrays, long strings — is dropped rather than stored, so a signal
+ * can never smuggle content into the encrypted-at-rest store.
+ */
+export function sanitizeSignalMeta(meta: unknown): Record<string, string | number | boolean> | undefined {
+  if (typeof meta !== 'object' || meta === null) return undefined;
+  const out: Record<string, string | number | boolean> = {};
+  let count = 0;
+  for (const [key, value] of Object.entries(meta as Record<string, unknown>)) {
+    if (count >= 8) break;
+    if (!/^[a-zA-Z0-9_]{1,24}$/.test(key)) continue;
+    if (typeof value === 'boolean') out[key] = value;
+    else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
+    else if (typeof value === 'string' && value.length <= 64) out[key] = value;
+    else continue;
+    count++;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function parseIngest(body: unknown): Signal | null {
   if (typeof body !== 'object' || body === null) return null;
   const b = body as Record<string, unknown>;
@@ -218,5 +301,6 @@ export function parseIngest(body: unknown): Signal | null {
   if (!isSignalValue(b.value)) return null;
   const ts = typeof b.ts === 'number' ? b.ts : Date.now();
   if (!Number.isFinite(ts)) return null;
-  return { sourceId: b.sourceId, type: b.type, value: b.value, ts };
+  const meta = sanitizeSignalMeta(b.meta);
+  return { sourceId: b.sourceId, type: b.type, value: b.value, ts, ...(meta ? { meta } : {}) };
 }

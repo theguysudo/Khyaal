@@ -28,6 +28,15 @@ export interface Bundle {
   commands: { id: string; ts: number; type: string; text: string; ackTs: number | null }[];
   hourlyActivity: number[];
   sleepSound: { sourceId: string; type: string; value: string; ts: number }[];
+  /** Movement summary from the phone's GPS — a zone and numbers, never coordinates. */
+  movement: {
+    zone: 'home' | 'away' | null;
+    distanceM: number | null;
+    speedKmh: number | null;
+    moving: boolean | null;
+    lastTs: number | null;
+    stepsToday: number | null;
+  };
 }
 
 export async function postJSON<T = unknown>(url: string, body?: unknown): Promise<T> {

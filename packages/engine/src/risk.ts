@@ -25,6 +25,7 @@ const WEIGHTS = {
   overnightCharge: 16,
   presence: 18,
   silence: 20,
+  gpsStillness: 18,
 } as const;
 
 /** Missing-source confidence penalties. */
@@ -43,6 +44,18 @@ export function tierForScore(score: number): Tier {
 
 const byType = (signals: Signal[], type: Signal['type']) =>
   signals.filter((s) => s.type === type).sort((a, b) => a.ts - b.ts);
+
+/**
+ * Is this contribution an *absence* — something that weighs only because it
+ * did not happen? Those are the ones an explanation (being away, having gone
+ * out) is allowed to soften. A fall or a loud sound is a verdict: it is
+ * never softened, only ever added to.
+ */
+function isAbsenceContribution(c: Contribution): boolean {
+  if (c.signal === 'sound_event') return false;
+  if (c.signal === 'presence') return c.weight === WEIGHTS.presence; // not the fall
+  return c.signal === 'screen_event' || c.signal === 'motion' || c.signal === 'silence' || c.signal === 'charging';
+}
 
 /**
  * The rule-based v1 scorer. Absence weighs far more than presence: a quiet
@@ -78,6 +91,7 @@ export function computeRisk(input: RiskInput): RiskResult {
   const motions = byType(signals, 'motion');
   const chargings = byType(signals, 'charging');
   const zones = byType(signals, 'location_zone');
+  const gps = byType(signals, 'gps_motion');
   const presences = byType(signals, 'presence');
   const checkins = byType(signals, 'manual_checkin');
   const sleeps = byType(signals, 'sleep_event');
@@ -200,6 +214,24 @@ export function computeRisk(input: RiskInput): RiskResult {
     }
   }
 
+  // --- 4c. GPS movement — detected here, applied after the silence rule ---
+  // The phone reports movement derived from GPS, never coordinates: how far
+  // she has moved, how fast, and whether she is moving at all. Its job is to
+  // explain a quiet house ("she went to the market") and to corroborate
+  // stillness when the accelerometer has nothing to say.
+  const lastGps = last(gps);
+  const recentTravel = [...gps]
+    .reverse()
+    .find((g) => {
+      const distance = Number(g.meta?.distanceM ?? 0);
+      const speed = Number(g.meta?.speedKmh ?? 0);
+      return (distance >= 800 || speed >= 8) && nowTs - g.ts < 3 * HOUR;
+    });
+  if (lastGps !== null && nowTs - lastGps < 12 * HOUR) {
+    // A second, independent movement source is worth a little confidence.
+    confidence += 0.05;
+  }
+
   // --- 5. Silence — the strongest single signal --------------------------
   const lastAny = Math.max(
     ...signals.map((s) => s.ts),
@@ -219,6 +251,42 @@ export function computeRisk(input: RiskInput): RiskResult {
   } else {
     confidence -= CONFIDENCE_PENALTY.thinBaseline;
     notes.push('Very little history yet — treat the score gently.');
+  }
+
+  // --- 5b. GPS movement applied -----------------------------------------
+  // Applied after the silence rule so travel can soften it — a quiet house
+  // with a GPS trail is a busy person, not a silent one.
+  if (!away && recentTravel && !isQuietHours(input.household.quietHours, nowTs)) {
+    // Soften the absence signals — but less than the 'away' zone does,
+    // because a zone is a declared fact and travel is a hint. The signals are
+    // softened, never hidden.
+    //
+    // Only absences are softened. A fall (the sensor's verdict) and a loud
+    // sound (the phone's verdict) are never explained away by movement.
+    for (const c of contributions) {
+      if (isAbsenceContribution(c)) c.effect = Math.round(c.effect * 0.5 * 10) / 10;
+    }
+    contributions.unshift({
+      signal: 'gps_motion',
+      weight: 0,
+      effect: 0,
+      reason: `Her phone's GPS shows she has moved recently (${Math.round(Number(recentTravel.meta?.distanceM ?? 0))} m) — that explains a quiet house.`,
+    });
+    notes.push('GPS shows recent movement — some absences are explained.');
+  } else if (
+    !away &&
+    isDaytime(nowTs) &&
+    lastGps !== null &&
+    nowTs - lastGps > 6 * HOUR &&
+    !motions.some((m) => nowTs - m.ts < 6 * HOUR)
+  ) {
+    // GPS is the only movement source we have, and it has been still for hours.
+    contributions.push({
+      signal: 'gps_motion',
+      weight: WEIGHTS.gpsStillness,
+      effect: Math.min(WEIGHTS.gpsStillness, 8 + ((nowTs - lastGps - 6 * HOUR) / (30 * MIN)) * 1.5),
+      reason: `GPS has seen no movement for ${fmtDuration(nowTs - lastGps)}.`,
+    });
   }
 
   // --- 6. Night context: sleep marker softens the expected night quiet ----
@@ -256,8 +324,13 @@ export function computeRisk(input: RiskInput): RiskResult {
   // --- Away overrides the absence signals --------------------------------
   // Being out is not a risk signal — it is an explanation. It always shows,
   // and whatever absences survived are softened, never hidden.
+  //
+  // A fall is never softened by being away: the room sensor saw an impact
+  // pattern, and a phone that happens to be out does not explain it away.
   if (away) {
-    for (const c of contributions) c.effect = Math.round(c.effect * 0.35 * 10) / 10;
+    for (const c of contributions) {
+      if (isAbsenceContribution(c)) c.effect = Math.round(c.effect * 0.35 * 10) / 10;
+    }
     contributions.unshift(explanation);
     notes.push('Being out softens the other signals; they are not ignored, just explained.');
   }

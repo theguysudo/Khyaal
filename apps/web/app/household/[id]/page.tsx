@@ -13,6 +13,9 @@ import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/dashboard/bento';
+import NightWatchCard from '@/components/dashboard/NightWatchCard';
+import TalkbackCard from '@/components/dashboard/TalkbackCard';
+import MovementCard from '@/components/dashboard/MovementCard';
 import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
 
 export default function DashboardPage() {
@@ -117,10 +120,12 @@ export default function DashboardPage() {
           <StatusCard bundle={bundle} />
           <TrendCard bundle={bundle} />
           <CommandsCard id={id} bundle={bundle} />
+          <TalkbackCard id={id} parentName={hh.parentName} childName={hh.childName} />
           <RhythmCard bundle={bundle} />
           <LadderCard tier={state.tier} />
           <ExplainCard bundle={bundle} />
-          <SleepSoundCard bundle={bundle} />
+          <NightWatchCard events={bundle.sleepSound} />
+          <MovementCard movement={bundle.movement} nowTs={bundle.simNowTs} />
           <AnalysisCard id={id} bundle={bundle} />
           <CircleCard id={id} bundle={bundle} />
           <PushCard id={id} />
@@ -370,48 +375,10 @@ function ExplainCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>[
   );
 }
 
-function SleepSoundCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
-  if (!bundle) return null;
-  const events = bundle.sleepSound;
-  return (
-    <BentoCard label="Night watch" className="col-span-12 lg:col-span-5">
-      <CardTitle note="on-device · nothing recorded">Night watch</CardTitle>
-      <ul className="mt-4 space-y-2 text-sm">
-        {events.length === 0 && (
-          <li className="text-ink/45">
-            No night events yet. Her phone can watch over the night opt-in — it listens for loud sounds only, on-device,
-            and shares just the classification.
-          </li>
-        )}
-        {events.slice().reverse().map((s, i) => (
-          <li key={i} className="flex items-baseline gap-3">
-            <span className="flex-none text-xs tabular-nums text-ink/40">{fmtClock(s.ts)}</span>
-            <span className="text-ink/75">
-              {s.type === 'sleep_event'
-                ? s.value === 'asleep'
-                  ? '🌙 Sleeping peacefully'
-                  : s.value === 'woke'
-                    ? '☀️ Awake this morning'
-                    : s.value === 'restless'
-                      ? '😕 Restless night stretch'
-                      : '🌅 Up for the day'
-                : s.value === 'loud'
-                  ? '📢 A loud sound was heard'
-                  : s.value === 'noise'
-                    ? '🔉 Some noise nearby'
-                    : '🔇 All quiet'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </BentoCard>
-  );
-}
-
 function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<'openrouter' | 'nvidia'>('openrouter');
+  const [provider, setProvider] = useState<'minimax' | 'nvidia' | 'openrouter'>('minimax');
   const [apiKey, setApiKey] = useState('');
   const [text, setText] = useState<string | null>(bundle?.household.lastAnalysis?.text ?? null);
   const [model, setModel] = useState<string | null>(bundle?.household.lastAnalysis?.model ?? null);
@@ -437,7 +404,7 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
 
   return (
     <BentoCard label="AI behaviour analysis" className="col-span-12 lg:col-span-7">
-      <CardTitle note={model ? `last: ${model}` : 'OpenRouter · NVIDIA'}>
+      <CardTitle note={model ? `last: ${model}` : 'MiniMax · NVIDIA · OpenRouter'}>
         Behaviour analysis, read by an LLM
       </CardTitle>
       <p className="mt-2 text-xs leading-relaxed text-ink/45">
@@ -445,9 +412,14 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
         Never content — there is none.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <select value={provider} onChange={(e) => setProvider(e.target.value as 'openrouter' | 'nvidia')} className="rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none">
-          <option value="openrouter">OpenRouter</option>
+        <select
+          value={provider}
+          onChange={(e) => setProvider(e.target.value as 'minimax' | 'nvidia' | 'openrouter')}
+          className="rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none"
+        >
+          <option value="minimax">MiniMax</option>
           <option value="nvidia">NVIDIA NIM</option>
+          <option value="openrouter">OpenRouter</option>
         </select>
         <input
           value={apiKey}
@@ -635,6 +607,7 @@ function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
 
 function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   const [networks, setNetworks] = useState<{ ssid: string; rssi: number; secure: boolean }[] | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [status, setStatus] = useState<{ connected?: boolean; ssid?: string; rssi?: number; ip?: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [password, setPassword] = useState('');
@@ -644,7 +617,11 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   const refresh = async () => {
     try {
       const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
-      setNetworks(r.networks ?? null);
+      // Older servers stored a bare array; newer ones store {networks, error}.
+      const scan = r.scan ?? r;
+      const list = Array.isArray(scan) ? scan : (scan?.networks ?? null);
+      setNetworks(list);
+      setScanError(Array.isArray(scan) ? null : (scan?.error ?? null));
       setStatus(r.status ?? null);
     } catch {
       /* panel stays with what it has */
@@ -660,12 +637,16 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
     try {
       await postJSON(`/api/v1/household/${id}/sources/${sourceId}/actions`, { action, ...payload });
       if (action === 'wifi_scan') {
-        setNote('Scanning — the sensor reports back within ~10 s…');
-        for (let i = 0; i < 8; i++) {
+        setNote('Scanning — the USB relay types it to the sensor and waits for the list…');
+        // The scan is a serial round-trip: give it room, then report honestly.
+        for (let i = 0; i < 12; i++) {
           await new Promise((r) => setTimeout(r, 2000));
           const r = await fetch(`/api/v1/household/${id}/sources/${sourceId}/wifi`).then((x) => x.json());
-          if (r.networks) {
-            setNetworks(r.networks);
+          const scan = r.scan ?? r;
+          const list = Array.isArray(scan) ? scan : scan?.networks;
+          if (list) {
+            setNetworks(list);
+            setScanError(Array.isArray(scan) ? null : (scan?.error ?? null));
             setNote(null);
             break;
           }
@@ -711,6 +692,14 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         )}
       </div>
       {note && <p className="mt-2 text-xs text-ink/50">{note}</p>}
+      {scanError && (
+        <p className="mt-2 rounded-xl border border-[#b23a2f]/25 bg-[#f6dcd8]/50 px-3 py-2 text-xs leading-relaxed text-[#77231c]">
+          The scan came back empty — {scanError}. If the relay is not running, start it and try again.
+        </p>
+      )}
+      {networks && networks.length === 0 && !scanError && (
+        <p className="mt-2 text-xs text-ink/45">No networks found nearby.</p>
+      )}
       {networks && networks.length > 0 && (
         <ul className="mt-3 divide-y divide-ink/5">
           {networks

@@ -427,3 +427,95 @@ describe('fall detection', () => {
     expect(out.state.tier).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// GPS movement (on-device, coordinates never leave the phone)
+// ---------------------------------------------------------------------------
+
+describe('gps movement', () => {
+  const gps = (ts: number, distanceM: number, speedKmh: number): Signal => ({
+    sourceId: 'phone',
+    type: 'gps_motion',
+    value: 1,
+    ts,
+    meta: { distanceM, speedKmh, moving: speedKmh > 1, accuracyM: 12 },
+  });
+
+  it('recent travel softens the absence signals and explains the quiet house', () => {
+    const now = dayAt(0, 15);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      // today she went out: no movement since the morning
+      ...dayOfSignals(0, { motionUntilHour: 8.5, signalsEndHour: 9 }),
+      { sourceId: 'phone', type: 'screen_event', value: 'unlock', ts: dayAt(0, 7.1) },
+      gps(now - 40 * MIN, 2400, 11),
+    ];
+    const r = risk(signals, now);
+    const explanation = r.contributions.find((c) => c.signal === 'gps_motion');
+    expect(explanation).toBeDefined();
+    expect(explanation!.reason).toContain('moved recently');
+    // Softened, never hidden: the movement contribution is still there.
+    const movement = r.contributions.find((c) => c.signal === 'motion');
+    expect(movement).toBeDefined();
+    expect(movement!.effect).toBeLessThan(28);
+  });
+
+  it('a still GPS with no accelerometer motion contributes on its own', () => {
+    const now = dayAt(0, 15);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      { sourceId: 'phone', type: 'screen_event', value: 'unlock', ts: dayAt(0, 7.1) },
+      gps(dayAt(0, 7.2), 4, 0),
+    ];
+    const r = risk(signals, now);
+    const still = r.contributions.find((c) => c.signal === 'gps_motion' && c.effect > 0);
+    expect(still).toBeDefined();
+    expect(still!.reason).toContain('no movement');
+  });
+
+  it('a fresh GPS report adds a little confidence, never a score of its own', () => {
+    const now = dayAt(0, 15);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      ...dayOfSignals(0, { motionUntilHour: 14.8 }),
+      gps(now - 5 * MIN, 12, 0),
+    ];
+    const r = risk(signals, now);
+    expect(r.confidence).toBeGreaterThan(0.95);
+    expect(r.score!).toBeLessThan(35);
+  });
+
+  it('travel never overrides a fall', () => {
+    const now = dayAt(0, 11.5);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      ...dayOfSignals(0, { motionUntilHour: 11.3 }),
+      { sourceId: 'esp32', type: 'presence', value: 'fall', ts: now - 2 * MIN },
+      gps(now - 3 * MIN, 3000, 14),
+    ];
+    const r = risk(signals, now);
+    expect(r.contributions.some((c) => c.signal === 'presence' && c.effect === 100)).toBe(true);
+    expect(r.score).toBe(100);
+  });
+});
+
+describe('falls are never softened', () => {
+  it('being away does not dilute a fall the room sensor saw', () => {
+    const now = dayAt(0, 11.5);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      ...dayOfSignals(0, { motionUntilHour: 11.3 }),
+      { sourceId: 'esp32', type: 'presence', value: 'fall', ts: now - 2 * MIN },
+      // The phone says she is out — that explains other absences, not this.
+      { sourceId: 'phone', type: 'location_zone', value: 'away', ts: now - 20 * MIN },
+    ];
+    const r = risk(signals, now);
+    expect(r.contributions.some((c) => c.signal === 'presence' && c.effect === 100)).toBe(true);
+    expect(r.score).toBe(100);
+  });
+});

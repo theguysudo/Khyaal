@@ -8,6 +8,8 @@ import type {
   KhayaalUser,
   Signal,
   Source,
+  TalkbackChunk,
+  TalkbackSession,
 } from '@khayaal/shared';
 import { decrypt, encrypt } from './crypto-box';
 import { firebaseAccessToken } from './firebase-auth';
@@ -316,14 +318,30 @@ export class FirestoreStore implements Store {
       body: toDoc({ ...action, queuedTs: Date.now() }),
     });
   }
-  async drainDeviceActions(sourceId: string): Promise<DeviceAction[]> {
+  async drainDeviceActions(sourceId: string, via: 'lan' | 'usb'): Promise<DeviceAction[]> {
     const rows = await listDocs(`sources/${encodeURIComponent(sourceId)}/actions`, 50);
+    const mine: DeviceAction[] = [];
+    const mineIds: string[] = [];
+    for (const r of rows) {
+      const action = String(r.data.action);
+      if (!action) continue;
+      const channel = r.data.via === 'usb' ? 'usb' : 'lan';
+      if (channel !== via) continue; // the other poller owns this one
+      mine.push({
+        action: action as DeviceAction['action'],
+        ...(r.data.payload ? { payload: r.data.payload as Record<string, unknown> } : {}),
+        via: channel,
+      });
+      mineIds.push(r.id);
+    }
+    // Only this channel's actions are taken; the rest stay queued for the
+    // other poller.
     await Promise.all(
-      rows.map((r) => deleteDoc(`sources/${encodeURIComponent(sourceId)}/actions/${r.id}`).catch(() => undefined)),
+      mineIds.map((id) =>
+        deleteDoc(`sources/${encodeURIComponent(sourceId)}/actions/${id}`).catch(() => undefined),
+      ),
     );
-    return rows
-      .map((r) => ({ action: String(r.data.action) } as DeviceAction))
-      .filter((a) => a.action);
+    return mine;
   }
 
   async putDeviceScan(sourceId: string, networks: unknown): Promise<void> {
@@ -341,6 +359,59 @@ export class FirestoreStore implements Store {
     const doc = await getDoc<{ data: unknown; ts: number }>(`devicedata/${encodeURIComponent(sourceId)}-status`);
     if (!doc || Date.now() - doc.ts > 600_000) return null;
     return doc.data;
+  }
+
+  // -- Talkback ---------------------------------------------------------------
+
+  async createTalkbackSession(session: TalkbackSession): Promise<TalkbackSession> {
+    await setDoc(`${sub(session.householdId, 'talkbackSessions')}/${session.id}`, session);
+    return session;
+  }
+  async getTalkbackSession(householdId: string, sessionId: string): Promise<TalkbackSession | null> {
+    return getDoc<TalkbackSession>(`${sub(householdId, 'talkbackSessions')}/${sessionId}`);
+  }
+  async getLatestTalkbackSession(householdId: string): Promise<TalkbackSession | null> {
+    const rows = await listDocs(sub(householdId, 'talkbackSessions'), 50);
+    const sessions = rows
+      .map((r) => r.data as unknown as TalkbackSession)
+      .filter((s) => s && typeof s.createdTs === 'number')
+      .sort((a, b) => b.createdTs - a.createdTs);
+    return sessions[0] ?? null;
+  }
+  async updateTalkbackSession(
+    householdId: string,
+    sessionId: string,
+    patch: Partial<TalkbackSession>,
+  ): Promise<TalkbackSession | null> {
+    const path = `${sub(householdId, 'talkbackSessions')}/${sessionId}`;
+    const cur = await getDoc<TalkbackSession>(path);
+    if (!cur) return null;
+    const next = { ...cur, ...patch };
+    await setDoc(path, next);
+    return next;
+  }
+  async appendTalkbackChunk(
+    householdId: string,
+    sessionId: string,
+    chunk: Omit<TalkbackChunk, 'seq'>,
+  ): Promise<TalkbackChunk> {
+    const base = `${sub(householdId, 'talkbackChunks')}/${sessionId}`;
+    const rows = await listDocs(base, 400);
+    const seq = rows.reduce((max, r) => Math.max(max, Number(r.data.seq ?? 0)), 0) + 1;
+    const next = { ...chunk, seq };
+    await setDoc(`${base}/${seq}`, next);
+    return next;
+  }
+  async getTalkbackChunks(
+    householdId: string,
+    sessionId: string,
+    afterSeq: number,
+  ): Promise<TalkbackChunk[]> {
+    const rows = await listDocs(`${sub(householdId, 'talkbackChunks')}/${sessionId}`, 400);
+    return rows
+      .map((r) => r.data as unknown as TalkbackChunk)
+      .filter((c) => c && typeof c.seq === 'number' && c.seq > afterSeq)
+      .sort((a, b) => a.seq - b.seq);
   }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {

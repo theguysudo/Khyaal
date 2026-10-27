@@ -19,12 +19,21 @@ export async function GET(
   const src = await getStore().findSource(id, sourceId);
   if (!src || src.type !== 'esp32') return unauthorized();
 
-  const [networks, status] = await Promise.all([
+  const [raw, status] = await Promise.all([
     getStore().getDeviceScan(sourceId),
     getStore().getDeviceStatus(sourceId),
   ]);
+
+  // One shape, always: the scan is an object with the list, the count and the
+  // reason it might be empty. Older rows stored a bare array, so that is
+  // normalised up to the same shape — the dashboard only ever has to read
+  // `scan.networks` and `scan.error`.
+  const scan = Array.isArray(raw)
+    ? { networks: raw, count: raw.length, error: null }
+    : ((raw as { networks?: unknown[]; count?: number; error?: string | null } | null) ?? null);
+
   return NextResponse.json(
-    { networks, status },
+    { scan, networks: scan?.networks ?? null, status },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

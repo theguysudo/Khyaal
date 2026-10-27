@@ -8,6 +8,22 @@ export const dynamic = 'force-dynamic';
 const ACTIONS = new Set(['falltest', 'recheck', 'wifi_scan', 'wifi_connect', 'wififorget']);
 
 /**
+ * Which transport can actually run each action.
+ *
+ *  - 'wifi_*' must go over the USB relay: the board can only scan, join and
+ *    forget networks through its serial CLI, and it may not even be online.
+ *  - 'falltest' works over both, so it is queued on both channels. Whichever
+ *    poller gets there first fires it; a repeat is harmless (the engine
+ *    recomputes, it does not count).
+ */
+function channelsFor(action: DeviceAction['action']): ('lan' | 'usb')[] {
+  if (action === 'wifi_scan' || action === 'wifi_connect' || action === 'wififorget') {
+    return ['usb'];
+  }
+  return ['lan', 'usb'];
+}
+
+/**
  * POST /api/v1/household/{id}/sources/{sourceId}/actions { action, ... }
  * Family-only dashboard control of a paired sensor. The Mac-side bridge
  * relays actions over the sensor's USB link (so Wi-Fi management works even
@@ -51,7 +67,14 @@ export async function POST(
     payload = { ssid, password };
   }
 
-  await getStore().queueDeviceAction(id, sourceId, { action, ...(payload ? { payload } : {}) });
+  const channels = channelsFor(action);
+  for (const via of channels) {
+    await getStore().queueDeviceAction(id, sourceId, {
+      action,
+      ...(payload ? { payload } : {}),
+      via,
+    });
+  }
   await getStore().appendEvent(id, {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
     ts: Date.now() + (await getStore().getHousehold(id))!.simTimeOffsetMs,
@@ -65,7 +88,8 @@ export async function POST(
   return NextResponse.json({
     ok: true,
     action,
-    note: action.startsWith('wifi') || action === 'wififorget'
+    via: channels,
+    note: channels.includes('usb')
       ? 'The USB relay runs this within ~3 s.'
       : 'The sensor fires on its next poll (~5 s).',
   });

@@ -19,6 +19,7 @@ const EMAIL = 'hello@khayaal.care';
 const NAV_LINKS = [
   { label: 'How it works', href: '/#how' },
   { label: 'Signals', href: '/#signals' },
+  { label: 'Docs', href: '/#docs' },
   { label: 'Demo', href: '/demo' },
   { label: 'Privacy', href: '/#promise' },
 ];
