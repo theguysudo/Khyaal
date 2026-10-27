@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createHousehold, ensureDemoHousehold, makePairingCode } from '@/lib/server/runtime';
+import { createHousehold, ensureDemoHousehold } from '@/lib/server/runtime';
 import { getStore } from '@/lib/server/store';
 import { demoCookieHeader, sessionFromRequest } from '@/lib/server/session';
 import { rateLimit } from '@/lib/server/rate-limit';
@@ -50,10 +50,10 @@ export async function POST(req: Request) {
     const code = String(body.code ?? '').trim();
     const hh = await store.getHouseholdByPairingCode(code);
     if (!hh) return NextResponse.json({ error: 'No household with that code' }, { status: 404 });
-    // Parent devices re-key on every pairing for hygiene.
-    const newCode = makePairingCode();
-    await store.updateHousehold(hh.id, { pairingCode: newCode });
-    return NextResponse.json({ household: { ...hh, pairingCode: newCode } });
+    // No rotation here: the phone joins and then mints its source with the
+    // same code, and several devices may pair from one printed code. Rotation
+    // is explicit — the dashboard's Sources card can regenerate the code.
+    return NextResponse.json({ household: hh });
   }
 
   if (action === 'demo') {

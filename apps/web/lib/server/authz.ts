@@ -114,12 +114,7 @@ export async function requireSourceCreator(
 
   if (pairingCode) {
     const ok = keysMatch(household.pairingCode, pairingCode);
-    if (ok) {
-      // One pairing, one key mint: rotate immediately.
-      const { makePairingCode } = await import('@/lib/server/runtime');
-      await store.updateHousehold(householdId, { pairingCode: makePairingCode() });
-      return household;
-    }
+    if (ok) return household;
   }
   return unauthorized();
 }

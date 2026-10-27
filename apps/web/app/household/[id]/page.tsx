@@ -771,10 +771,12 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
   const [error, setError] = useState<string | null>(null);
   const [testedSrc, setTestedSrc] = useState<string | null>(null);
   const [wifiOpenFor, setWifiOpenFor] = useState<string | null>(null);
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/server-info').then((r) => r.json()).then((i) => setHost(i.lanBaseUrl ?? 'http://localhost:3100')).catch(() => {});
-  }, []);
+    fetch(`/api/v1/household/${id}/pairing-code`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setPairingCode(d.pairingCode)).catch(() => {});
+  }, [id]);
 
   if (!bundle) return null;
   const addSensor = async () => {
@@ -817,6 +819,27 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
   return (
     <BentoCard label="Sources" className="col-span-12">
       <CardTitle note="never a feed, never a map">The watchers</CardTitle>
+      {pairingCode && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-ink/10 bg-white px-4 py-3 text-sm">
+          <span className="text-ink/60">
+            Pairing code for a new phone or sensor:
+            <span className="ml-2 font-mono text-lg tracking-[0.2em] text-clay">{pairingCode}</span>
+          </span>
+          <button
+            onClick={async () => {
+              try {
+                const d = await postJSON<{ pairingCode: string }>(`/api/v1/household/${id}/pairing-code`, {});
+                setPairingCode(d.pairingCode);
+              } catch {
+                /* keep showing the old one */
+              }
+            }}
+            className="ml-auto rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper"
+          >
+            regenerate
+          </button>
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {bundle.sources.map((s) => {
           const fresh = s.lastSeenTs && bundle.simNowTs - s.lastSeenTs < 30 * 60_000;
