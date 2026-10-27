@@ -150,9 +150,11 @@ export async function createHousehold(input: CreateHouseholdInput): Promise<Hous
     },
     escalationConfig: { nudgeAfterMin: 10, checkInAfterMin: 10, alertAfterMin: 15 },
     simTimeOffsetMs: 0,
-    // A real household earns its baseline over ~2 days; the onboarding form
-    // seeds a prior, so scoring can start gently right away.
-    learningUntilTs: nowTs + 12 * HOUR,
+    // Demo-first: scoring is instant. The declared onboarding prior is treated
+    // as an earned week, so confidence is full and reasons read naturally from
+    // the first request. The engine's learning-window logic remains — flip
+    // learningUntilTs forward (or PATCH learningHours) to re-enable it.
+    learningUntilTs: nowTs - MIN,
     createdAtTs: nowTs,
     ownerSubs: input.ownerSub ? [input.ownerSub] : [],
   };
@@ -162,17 +164,51 @@ export async function createHousehold(input: CreateHouseholdInput): Promise<Hous
     wakeHour: input.wakeHour ?? 7.25,
     chargingStartHour: input.chargeStartHour ?? 22.5,
     dailyMotionCount: 24,
-    sampleDays: 1,
+    sampleDays: 6,
     updatedAt: nowTs,
   });
-  await store.addSource(hh.id, {
+  const phone: Source = {
     id: `src_${randomId()}`,
     type: 'phone',
     label: `${hh.parentName}'s phone`,
     apiKey: `sk_${randomId()}${randomId()}`,
     createdAtTs: nowTs,
     lastSeenTs: null,
-  });
+  };
+  const esp: Source = {
+    id: `src_${randomId()}`,
+    type: 'esp32',
+    label: 'Room sensor (ESP32)',
+    apiKey: `sk_${randomId()}${randomId()}`,
+    createdAtTs: nowTs,
+    lastSeenTs: null,
+  };
+  await store.addSource(hh.id, phone);
+  await store.addSource(hh.id, esp);
+
+  // Seed one believable yesterday plus this morning from the declared prior,
+  // so the very first tick has history to score against (confidence 1.0).
+  const today = dayStartOf(nowTs);
+  const nowHour = (nowTs - today) / HOUR;
+  const wake = input.wakeHour ?? 7.25;
+  const history: Signal[] = [
+    ...ordinaryDay(today - 24 * HOUR, phone.id, esp.id, {
+      wakeHour: wake - 0.15,
+      motionUntilHour: 21.5,
+      chargeTonight: true,
+    }),
+  ];
+  if (nowHour > wake + 0.75) {
+    history.push(
+      ...ordinaryDay(today, phone.id, esp.id, {
+        wakeHour: wake + 0.05,
+        motionUntilHour: Math.max(wake + 1, nowHour - 0.2),
+        chargeTonight: false,
+        stopHour: Math.min(nowHour - 0.15, 24),
+      }),
+    );
+  }
+  for (const s of history) await store.appendSignal(hh.id, s);
   return hh;
 }
 

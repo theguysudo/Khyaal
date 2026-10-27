@@ -148,7 +148,8 @@ export default function OnboardingPage() {
                 {created.parentName} is being looked after.
               </h1>
               <p className="mt-3 text-[15px] text-ink/60">
-                For the first hours Khayaal only listens and learns — no scores, no alerts, no noise.
+                Scoring starts right away — Khayaal seeds her rhythm from what you
+                told us and keeps learning from every ordinary day.
               </p>
 
               <div className="mx-auto mt-8 max-w-sm rounded-3xl border border-ink/10 bg-white p-7 shadow-[0_2px_20px_rgba(42,36,29,0.05)]">

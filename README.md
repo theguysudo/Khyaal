@@ -79,9 +79,11 @@ unit-tested. The rule-based v1:
 - **Quiet hours** hold the ladder at a nudge unless the score is ≥ 85.
 - **Missing data degrades confidence** (0.4–1.0) and never raises the score
   by itself; low confidence caps the reachable tier.
-- **Learning window:** a new household scores nothing until
-  `learningUntilTs`; the baseline (wake time, charge start, activity level)
-  is learned from robust medians over a 7-day sliding window.
+- **Learning window:** the engine supports a deliberate no-scoring window
+  (`learningUntilTs`), and the baseline (wake time, charge start, activity
+  level) is learned from robust medians over a 7-day sliding window. For the
+  short demo window, new households and demo scenarios seed the baseline
+  instantly — scoring starts on the first request.
 
 `advanceState()` is a pure function — same signals, same state out. That is
 what makes transitions idempotent under 1.5 s polling from any number of
