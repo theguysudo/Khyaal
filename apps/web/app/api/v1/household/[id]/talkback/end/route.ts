@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { householdAccess, unauthorized } from '@/lib/server/authz';
+import { randomId } from '@khayaal/engine';
+import { scopedAccess, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
@@ -12,8 +13,8 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await householdAccess(req, id);
-  if (access.level === 'none') return unauthorized();
+  const access = await scopedAccess(req, id, 'talkback');
+  if (access instanceof Response) return access;
 
   let body: { sessionId?: string } = {};
   try {
@@ -36,11 +37,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       endedTs: Date.now(),
     });
     await store.appendEvent(id, {
-      id: `evt_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      id: `evt_${Date.now().toString(36)}-${randomId()}`,
       ts: Date.now(),
       type: 'note',
       meta: 'The talkback ended.',
     });
   }
+  // The audio dies with the conversation: the stored slices are deleted,
+  // not merely hidden from readers.
+  await store.deleteTalkbackChunks(id, sessionId);
   return NextResponse.json({ ok: true });
 }

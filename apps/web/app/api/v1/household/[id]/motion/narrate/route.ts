@@ -5,6 +5,7 @@ import { simNow } from '@/lib/server/runtime';
 import { anchorLevels, defaultBlueprint, deriveCsiEvents } from '@khayaal/engine';
 import { chat, parseProvider } from '@/lib/server/llm';
 import { rateLimit } from '@/lib/server/rate-limit';
+import { UNTRUSTED_RULE, promptTurn, untrustedText } from '@/lib/server/untrusted';
 
 /**
  * POST /api/v1/household/{id}/motion/narrate — the model reads the room.
@@ -61,15 +62,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
   }
 
+  const recent = events.slice(-30);
   const summary = {
     windowMinutes: 15,
-    events: events.slice(-30).map((e) => ({
+    events: recent.map((e) => ({
       at: new Date(e.ts).toISOString().slice(11, 19),
       kind: e.kind,
-      where: e.label,
     })),
-    sensorsNow: levels,
+    sensorsNow: levels.map((l) => ({
+      level: l.level,
+      threshold: l.threshold,
+      lastMotionTs: l.lastMotionTs,
+    })),
   };
+
+  // The room labels come from the blueprint and the sensor's state string
+  // comes straight off the wire — both are text a device (or a room someone
+  // named) chose. They stay out of the server-computed block and ride in the
+  // untrusted one, where the prompt says to read them as data only (F-6).
+  // The indices keep each label tied to the numbers it belongs to.
+  const untrustedItems = [
+    ...recent.map((e, i) => `event[${i}] room label = ${untrustedText(e.label)}`),
+    ...levels.map(
+      (l, i) => `sensor[${i}] label = ${untrustedText(l.sensor)}, state = ${untrustedText(l.state)}`,
+    ),
+  ];
 
   const result = await chat(
     [
@@ -79,9 +96,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           'You are Khayaal, a calm family-care analyst. You are given a room sensor log: movement state changes and how strong each movement burst was. ' +
           'Describe in 2-4 short sentences what the room has been doing, in plain language a family understands. ' +
           'Distinguish brief pass-through movement from sustained activity, and say when the room went quiet. ' +
-          'Never speculate about identity or diagnose anything. If the log shows a fall, say plainly that the sensor flagged a fall pattern.',
+          'Never speculate about identity or diagnose anything. If the log shows a fall, say plainly that the sensor flagged a fall pattern. ' +
+          UNTRUSTED_RULE,
       },
-      { role: 'user', content: JSON.stringify(summary) },
+      { role: 'user', content: promptTurn(summary, untrustedItems) },
     ],
     {
       provider: parseProvider(body.provider),

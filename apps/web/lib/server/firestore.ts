@@ -428,6 +428,15 @@ export class FirestoreStore implements Store {
       .filter((c) => c && typeof c.seq === 'number' && c.seq > afterSeq)
       .sort((a, b) => a.seq - b.seq);
   }
+  async deleteTalkbackChunks(householdId: string, sessionId: string): Promise<void> {
+    // Audio is transient: when the session ends the slices are deleted, not
+    // just hidden from readers.
+    const base = `${sub(householdId, 'talkbackChunks')}/${sessionId}`;
+    const rows = await listDocs(base, 400);
+    await Promise.all(
+      rows.map((r) => deleteDoc(`${base}/${r.id}`).catch(() => undefined)),
+    );
+  }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {
     const res = await call(`documents/${sub(householdId, 'signals')}`, {

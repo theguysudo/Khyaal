@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { randomId } from '@khayaal/engine';
 import { requireFamily, requireSourceCreator, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
+import { makePairingCode } from '@/lib/server/runtime';
 
 /**
  * Sources — the devices that speak /api/v1/ingest.
@@ -42,6 +43,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     lastSeenTs: null,
   };
   await store.addSource(id, source);
+  // One mint, one code: the printed/visible code cannot mint keys forever.
+  // The family taps regenerate for the next device — the fresh code is on
+  // the card the moment they need it. The replacement comes from the
+  // CSPRNG (crypto.randomInt), never from a modulo of getRandomValues and
+  // never from Math.random().
+  await store.updateHousehold(id, {
+    pairingCode: makePairingCode(),
+  });
   return NextResponse.json(source); // includes apiKey — shown once
 }
 

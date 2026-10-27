@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sessionFromRequest } from '@/lib/server/session';
+import { rateLimit } from '@/lib/server/rate-limit';
 import { claimHouseholdByCode } from '@/lib/server/runtime';
 
 /**
@@ -10,6 +11,13 @@ import { claimHouseholdByCode } from '@/lib/server/runtime';
 export async function POST(req: Request) {
   const session = sessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Sign in with Google first' }, { status: 401 });
+  // The code space is six digits: unthrottled, it falls to brute force in
+  // under half an hour. Five guesses a minute per account (and per IP) puts
+  // a full sweep out of reach.
+  if (!rateLimit(`claim:${session.sub}`, 5, 60_000) ||
+      !rateLimit(`claim-ip:${req.headers.get('x-forwarded-for') ?? 'local'}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many attempts — try again in a minute' }, { status: 429 });
+  }
   let code = '';
   try {
     const body = await req.json();

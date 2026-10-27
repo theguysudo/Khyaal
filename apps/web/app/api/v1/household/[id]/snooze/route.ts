@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { snooze } from '@/lib/server/runtime';
-import { requireHouseholdMember, unauthorized } from '@/lib/server/authz';
+import { requireScoped, unauthorized } from '@/lib/server/authz';
 
-/** POST /api/v1/household/{id}/snooze { minutes } */
+/**
+ * POST /api/v1/household/{id}/snooze { minutes }
+ *
+ * Silencing the alert ladder is a family decision. A room sensor may not
+ * make it.
+ */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const guard = await requireHouseholdMember(req, id);
+  const guard = await requireScoped(req, id, 'snooze');
   if (guard instanceof Response) return guard;
   let minutes = 60;
   try {

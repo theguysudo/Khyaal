@@ -64,6 +64,9 @@ export async function currentSession(householdId: string): Promise<TalkbackSessi
       state: 'ended',
       endedTs: Date.now(),
     });
+    // Nobody answered, so nobody spoke — but drop the slices anyway: the
+    // session is over and its audio must not outlive it.
+    await getStore().deleteTalkbackChunks(householdId, session.id);
     return null;
   }
   return session;
@@ -72,6 +75,16 @@ export async function currentSession(householdId: string): Promise<TalkbackSessi
 export function isBase64(value: string): boolean {
   if (!value || value.length % 4 !== 0) return false;
   return /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+}
+
+/**
+ * Audio belongs to a live conversation. Once a session has ended (or was
+ * declined), its chunks are dead data — the store keeps them until retention
+ * clears them, but no reader may have them again.
+ */
+export function readAliveChunks(chunks: TalkbackChunk[], session: TalkbackSession) {
+  if (session.state === 'ended' || session.state === 'declined') return [];
+  return chunks;
 }
 
 /** The public shape of a chunk on the wire. */

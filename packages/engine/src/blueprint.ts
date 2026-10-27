@@ -143,9 +143,22 @@ export function deriveCsiEvents(
 // Blueprint shape
 // ---------------------------------------------------------------------------
 
+/**
+ * A short, unpredictable suffix for a room that has no usable name. The
+ * room id ends up in the blueprint the family shares and in the anchors the
+ * dashboard draws, so it is a credential-adjacent identifier: it must come
+ * from a CSPRNG, not `Math.random()`. `globalThis.crypto` works in the
+ * browser bundle and on Node 18+.
+ */
+function randomSuffix(): string {
+  const bytes = new Uint8Array(4);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export function makeRoomId(name: string): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return slug ? `room_${slug}` : `room_${Math.random().toString(36).slice(2, 8)}`;
+  return slug ? `room_${slug}` : `room_${randomSuffix()}`;
 }
 
 /**

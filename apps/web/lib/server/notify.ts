@@ -136,8 +136,10 @@ async function sendEmail(hh: Household, title: string, body: string): Promise<vo
 /** Fire the full tier-3 dispatch. Never throws. */
 export async function dispatchTierAlert(hh: Household, reason: string): Promise<void> {
   const title = `${hh.parentName} needs attention`;
-  const body = `${reason} Last-known signals are on the dashboard. Care circle: ${
-    (hh.careCircle ?? []).map((m) => m.name).join(', ') || 'none yet'
-  }.`;
+  // The push body lands on every registered device token — and a device can
+  // register its own token. It must carry no care-circle details: no names,
+  // no email addresses, no phone numbers. A push is a screen, not a private
+  // message. (The email to the care circle goes through the same body.)
+  const body = `${reason} Last-known signals are on the dashboard.`;
   await Promise.allSettled([sendFcm(hh, title, body), sendWebPush(hh, title, body), sendEmail(hh, title, body)]);
 }

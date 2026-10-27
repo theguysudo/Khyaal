@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { householdAccess, unauthorized } from '@/lib/server/authz';
+import { scopedAccess } from '@/lib/server/authz';
 import { currentSession, callerRole } from '@/lib/server/talkback';
 
 export const dynamic = 'force-dynamic';
@@ -15,12 +15,12 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await householdAccess(req, id);
-  if (access.level === 'none') return unauthorized();
+  const access = await scopedAccess(req, id, 'talkback');
+  if (access instanceof Response) return access;
 
   const session = await currentSession(id);
   return NextResponse.json(
-    { session, role: callerRole(access.level) },
+    { session, role: callerRole(access.level === 'family' ? 'family' : 'device') },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

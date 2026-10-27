@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { householdAccess } from '@/lib/server/authz';
+import { requireDeviceControl } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
 
@@ -15,7 +15,11 @@ export const dynamic = 'force-dynamic';
  * Auth: the sensor's own credentials (x-kh-household / x-kh-source / x-kh-key).
  */
 export async function POST(req: Request) {
-  if (!rateLimit(`devwifi:${req.headers.get('x-forwarded-for') ?? 'local'}`, 60, 60_000)) {
+  if (
+    !rateLimit(`devwifi:${req.headers.get('x-forwarded-for') ?? 'local'}`, 60, 60_000, {
+      globalMultiplier: 8,
+    })
+  ) {
     return NextResponse.json({ error: 'Slow down' }, { status: 429 });
   }
   const householdId = req.headers.get('x-kh-household');
@@ -23,8 +27,8 @@ export async function POST(req: Request) {
   if (!householdId || !sourceId) {
     return NextResponse.json({ error: 'Device credentials required' }, { status: 401 });
   }
-  const access = await householdAccess(req, householdId);
-  if (access.level === 'none') return NextResponse.json({ error: 'Unknown source' }, { status: 403 });
+  const source = await requireDeviceControl(req, householdId);
+  if (source instanceof Response) return source;
 
   let body: { kind?: string; networks?: unknown; status?: unknown; count?: number; error?: string };
   try {

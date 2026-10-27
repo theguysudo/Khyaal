@@ -103,6 +103,14 @@ export interface Store {
     sessionId: string,
     afterSeq: number,
   ): Promise<TalkbackChunk[]>;
+  /**
+   * Drops every stored audio slice of a session.
+   *
+   * Audio is transient: when a conversation ends (or is declined) the slices
+   * are deleted, not merely hidden from readers. Retention keeps them out of
+   * memory for the rest of the session's life.
+   */
+  deleteTalkbackChunks(householdId: string, sessionId: string): Promise<void>;
 
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
@@ -376,13 +384,21 @@ export class MemoryStore implements Store {
     const list = db().talkbackChunks.get(sessionId) ?? [];
     return list.filter((c) => c.seq > afterSeq);
   }
+  async deleteTalkbackChunks(householdId: string, sessionId: string): Promise<void> {
+    // The session is the authority on who owns the audio: a session id from
+    // another household must not be able to delete anything here.
+    const session = db().talkbackSessions.get(sessionId);
+    if (!session || session.householdId !== householdId) return;
+    db().talkbackChunks.delete(sessionId);
+  }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {
     const list = db().signals.get(householdId) ?? [];
     // AES-256-GCM at rest — the heap only ever holds ciphertext envelopes.
     list.push(encrypt(JSON.stringify(signal)));
-    // Retain ~7 days.
-    const cutoff = signal.ts - 7 * 24 * 3600_000;
+    // Retain ~7 days, measured from SERVER time — never from a timestamp a
+    // device could have stamped far into the future.
+    const cutoff = Date.now() - 7 * 24 * 3600_000;
     db().signals.set(
       householdId,
       list

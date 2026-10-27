@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { randomId } from '@khayaal/engine';
 import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
+import { makePairingCode } from '@/lib/server/runtime';
 
 /**
  * POST /api/v1/relay/pair { pairingCode } — bootstrap the USB relay into a
@@ -48,9 +49,10 @@ export async function POST(req: Request) {
     lastSeenTs: null,
   };
   await store.addSource(household.id, source);
-  // One code, one use — same rotation rule as every other source mint.
+  // One code, one use — same rotation rule as every other source mint. The
+  // replacement code comes from the CSPRNG, never from Math.random().
   await store.updateHousehold(household.id, {
-    pairingCode: String(Math.floor(100000 + Math.random() * 900000)),
+    pairingCode: makePairingCode(),
   });
 
   return NextResponse.json({

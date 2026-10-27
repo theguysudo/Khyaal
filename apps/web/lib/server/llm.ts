@@ -74,6 +74,23 @@ const DEFAULT_MODELS: Record<LlmProvider, string[]> = {
   xai: ['grok-4-latest', 'grok-3-mini'],
 };
 
+/**
+ * The model ids a caller is allowed to ask for.
+ *
+ * The catalogue is a closed list: a request used to forward its `model`
+ * parameter verbatim to the provider, so any caller could name an expensive
+ * model and bill it against the operator's key. Anything outside this list
+ * is ignored and the provider's own defaults are used instead.
+ */
+export const ALLOWED_MODELS: readonly string[] = [
+  ...new Set(Object.values(DEFAULT_MODELS).flat()),
+];
+
+/** True when the caller named a model the catalogue knows. */
+export function isAllowedModel(model: unknown): model is string {
+  return typeof model === 'string' && ALLOWED_MODELS.includes(model.trim());
+}
+
 interface ProviderSpec {
   baseUrl: string;
   envKey: string;
@@ -166,7 +183,9 @@ async function callProvider(
   const key = providerKey(provider, useRequestKey ? opts.apiKey : undefined);
   if (!key) return { result: null };
 
-  const requestedModel = opts.model && opts.model.trim();
+  // A caller may only pick from the known catalogue — an arbitrary model id
+  // would be billed against the operator's key.
+  const requestedModel = opts.model && isAllowedModel(opts.model) ? opts.model.trim() : '';
   const models = requestedModel ? [requestedModel] : DEFAULT_MODELS[provider];
   const headers: Record<string, string> = {
     [spec.headerName]: `${spec.headerPrefix}${key}`,

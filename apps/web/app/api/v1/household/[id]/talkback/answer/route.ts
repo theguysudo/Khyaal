@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { householdAccess, unauthorized } from '@/lib/server/authz';
+import { randomId } from '@khayaal/engine';
+import { scopedAccess, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
 import { callerRole, currentSession } from '@/lib/server/talkback';
@@ -17,9 +18,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Slow down' }, { status: 429 });
   }
   const { id } = await params;
-  const access = await householdAccess(req, id);
-  if (access.level === 'none') return unauthorized();
-  const role = callerRole(access.level);
+  const access = await scopedAccess(req, id, 'talkback');
+  if (access instanceof Response) return access;
+  const role = callerRole(access.level === 'family' ? 'family' : 'device');
 
   let body: { sessionId?: string; allow?: boolean };
   try {
@@ -48,8 +49,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     answeredTs: Date.now(),
   });
 
+  // A declined conversation never had a reason to keep any audio: drop what
+  // is there.
+  if (!allow) await getStore().deleteTalkbackChunks(id, sessionId);
+
   await getStore().appendEvent(id, {
-    id: `evt_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    id: `evt_${Date.now().toString(36)}-${randomId()}`,
     ts: Date.now(),
     type: 'note',
     meta: allow

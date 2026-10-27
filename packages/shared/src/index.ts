@@ -379,6 +379,34 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
 /** Longest numeric vector allowed in a signal's detail bag. */
 export const MAX_META_VECTOR = 32;
 
+/**
+ * Longest string a signal's `value` may be.
+ *
+ * Every legitimate value is a short enum — 'motion', 'idle', 'home', 'away',
+ * 'unlock', 'asleep', 'quiet', 'ok' — and the same 64-character bound the
+ * detail bag uses. A long value is a memory weapon (F-7) and a
+ * prompt-injection surface (F-6), never telemetry.
+ */
+export const MAX_SIGNAL_VALUE_CHARS = 64;
+
+/**
+ * The one explicit exemption.
+ *
+ * `app_usage` carries the name of the app that was opened, and the Android
+ * app reports the full package name (the platform allows up to 255
+ * characters). It is still bounded, and still far too short to be a payload.
+ */
+export const MAX_APP_USAGE_VALUE_CHARS = 128;
+
+const VALUE_CHAR_LIMITS: Partial<Record<SignalType, number>> = {
+  app_usage: MAX_APP_USAGE_VALUE_CHARS,
+};
+
+/** The string-length ceiling for this signal type's value. */
+export function maxSignalValueChars(type: SignalType): number {
+  return VALUE_CHAR_LIMITS[type] ?? MAX_SIGNAL_VALUE_CHARS;
+}
+
 export function isSignalType(v: unknown): v is SignalType {
   return typeof v === 'string' && (SIGNAL_TYPES as readonly string[]).includes(v);
 }
@@ -426,8 +454,19 @@ export function parseIngest(body: unknown): Signal | null {
   if (typeof b.sourceId !== 'string' || !b.sourceId) return null;
   if (!isSignalType(b.type)) return null;
   if (!isSignalValue(b.value)) return null;
-  const ts = typeof b.ts === 'number' ? b.ts : Date.now();
-  if (!Number.isFinite(ts)) return null;
+  // A device-stamped clock can be wrong or hostile: a timestamp days in the
+  // future would otherwise shove every real signal out of the retention
+  // window on arrival. Five minutes of slack covers honest clock skew.
+  const now = Date.now();
+  const ts = typeof b.ts === 'number' ? b.ts : now;
+  if (!Number.isFinite(ts) || ts > now + 5 * 60_000) return null;
+  // A two-megabyte string in a signal is a memory weapon, not telemetry,
+  // and a long one is also a prompt-injection surface. Every legitimate
+  // value is a short enum; app_usage (the Android package name) holds the
+  // one explicit, still-bounded exemption.
+  const value = typeof b.value === 'string'
+    ? b.value.slice(0, maxSignalValueChars(b.type))
+    : b.value;
   const meta = sanitizeSignalMeta(b.meta);
-  return { sourceId: b.sourceId, type: b.type, value: b.value, ts, ...(meta ? { meta } : {}) };
+  return { sourceId: b.sourceId, type: b.type, value, ts, ...(meta ? { meta } : {}) };
 }

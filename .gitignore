@@ -27,3 +27,12 @@ apps/web/public/khayaal-debug.apk
 .tools/
 
 apps/web/.session-secret
+apps/web/.crypto-key
+apps/web/.crypto-key.parity
+
+# stray archive copies of this repo — they duplicate the local secret files
+# (.session-secret, .crypto-key) and must never be committed
+untitled folder/
+
+# stray source copy of the brand icon, superseded by apps/web/public/favicon.ico
+favicon/

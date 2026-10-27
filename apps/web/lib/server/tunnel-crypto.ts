@@ -48,14 +48,40 @@ export function isEncryptedEnvelope(b: Record<string, unknown>): boolean {
 
 const seen = new Map<string, number>();
 
+/** Drops entries older than the replay window. */
+function pruneSeen(now: number): void {
+  for (const [k, ts] of seen) if (now - ts > REPLAY_TTL_MS) seen.delete(k);
+}
+
+/**
+ * Has this (source, iv) pair been used already?
+ *
+ * The check is deliberately separate from the recording: an envelope is only
+ * remembered once its GCM tag has verified. Recording before verification
+ * let an attacker flush the replay window with junk envelopes — and the old
+ * overflow behaviour (`seen.clear()`) wiped every genuine entry at once,
+ * after which a captured envelope could be replayed.
+ */
 function ivSeenBefore(sourceId: string, ivB64: string): boolean {
+  pruneSeen(Date.now());
+  return seen.has(`${sourceId}:${ivB64}`);
+}
+
+/**
+ * Remembers a (source, iv) pair that has just been decrypted successfully.
+ * When the window is full the OLDEST entries are evicted — never the whole
+ * map — so one busy household can never blind another's replay protection.
+ */
+function rememberIv(sourceId: string, ivB64: string): void {
   const key = `${sourceId}:${ivB64}`;
   const now = Date.now();
-  for (const [k, ts] of seen) if (now - ts > REPLAY_TTL_MS) seen.delete(k);
-  if (seen.has(key)) return true;
-  if (seen.size >= REPLAY_MAX) seen.clear();
+  seen.delete(key);
   seen.set(key, now);
-  return false;
+  while (seen.size > REPLAY_MAX) {
+    const oldest = seen.keys().next();
+    if (oldest.done) break;
+    seen.delete(oldest.value);
+  }
 }
 
 export interface TunnelDecryptResult {
@@ -107,6 +133,10 @@ export function decryptIngest(
     const plain = Buffer.concat([decipher.update(ct), decipher.final()]);
     const payload = JSON.parse(plain.toString('utf8'));
     if (payload === null || typeof payload !== 'object') return { ok: false, error: 'bad-envelope' };
+    // Only a verified envelope enters the replay window. Until now the pair
+    // was recorded before the tag was checked, which let junk envelopes
+    // flush the window and made a captured envelope replayable.
+    rememberIv(sourceId, ivB64);
     return { ok: true, payload: payload as Record<string, unknown> };
   } catch {
     return { ok: false, error: 'tampered' };

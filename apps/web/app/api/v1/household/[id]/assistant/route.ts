@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireHouseholdMember, unauthorized } from '@/lib/server/authz';
+import { requireScoped, unauthorized } from '@/lib/server/authz';
 import { rateLimit } from '@/lib/server/rate-limit';
-import { chat, companionSystemPrompt, PROVIDER_LABELS } from '@/lib/server/llm';
+import { chat, companionSystemPrompt, isAllowedModel, PROVIDER_LABELS } from '@/lib/server/llm';
 import type { LlmProvider } from '@khayaal/shared';
 
 const MAX_MESSAGE_CHARS = 2000;
@@ -26,7 +26,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Slow down' }, { status: 429 });
   }
   const { id } = await params;
-  const guard = await requireHouseholdMember(req, id);
+  // LLM budget is the operator's money: only a caller that may speak for
+  // the household gets to spend it. A room sensor may not.
+  const guard = await requireScoped(req, id, 'assistant');
   if (guard instanceof Response) return guard;
   const hh = guard;
 
@@ -65,7 +67,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     ],
     {
       provider,
-      model: typeof body.model === 'string' ? body.model : undefined,
+      // The caller may pick from the known catalogue only — an arbitrary
+      // model id would be billed against the operator's key.
+      model: isAllowedModel(body.model) ? body.model : undefined,
       apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
       maxTokens: 600,
       temperature: 0.7,

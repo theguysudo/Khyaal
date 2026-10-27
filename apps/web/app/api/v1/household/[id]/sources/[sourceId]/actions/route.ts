@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomId } from '@khayaal/engine';
 import type { DeviceAction } from '@khayaal/shared';
 import { requireFamily, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
@@ -76,7 +77,7 @@ export async function POST(
     });
   }
   await getStore().appendEvent(id, {
-    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    id: `${Date.now().toString(36)}-${randomId()}`,
     ts: Date.now() + (await getStore().getHousehold(id))!.simTimeOffsetMs,
     type: 'note',
     meta:

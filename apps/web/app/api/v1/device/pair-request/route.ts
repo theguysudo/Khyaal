@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { householdAccess } from '@/lib/server/authz';
+import { requireDeviceControl } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
 
@@ -25,10 +25,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Device credentials required' }, { status: 401 });
   }
 
-  const access = await householdAccess(req, householdId);
-  if (access.level === 'none') return NextResponse.json({ error: 'Unknown source' }, { status: 403 });
-  const source = await getStore().findSource(householdId, sourceId);
-  if (!source) return NextResponse.json({ error: 'Unknown source' }, { status: 403 });
+  const source = await requireDeviceControl(req, householdId);
+  if (source instanceof Response) return source;
 
   const request = await getStore().getSensorPairRequest(householdId);
   const FRESH_MS = 5 * 60_000;

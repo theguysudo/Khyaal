@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { householdAccess, unauthorized } from '@/lib/server/authz';
+import { scopedAccess } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
-import { MAX_LONG_POLL_MS, wireChunk } from '@/lib/server/talkback';
+import { MAX_LONG_POLL_MS, readAliveChunks, wireChunk } from '@/lib/server/talkback';
 import { decrypt } from '@/lib/server/crypto-box';
 
 export const dynamic = 'force-dynamic';
@@ -16,8 +16,8 @@ export const maxDuration = 30;
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const access = await householdAccess(req, id);
-  if (access.level === 'none') return unauthorized();
+  const access = await scopedAccess(req, id, 'talkback');
+  if (access instanceof Response) return access;
 
   const url = new URL(req.url);
   const after = Number(url.searchParams.get('after') ?? 0);
@@ -36,7 +36,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!session) {
       return NextResponse.json({ chunks: [], now: Date.now() });
     }
-    const chunks = await store.getTalkbackChunks(id, session.id, afterSeq);
+    const chunks = readAliveChunks(
+      await store.getTalkbackChunks(id, session.id, afterSeq),
+      session,
+    );
     if (chunks.length > 0) {
       return NextResponse.json(
         {

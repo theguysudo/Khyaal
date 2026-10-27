@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import type {
   AppCommand,
   Baseline,
@@ -174,6 +176,17 @@ function movementSummary(signals: Signal[], nowTs: number): MovementSummary {
 // ---------------------------------------------------------------------------
 
 /**
+ * The one refusal every ingest credential failure gets.
+ *
+ * The endpoint used to answer "Unknown source — pair this device first" for
+ * an unknown source id and "Bad source key" for a known one — the same
+ * request, two different answers, which turned /ingest into an oracle for
+ * enumerating source ids. One generic answer closes it, and it names both
+ * causes so the family still knows what to do.
+ */
+export const INGEST_FORBIDDEN = 'Unknown source or Bad source key — pair this device first';
+
+/**
  * Turns a `csi` signal into the reading the dashboard's scope draws.
  *
  * The batch arrives as two arrays in the signal's detail bag: `samples` is
@@ -220,8 +233,9 @@ export async function ingestSignal(
   if (!household) return { ok: false, error: 'Unknown household' };
 
   const source = await store.findSource(householdId, signal.sourceId);
-  if (!source) return { ok: false, error: 'Unknown source — pair this device first' };
-  if (apiKey && source.apiKey !== apiKey) return { ok: false, error: 'Bad source key' };
+  // One answer for every credential failure — see INGEST_FORBIDDEN.
+  if (!source) return { ok: false, error: INGEST_FORBIDDEN };
+  if (apiKey && source.apiKey !== apiKey) return { ok: false, error: INGEST_FORBIDDEN };
 
   // The CSI stream is a live scope, not a risk input: it goes to its own
   // series so a 1 Hz reading cannot crowd presence events out of the log.
@@ -251,8 +265,16 @@ export async function ingestSignal(
 // Pairing & household creation
 // ---------------------------------------------------------------------------
 
+/**
+ * The six-digit code a parent device types to join a household.
+ *
+ * `crypto.randomInt` is a CSPRNG with no modulo bias — the old
+ * `Math.random()` version was both predictable (V8's xorshift128+ state is
+ * recoverable from a few outputs) and, once the code space is brute-forceable,
+ * a family-takeover primitive.
+ */
 export function makePairingCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(crypto.randomInt(100000, 1_000_000));
 }
 
 export interface CreateHouseholdInput {

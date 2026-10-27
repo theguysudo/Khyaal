@@ -50,10 +50,11 @@ export async function POST(req: Request) {
     const code = String(body.code ?? '').trim();
     const hh = await store.getHouseholdByPairingCode(code);
     if (!hh) return NextResponse.json({ error: 'No household with that code' }, { status: 404 });
-    // No rotation here: the phone joins and then mints its source with the
-    // same code, and several devices may pair from one printed code. Rotation
-    // is explicit — the dashboard's Sources card can regenerate the code.
-    return NextResponse.json({ household: hh });
+    // One code may pair several devices, so rotation stays explicit (the
+    // Sources card regenerates; minting a source rotates it too). The
+    // response carries only what the pairing screen needs — never the whole
+    // household with its care-circle contacts and owner ids.
+    return NextResponse.json({ household: { id: hh.id, parentName: hh.parentName } });
   }
 
   if (action === 'demo') {

@@ -56,7 +56,14 @@ export function statusFor(state: HouseholdState, hh: Household, nowTs: number): 
 }
 
 export function randomId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  // CSPRNG via the platform Web Crypto (Node 18+ and every browser): these
+  // ids end up inside API keys and pairing identifiers, so predictability
+  // was a real finding, not a nitpick. `globalThis.crypto` is the one form
+  // that works in both places — this package is bundled into the browser
+  // dashboard as well as the server.
+  const bytes = new Uint8Array(12);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("");
 }
 
 /**

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { householdAccess, unauthorized } from '@/lib/server/authz';
+import { scopedAccess, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { encrypt } from '@/lib/server/crypto-box';
 import { rateLimit } from '@/lib/server/rate-limit';
@@ -15,13 +15,17 @@ export const dynamic = 'force-dynamic';
  * Reply: { ok: true, seq }
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!rateLimit(`talkbackchunk:${req.headers.get('x-forwarded-for') ?? 'local'}`, 240, 60_000)) {
+  if (
+    !rateLimit(`talkbackchunk:${req.headers.get('x-forwarded-for') ?? 'local'}`, 240, 60_000, {
+      globalMultiplier: 8,
+    })
+  ) {
     return NextResponse.json({ error: 'Slow down' }, { status: 429 });
   }
   const { id } = await params;
-  const access = await householdAccess(req, id);
-  if (access.level === 'none') return unauthorized();
-  const role = callerRole(access.level);
+  const access = await scopedAccess(req, id, 'talkback');
+  if (access instanceof Response) return access;
+  const role = callerRole(access.level === 'family' ? 'family' : 'device');
 
   let body: { sessionId?: string; mime?: string; data?: string };
   try {

@@ -5,6 +5,7 @@ import { getStore } from '@/lib/server/store';
 import { tickHousehold } from '@/lib/server/runtime';
 import { rateLimit } from '@/lib/server/rate-limit';
 import { chat } from '@/lib/server/llm';
+import { UNTRUSTED_RULE, promptTurn, untrustedText } from '@/lib/server/untrusted';
 
 /**
  * POST /api/v1/household/{id}/analysis — LLM behaviour analysis.
@@ -53,19 +54,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     tierChanges24h: events.filter((e) => e.type === 'tier_change').length,
     checkins24h: events.filter((e) => e.type === 'checkin').length,
     recurringReasons: countContributions(state.contributions),
-    nightEvents: sleepSound.map((s: Signal) => ({ type: s.type, value: String(s.value) })),
     hourlyActivity,
     lastActiveTs: state.lastActiveTs,
   };
+
+  // The night events carry a signal's value, and that value is a string the
+  // device chose. It does not go into the aggregates above: it rides in the
+  // untrusted block, where the prompt tells the model to read it as an
+  // observation and never as an instruction (F-6).
+  const untrustedItems = sleepSound.map(
+    (s: Signal) => `night event ${s.type} = ${untrustedText(s.value)}`,
+  );
 
   const result = await chat(
     [
       {
         role: 'system',
         content:
-          'You are Khayaal, a calm family-care analyst. You receive privacy-safe aggregates from a passive wellbeing monitor for an elderly parent. Identify behaviour patterns, gentle concerns, and 2-3 concrete recommendations. Never diagnose medical conditions; recommend a doctor for anything medical. Be warm, concrete, under 220 words. Use short paragraphs or bullets.',
+          'You are Khayaal, a calm family-care analyst. You receive privacy-safe aggregates from a passive wellbeing monitor for an elderly parent. Identify behaviour patterns, gentle concerns, and 2-3 concrete recommendations. Never diagnose medical conditions; recommend a doctor for anything medical. Be warm, concrete, under 220 words. Use short paragraphs or bullets. ' +
+          UNTRUSTED_RULE,
       },
-      { role: 'user', content: JSON.stringify(stats) },
+      { role: 'user', content: promptTurn(stats, untrustedItems) },
     ],
     {
       provider,

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { householdAccess, unauthorized } from '@/lib/server/authz';
+import { randomId } from '@khayaal/engine';
+import { scopedAccess } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
 import { callerRole, currentSession, makeTalkbackSession } from '@/lib/server/talkback';
@@ -19,8 +20,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Slow down' }, { status: 429 });
   }
   const { id } = await params;
-  const access = await householdAccess(req, id);
-  if (access.level === 'none') return unauthorized();
+  // Talkback opens a microphone on the other side: only a caller that may
+  // speak for the household gets to start one. A room sensor may not.
+  const access = await scopedAccess(req, id, 'talkback');
+  if (access instanceof Response) return access;
   const household = access.household!;
 
   let body: { direction?: string } = {};
@@ -30,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     /* default direction */
   }
   const direction = body.direction === 'to_family' ? 'to_family' : 'to_parent';
-  const role = callerRole(access.level);
+  const role = callerRole(access.level === 'family' ? 'family' : 'device');
 
   // One live conversation at a time. If a session is already running, that
   // one wins — asking again would stack popups on the other phone.
@@ -47,7 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const session = makeTalkbackSession(id, role, requesterName, direction);
   await getStore().createTalkbackSession(session);
   await getStore().appendEvent(id, {
-    id: `evt_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    id: `evt_${Date.now().toString(36)}-${randomId()}`,
     ts: Date.now(),
     type: 'note',
     meta:
