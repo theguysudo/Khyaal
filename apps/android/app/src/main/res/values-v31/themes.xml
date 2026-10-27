@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: the system splash paints the same night navy, so the
+         brand splash in Compose continues it without a visible seam. -->
+    <style name="Theme.Khayaal" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/khayaal_night</item>
+        <item name="android:statusBarColor">@color/khayaal_night</item>
+        <item name="android:navigationBarColor">@color/khayaal_night</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowSplashScreenBackground">@color/khayaal_night</item>
+    </style>
+</resources>

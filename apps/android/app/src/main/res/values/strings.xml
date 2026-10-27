@@ -159,6 +159,8 @@
     <!-- Talkback (the walkie-talkie) -->
     <string name="talkback_title">Talkback</string>
     <string name="talkback_idle">Press and hold the big button to talk. They have to allow it first.</string>
+    <string name="talkback_idle_state">Ready</string>
+    <string name="talkback_waiting">Waiting for them to allow the call</string>
     <string name="talkback_hold_to_talk">Hold to talk</string>
     <string name="talkback_talking">You are talking</string>
     <string name="talkback_listening">They are talking</string>
@@ -172,6 +174,30 @@
     <string name="talkback_incoming_privacy">Your microphone will stay off until you press Allow.</string>
     <string name="talkback_allow">Allow</string>
     <string name="talkback_not_now">Not now</string>
+
+    <!-- Permissions (one gentle step, right after pairing) -->
+    <string name="perm_mic_title">Talk to the family</string>
+    <string name="perm_mic_body">Khayaal uses the microphone only when you tap to talk — nothing is recorded. If you switch on night watch, it listens for loud sounds only, on this phone.</string>
+    <string name="perm_notifications_title">Gentle check-ins</string>
+    <string name="perm_notifications_body">So the family\'s gentle questions reach you, even when the phone is asleep in your bag.</string>
+    <string name="perm_location_title">Know where you stand</string>
+    <string name="perm_location_body">Khayaal notices whether you are home or out, and whether you are moving. A street address is never seen and never sent — only \"home\" or \"away\".</string>
+    <string name="perm_activity_title">Count the day\'s steps</string>
+    <string name="perm_activity_body">The phone counts your steps and walking on the device itself, so the family knows you are moving about.</string>
+    <string name="perm_call_title">Call in one tap</string>
+    <string name="perm_call_body">Lets Khayaal dial the family directly for you. Without it, the dialer simply opens and you press call yourself.</string>
+    <string name="perm_optional">Optional</string>
+    <string name="perm_allow">Allow</string>
+    <string name="perm_skip">Skip for now</string>
+    <string name="perm_not_now">Not now — continue without these</string>
+    <string name="perm_done_title">You\'re all set</string>
+    <string name="perm_done_body">You can change any of these later, any time, in the phone\'s settings. Khayaal will ask again, gently, if something needs it.</string>
+    <string name="perm_done_button">Open Khayaal</string>
+    <string name="perm_open_settings">Open settings</string>
+
+    <!-- Talkback permission states -->
+    <string name="talkback_mic_needed">Khayaal needs the microphone so the family can hear you. Nothing is recorded — your voice goes straight to them.</string>
+    <string name="talkback_mic_denied">The microphone is turned off for Khayaal. You can allow it in the phone\'s settings.</string>
 
     <!-- Segments -->
     <string name="segment_today">Today</string>
@@ -219,6 +245,9 @@
     <string name="movement_steps">%1$s steps today</string>
     <string name="movement_steps_unknown">Steps are not known yet today</string>
     <string name="movement_privacy">Khayaal never records where you go — only whether you are moving.</string>
+    <string name="movement_needs_permission">Allow location and Khayaal can tell the family you are home and moving about.</string>
+    <string name="movement_allow_location">Allow location</string>
+    <string name="movement_open_settings">Open settings</string>
 
     <!-- Night segment -->
     <string name="night_title">Night watch</string>

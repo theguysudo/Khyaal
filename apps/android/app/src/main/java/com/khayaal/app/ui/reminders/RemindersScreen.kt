@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.khayaal.app.R
 import com.khayaal.app.data.api.CommandDto
+import com.khayaal.app.ui.components.ScreenHeader
 import com.khayaal.app.ui.home.HomeTime
 import com.khayaal.app.ui.theme.Clay
 import com.khayaal.app.ui.theme.ClayDeep
@@ -58,20 +59,10 @@ fun RemindersScreen(
                 .padding(padding)
                 .padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.assistant_back_desc),
-                        tint = Ink.copy(alpha = 0.6f),
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.reminders_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Ink,
-                )
-            }
+            ScreenHeader(
+                title = stringResource(R.string.reminders_title),
+                onBack = onBack,
+            )
 
             Spacer(Modifier.padding(top = 12.dp))
 

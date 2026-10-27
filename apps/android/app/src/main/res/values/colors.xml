@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Khayaal design tokens — mirrors apps/web/tailwind.config.ts -->
-    <color name="khayaal_paper">#FAF6EF</color>
-    <color name="khayaal_ink">#2A241D</color>
-    <color name="khayaal_clay">#B95C38</color>
+    <!-- Khayaal design tokens — the dark-navy brand direction. -->
+    <color name="khayaal_night">#050514</color>
+    <color name="khayaal_ink">#F1F0FA</color>
+    <color name="khayaal_glow">#5B8DFF</color>
     <color name="ic_launcher_background">#FAF6EF</color>
 </resources>

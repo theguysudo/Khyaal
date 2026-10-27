@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.khayaal.app.R
 import com.khayaal.app.care.FamilyCall
+import com.khayaal.app.ui.components.ScreenHeader
 import com.khayaal.app.ui.theme.Clay
 import com.khayaal.app.ui.theme.ClayDeep
 import com.khayaal.app.ui.theme.Ink
@@ -72,7 +73,6 @@ fun AssistantScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val sendDescription = stringResource(R.string.assistant_send_desc)
-    val backDescription = stringResource(R.string.assistant_back_desc)
 
     LaunchedEffect(ui.messages.size) {
         if (ui.messages.isNotEmpty()) listState.animateScrollToItem(ui.messages.size - 1)
@@ -85,32 +85,12 @@ fun AssistantScreen(
                 .padding(padding)
                 .imePadding(),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = backDescription,
-                        tint = Ink.copy(alpha = 0.6f),
-                    )
-                }
-                Column {
-                    Text(
-                        text = stringResource(R.string.assistant_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Ink,
-                    )
-                    Text(
-                        text = stringResource(R.string.assistant_subtitle),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Ink.copy(alpha = 0.55f),
-                    )
-                }
-            }
+            ScreenHeader(
+                title = stringResource(R.string.assistant_title),
+                subtitle = stringResource(R.string.assistant_subtitle),
+                onBack = onBack,
+            )
+            Spacer(Modifier.height(4.dp))
 
             LazyColumn(
                 state = listState,
@@ -181,12 +161,14 @@ fun AssistantScreen(
                         .size(56.dp)
                         .semantics { contentDescription = sendDescription },
                     shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Clay),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Clay,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
             }

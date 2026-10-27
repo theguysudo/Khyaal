@@ -14,8 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.khayaal.app.R
 import com.khayaal.app.ui.components.CodeInput
-import com.khayaal.app.ui.theme.Clay
+import com.khayaal.app.ui.components.KhayaalButton
 import com.khayaal.app.ui.theme.ClayDeep
 import com.khayaal.app.ui.theme.Ink
 import com.khayaal.app.ui.theme.Paper
@@ -109,14 +107,12 @@ fun PairingScreen(
                 }
 
                 Spacer(Modifier.height(32.dp))
-                Button(
+                KhayaalButton(
                     onClick = viewModel::pair,
                     enabled = ui.code.length == 6 && !ui.pairing,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    minHeight = 58.dp,
                     shape = RoundedCornerShape(28.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Clay),
                 ) {
                     if (ui.pairing) {
                         CircularProgressIndicator(

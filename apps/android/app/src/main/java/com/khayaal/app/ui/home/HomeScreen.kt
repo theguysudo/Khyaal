@@ -61,12 +61,14 @@ import com.khayaal.app.R
 import com.khayaal.app.care.FamilyCall
 import com.khayaal.app.data.api.CommandDto
 import com.khayaal.app.sleep.SleepWatchManager
+import com.khayaal.app.ui.components.KhayaalButton
 import com.khayaal.app.ui.theme.Clay
 import com.khayaal.app.ui.theme.ClayDeep
 import com.khayaal.app.ui.theme.Ink
 import com.khayaal.app.ui.theme.Mist
 import com.khayaal.app.ui.theme.Paper
 import com.khayaal.app.ui.theme.Sage
+import com.khayaal.app.ui.theme.Tier3
 
 /**
  * Her daily view, in five plain sections: Today, Family, Health & Safety,
@@ -103,7 +105,6 @@ fun HomeScreen(
     }
 
     RequestCarePermissions()
-    RequestCallPhonePermission()
 
     // The location permission is asked for once, gently. The GPS listener is
     // a no-op until it is granted, so it is started again afterwards — and
@@ -116,6 +117,23 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         viewModel.refreshLocation()
         if (!hasLocationPermission(context)) {
+            locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+    }
+    // Movement without its grant is never a dead card: one tap re-asks, and
+    // if the system refuses to ask again the settings page opens instead.
+    val openAppSettings = {
+        context.startActivity(
+            android.content.Intent(
+                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", context.packageName, null),
+            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+    val requestLocation = {
+        if (hasLocationPermission(context)) {
+            viewModel.refreshLocation()
+        } else {
             locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
     }
@@ -163,7 +181,9 @@ fun HomeScreen(
                 )
                 IconButton(
                     onClick = { showSettings = true },
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Mist, RoundedCornerShape(16.dp)),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Settings,
@@ -214,7 +234,12 @@ fun HomeScreen(
                             onReminders = onReminders,
                         )
 
-                        HomeSegment.MOVEMENT -> MovementSection(ui = ui, locationAllowed = hasLocationPermission(context))
+                        HomeSegment.MOVEMENT -> MovementSection(
+                            ui = ui,
+                            locationAllowed = hasLocationPermission(context),
+                            onAllowLocation = requestLocation,
+                            onOpenSettings = openAppSettings,
+                        )
 
                         HomeSegment.NIGHT -> NightSection(
                             ui = ui,
@@ -351,14 +376,13 @@ private fun TodaySection(
 
     StaggeredIn(index = 3) {
         val okDescription = stringResource(R.string.a11y_im_ok_button)
-        Button(
+        KhayaalButton(
             onClick = onCheckIn,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 84.dp)
                 .semantics { contentDescription = okDescription },
+            minHeight = 84.dp,
             shape = RoundedCornerShape(28.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Clay),
         ) {
             Text(
                 text = stringResource(R.string.home_im_ok),
@@ -451,12 +475,14 @@ private fun FamilySection(
                     .fillMaxWidth()
                     .heightIn(min = 64.dp),
                 shape = RoundedCornerShape(22.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Sage),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Sage,
+                    contentColor = Color(0xFF062512),
+                ),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Call,
                     contentDescription = null,
-                    tint = Color.White,
                     modifier = Modifier.size(28.dp),
                 )
                 Spacer(Modifier.width(10.dp))
@@ -480,12 +506,14 @@ private fun FamilySection(
                     .fillMaxWidth()
                     .heightIn(min = 72.dp),
                 shape = RoundedCornerShape(22.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Clay),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Clay,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
             ) {
                 Icon(
                     imageVector = Icons.Filled.PhoneInTalk,
                     contentDescription = null,
-                    tint = Color.White,
                     modifier = Modifier.size(30.dp),
                 )
                 Spacer(Modifier.width(10.dp))
@@ -517,12 +545,14 @@ private fun HealthSection(
                     .fillMaxWidth()
                     .heightIn(min = 80.dp),
                 shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ClayDeep),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Tier3,
+                    contentColor = Color.White,
+                ),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Emergency,
                     contentDescription = null,
-                    tint = Color.White,
                     modifier = Modifier.size(32.dp),
                 )
                 Spacer(Modifier.width(10.dp))
@@ -541,7 +571,10 @@ private fun HealthSection(
                     .fillMaxWidth()
                     .heightIn(min = 80.dp),
                 shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Sage),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Sage,
+                    contentColor = Color(0xFF062512),
+                ),
             ) {
                 Text(
                     text = stringResource(R.string.health_checkin),
@@ -594,7 +627,12 @@ private fun HealthSection(
 
 /** Movement: steps, moving or still, at home or out — the web wording, in plain words. */
 @Composable
-private fun MovementSection(ui: HomeViewModel.HomeUiState, locationAllowed: Boolean) {
+private fun MovementSection(
+    ui: HomeViewModel.HomeUiState,
+    locationAllowed: Boolean,
+    onAllowLocation: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val animatedSteps by animateIntAsState(
         targetValue = ui.stepsToday.toInt(),
         animationSpec = tween(durationMillis = 900),
@@ -642,7 +680,28 @@ private fun MovementSection(ui: HomeViewModel.HomeUiState, locationAllowed: Bool
 
             Spacer(Modifier.height(8.dp))
 
-            SegmentHint(stringResource(R.string.movement_privacy))
+            if (locationAllowed) {
+                SegmentHint(stringResource(R.string.movement_privacy))
+            } else {
+                SegmentHint(stringResource(R.string.movement_needs_permission))
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = onAllowLocation) {
+                        Text(
+                            text = stringResource(R.string.movement_allow_location),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = ClayDeep,
+                        )
+                    }
+                    TextButton(onClick = onOpenSettings) {
+                        Text(
+                            text = stringResource(R.string.movement_open_settings),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Ink.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -751,18 +810,9 @@ private fun RequestCarePermissions() {
 }
 
 /**
- * CALL_PHONE is optional — the call chain works without it by opening the
- * dialer. Ask once here so the tier-3 chain can dial directly if allowed.
+ * CALL_PHONE is asked in the one-time permissions step after pairing; the
+ * call chain works without it by opening the dialer, so nothing is re-prompted here.
  */
-@Composable
-private fun RequestCallPhonePermission() {
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { }
-    LaunchedEffect(Unit) {
-        launcher.launch(Manifest.permission.CALL_PHONE)
-    }
-}
 
 /** Whether "Hey Khayaal" on-device recognition exists on this phone. */
 private object VoiceAvailability {

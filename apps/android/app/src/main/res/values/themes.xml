@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Calm, warm, near-empty: the app theme mirrors the web paper palette. -->
-    <style name="Theme.Khayaal" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/khayaal_paper</item>
-        <item name="android:statusBarColor">@color/khayaal_paper</item>
-        <item name="android:navigationBarColor">@color/khayaal_paper</item>
-        <item name="android:windowLightStatusBar">true</item>
+    <!-- Night navy from first frame: the window background is the same colour
+         as the splash canvas, so cold start never flashes white. -->
+    <style name="Theme.Khayaal" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/khayaal_night</item>
+        <item name="android:statusBarColor">@color/khayaal_night</item>
+        <item name="android:navigationBarColor">@color/khayaal_night</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

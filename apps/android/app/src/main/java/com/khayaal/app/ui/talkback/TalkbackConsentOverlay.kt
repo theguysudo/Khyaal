@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.khayaal.app.R
-import com.khayaal.app.ui.theme.Clay
+import com.khayaal.app.ui.components.KhayaalButton
 import com.khayaal.app.ui.theme.ClayDeep
 import com.khayaal.app.ui.theme.Ink
 import com.khayaal.app.ui.theme.Mist
@@ -86,13 +86,11 @@ fun TalkbackConsentOverlay(
 
             Spacer(Modifier.height(40.dp))
 
-            Button(
+            KhayaalButton(
                 onClick = onAllow,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 96.dp),
+                modifier = Modifier.fillMaxWidth(),
+                minHeight = 96.dp,
                 shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Clay),
             ) {
                 Text(
                     text = stringResource(R.string.talkback_allow),
