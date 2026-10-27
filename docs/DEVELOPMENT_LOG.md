@@ -118,7 +118,9 @@ hint), and `flash` (erase + reflash). Sim, enc and lan verified live.
 Full audit in **[SECURITY_AUDIT.md](SECURITY_AUDIT.md)**; the fixes:
 1. **Household authorization** (`lib/server/authz.ts`) — all 15 household routes
    now require a family session or device credentials; anonymous callers get
-   404s (existence not confirmable). 14 new pen-test checks.
+   404s (existence not confirmable). The `/demo` console and no-login creators
+   keep working through a signed, household-bound `kh_demo` cookie that
+   authorizes exactly one household for a day. 17 new pen-test checks.
 2. **Source mint protected** — pairing code required and rotated on use.
 3. **Ingest key mandatory** on plaintext.
 4. **LLM endpoints capped + gated** (8 turns × 2000 chars; analysis family-only).
@@ -127,7 +129,7 @@ Full audit in **[SECURITY_AUDIT.md](SECURITY_AUDIT.md)**; the fixes:
    cache, tamper rejection — implemented in the bridge (Python), the server
    (node:crypto), and the ESP32 firmware (mbedtls, `enc` CLI). Verified live:
    sealed accept / replay 409 / tamper 400 / keyless 403 / cross-household 403.
-6. **Pen-test grown to 37 checks** — all passing; engine 20/20; Android 43/43;
+6. **Pen-test grown to 40 checks** — all passing; engine 20/20; Android 43/43;
    CI green. APK rebuilt (v0.3.0, auth headers + pairing code).
 
 ## Where things stand

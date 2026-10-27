@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import type { Household } from '@khayaal/shared';
-import { sessionFromRequest, type SessionUser } from './session';
+import { demoAccessFromRequest, sessionFromRequest, type SessionUser } from './session';
 import { getStore } from './store';
 
 /**
@@ -52,6 +52,12 @@ export async function householdAccess(req: Request, householdId: string): Promis
     if (user?.householdIds.includes(householdId) || household.ownerSubs?.includes(session.sub)) {
       return { level: 'family', household, session };
     }
+  }
+
+  // The /demo console: a signed, household-bound cookie handed out by
+  // pair {action:'demo'} counts as family access for exactly that household.
+  if (demoAccessFromRequest(req, householdId)) {
+    return { level: 'family', household, session: null };
   }
 
   return { level: 'none', household, session };

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHousehold, ensureDemoHousehold, makePairingCode } from '@/lib/server/runtime';
 import { getStore } from '@/lib/server/store';
-import { sessionFromRequest } from '@/lib/server/session';
+import { demoCookieHeader, sessionFromRequest } from '@/lib/server/session';
 import { rateLimit } from '@/lib/server/rate-limit';
 
 /**
@@ -35,7 +35,11 @@ export async function POST(req: Request) {
       quietEnd: num(body.quietEnd),
       ownerSub: session?.sub,
     });
-    return NextResponse.json({ household: hh });
+    const res = NextResponse.json({ household: hh });
+    // A creator who skipped sign-in still gets their dashboard for a day via
+    // the household-bound cookie; the durable path remains the account link.
+    res.headers.append('Set-Cookie', demoCookieHeader(hh.id));
+    return res;
   }
 
   if (action === 'join') {
@@ -50,7 +54,11 @@ export async function POST(req: Request) {
 
   if (action === 'demo') {
     const hh = await ensureDemoHousehold();
-    return NextResponse.json({ household: hh });
+    const res = NextResponse.json({ household: hh });
+    // The /demo console has no Google session; this cookie authorizes exactly
+    // this household for a day (verified by authz.ts on every request).
+    res.headers.append('Set-Cookie', demoCookieHeader(hh.id));
+    return res;
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

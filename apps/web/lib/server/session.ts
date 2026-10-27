@@ -67,3 +67,38 @@ export function sessionCookieHeader(token: string): string {
 export function clearSessionCookieHeader(): string {
   return 'kh_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
 }
+
+// --- Demo household access -------------------------------------------------
+// The /demo console runs without a Google login: pair {action:'demo'} hands
+// out a signed, household-bound cookie that authorizes exactly that one
+// household (and nothing else) for a day. Judge-proof and isolated: a demo
+// cookie for household A confers no power over household B.
+
+export function signDemoAccess(householdId: string): string {
+  const exp = Date.now() + 86_400_000;
+  const payload = Buffer.from(JSON.stringify({ hh: householdId, exp })).toString('base64url');
+  const sig = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+export function demoAccessFromRequest(req: Request, householdId: string): boolean {
+  const cookie = req.headers.get('cookie') ?? '';
+  const token = cookie.match(/(?:^|;\s*)kh_demo=([^;]+)/)?.[1];
+  if (!token) return false;
+  const [payload, sig] = token.split('.');
+  if (!payload || !sig) return false;
+  const expect = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expect);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return data.hh === householdId && typeof data.exp === 'number' && data.exp >= Date.now();
+  } catch {
+    return false;
+  }
+}
+
+export function demoCookieHeader(householdId: string): string {
+  return `kh_demo=${signDemoAccess(householdId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`;
+}
