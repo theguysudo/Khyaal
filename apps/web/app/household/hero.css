@@ -1,0 +1,633 @@
+/*
+ * The dashboard hero band.
+ *
+ * A full-viewport band that opens every household dashboard: a media plate
+ * (Khayaal's claymation of the grandmother) under a top-anchored headline,
+ * a nav that wipes its underlines in from the left, and a burger that opens a
+ * clipped mobile overlay.
+ *
+ * The mechanics — the stagger, the masked line reveals, the clip-path wipe,
+ * the easings, the delays — follow the reference spec exactly. Only the
+ * product-specific parts are Khayaal's: the palette (paper / cream / ink /
+ * clay / sage), the type (Instrument Serif + Instrument Sans, no blackletter)
+ * and the footage.
+ *
+ * Every class is prefixed with `kh-` so nothing here can leak into the
+ * landing page, the demo console or onboarding.
+ */
+
+/* -------------------------------------------------------------------------
+   0. Tokens — spec §3, Khayaal's palette.
+   Scoped to the hero and its menu so the rest of the app keeps its own type.
+   ------------------------------------------------------------------------- */
+.kh-hero,
+.kh-menu {
+  --kh-ink: #2a241d;
+  --kh-paper: #faf6ef;
+  --kh-cream: #f3ecdf;
+  --kh-clay: #b95c38;
+  --kh-sage: #7d8c6f;
+  --kh-nav-gap: clamp(1.1rem, 2.2vw, 2.15rem);
+  --kh-pad-x: clamp(1.25rem, 4vw, 3.6rem);
+  --kh-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --kh-ease-in-out: cubic-bezier(0.76, 0, 0.24, 1);
+  --kh-poster: url("/khayaal-hero-poster.jpg");
+  --kh-serif: "Instrument Serif", Georgia, serif;
+  --kh-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+/* -------------------------------------------------------------------------
+   1. Hero shell — spec §4.
+   position:relative with NO z-index on purpose: the header below has to
+   stack above the fixed menu (z 50) in the ROOT stacking context.
+   ------------------------------------------------------------------------- */
+.kh-hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--kh-cream);
+  color: var(--kh-ink);
+  font-family: var(--kh-sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* A tier-3 alert collapses the band to a slim strip so the banner below it
+   is the first thing on screen. */
+.kh-hero--compact {
+  min-height: 0;
+}
+.kh-hero--compact .kh-nav {
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+
+/* -------------------------------------------------------------------------
+   2. Media plate — spec §4, §8(a), §10.
+   The plate is anchored to the bottom of the band and feathered into the
+   cream field above it, so the subject sits BELOW the headline and the
+   horizon has no visible seam.
+   ------------------------------------------------------------------------- */
+.kh-hero__media {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  --kh-plate-top: max(340px, 42svh);
+  transform: scale(1.08);
+  filter: blur(14px);
+  opacity: 0;
+  animation: kh-media-in 1.9s var(--kh-ease) 0.1s forwards;
+}
+
+@keyframes kh-media-in {
+  to {
+    transform: scale(1);
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
+/*
+ * The spec's blurred backdrop. In the vinyl footage the subject sits at the
+ * BOTTOM of the frame, so a blurred copy of the frame hides behind the sharp
+ * one. Khayaal's footage puts the grandmother at the TOP-RIGHT, so a blurred
+ * copy of the same frame would hang a second, ghostly her behind the
+ * headline. The slot is kept, its Khayaal wash is built from the palette.
+ */
+.kh-hero__media::before {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  z-index: 0;
+  background:
+    radial-gradient(90% 70% at 16% 4%, rgba(185, 92, 56, 0.12), rgba(185, 92, 56, 0) 62%),
+    radial-gradient(70% 60% at 86% 22%, rgba(125, 140, 111, 0.12), rgba(125, 140, 111, 0) 64%),
+    radial-gradient(120% 80% at 50% 100%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 60%);
+  filter: blur(30px) saturate(104%);
+  transform: scale(1.05);
+  transform-origin: left center;
+}
+
+/* The type wash — spec §10, Khayaal's paper instead of the vinyl's sky. */
+.kh-hero__media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(250, 246, 239, 0.55) 0%, rgba(250, 246, 239, 0.18) 34%, rgba(250, 246, 239, 0) 58%),
+    radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 60%);
+}
+
+.kh-hero__media > img,
+.kh-hero__media > video {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--kh-plate-top);
+  bottom: 0;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  object-position: center 0%;
+  display: block;
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 2%, #000 6%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 2%, #000 6%);
+}
+.kh-hero__media > img {
+  z-index: 1;
+}
+/* The video carries the same crop as the poster, so the cross-fade lands on
+   the same framing — no jump. */
+.kh-hero__media > video {
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+.kh-hero__media > video.is-ready {
+  opacity: 1;
+}
+
+/* -------------------------------------------------------------------------
+   3. Nav — spec §6. The header sits IN NORMAL FLOW (position:relative) and
+   carries z-index 60 so the burger and the logo render above the open menu
+   overlay (z-index 50).
+   ------------------------------------------------------------------------- */
+.kh-nav {
+  position: relative;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(1.1rem, 2.4vw, 1.9rem) var(--kh-pad-x);
+}
+
+.kh-logo {
+  font-family: var(--kh-serif);
+  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--kh-ink);
+}
+.kh-logo__mark {
+  color: var(--kh-clay);
+  letter-spacing: -0.02em;
+}
+
+.kh-nav__links {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: var(--kh-nav-gap);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.kh-nav__links a {
+  font-size: clamp(0.95rem, 1.05vw, 1.05rem);
+  letter-spacing: 0.005em;
+  padding: 0.15rem 0;
+  display: inline-block;
+  position: relative;
+  color: var(--kh-ink);
+}
+.kh-nav__links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.5s var(--kh-ease);
+}
+.kh-nav__links a:hover::after,
+.kh-nav__links a:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.kh-nav__right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.kh-btn-play {
+  display: inline-block;
+  background: var(--kh-ink);
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.72rem 1.15rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    transform 0.45s var(--kh-ease),
+    background-color 0.45s var(--kh-ease),
+    box-shadow 0.45s var(--kh-ease);
+}
+.kh-btn-play:hover {
+  transform: translateY(-2px);
+  background: #1b1712;
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+}
+.kh-btn-play:active {
+  transform: translateY(0);
+}
+.kh-btn-play:focus-visible {
+  outline: 2px solid var(--kh-clay);
+  outline-offset: 3px;
+}
+
+/* The burger — spec §6. Three bars, the middle one deliberately shorter. */
+.kh-burger {
+  display: none;
+  width: 44px;
+  height: 44px;
+  margin-right: -8px;
+  position: relative;
+  z-index: 60;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+.kh-burger span {
+  position: absolute;
+  left: 11px;
+  width: 22px;
+  height: 1.6px;
+  background: var(--kh-ink);
+  border-radius: 2px;
+  transition:
+    transform 0.55s var(--kh-ease-in-out),
+    opacity 0.3s ease,
+    width 0.55s var(--kh-ease-in-out);
+}
+.kh-burger span:nth-child(1) {
+  top: 17px;
+}
+.kh-burger span:nth-child(2) {
+  top: 22px;
+  width: 15px;
+}
+.kh-burger span:nth-child(3) {
+  top: 27px;
+}
+.kh-burger.is-active span:nth-child(1) {
+  transform: translateY(5px) rotate(45deg);
+}
+.kh-burger.is-active span:nth-child(2) {
+  opacity: 0;
+  transform: translateX(10px);
+}
+.kh-burger.is-active span:nth-child(3) {
+  transform: translateY(-5px) rotate(-45deg);
+}
+.kh-burger:focus-visible {
+  outline: 2px solid var(--kh-clay);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   4. Headline — spec §4b and §7.
+   .kh-hero__inner is a flex row with justify-content:center: the <h1> box is
+   centred horizontally, and because align-items is left at its default
+   (stretch) the text renders at the TOP of that box. The headline is
+   top-anchored, never vertically centred.
+   ------------------------------------------------------------------------- */
+.kh-hero__inner {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vh, 4.5rem) var(--kh-pad-x) 0;
+  pointer-events: none;
+}
+
+.kh-headline {
+  margin: 0;
+  font-family: var(--kh-serif);
+  font-weight: 400;
+  font-size: clamp(2.7rem, 6.3vw, 6.75rem);
+  line-height: 1.06;
+  letter-spacing: -0.005em;
+  text-align: center;
+  color: var(--kh-ink);
+}
+
+.kh-line {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  padding-bottom: 0.06em;
+  margin-bottom: -0.06em;
+}
+.kh-line > span {
+  display: block;
+  transform: translateY(110%);
+  opacity: 0;
+  animation: kh-line-up 1.25s var(--kh-ease) forwards;
+}
+.kh-line:nth-child(1) > span {
+  animation-delay: 0.55s;
+}
+.kh-line:nth-child(2) > span {
+  animation-delay: 0.68s;
+}
+
+@keyframes kh-line-up {
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   5. Entrance stagger — spec §8(b).
+   ------------------------------------------------------------------------- */
+@keyframes kh-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.kh-rise {
+  opacity: 0;
+  transform: translateY(-14px);
+  animation: kh-rise 0.95s var(--kh-ease) forwards;
+}
+.kh-d1 {
+  animation-delay: 0.18s;
+}
+.kh-d2 {
+  animation-delay: 0.26s;
+}
+.kh-d3 {
+  animation-delay: 0.32s;
+}
+.kh-d4 {
+  animation-delay: 0.38s;
+}
+.kh-d5 {
+  animation-delay: 0.44s;
+}
+.kh-d6 {
+  animation-delay: 0.52s;
+}
+
+/* -------------------------------------------------------------------------
+   6. Mobile menu — spec §9.
+   The panel wipes in with clip-path. The visibility delay flips to 0s on
+   open and back to .85s on close, so it stays hittable during the wipe and
+   is properly removed afterwards. Everything reverses on close because it is
+   all transitions, not animations.
+   ------------------------------------------------------------------------- */
+.kh-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 var(--kh-pad-x);
+  background: rgba(243, 236, 223, 0.92);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(140%);
+  clip-path: inset(0 0 100% 0);
+  visibility: hidden;
+  transition:
+    clip-path 0.85s var(--kh-ease-in-out),
+    visibility 0s linear 0.85s;
+}
+.kh-menu.is-open {
+  clip-path: inset(0 0 0 0);
+  visibility: visible;
+  transition:
+    clip-path 0.85s var(--kh-ease-in-out),
+    visibility 0s linear 0s;
+}
+
+.kh-menu__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.kh-menu__list li {
+  overflow: hidden;
+}
+.kh-menu__list a {
+  font-family: var(--kh-serif);
+  font-size: clamp(2.35rem, 12vw, 3.4rem);
+  line-height: 1.22;
+  padding: 0.12em 0;
+  display: block;
+  transform: translateY(115%);
+  opacity: 0;
+  transition:
+    transform 0.8s var(--kh-ease),
+    opacity 0.6s ease;
+  color: var(--kh-ink);
+}
+.kh-menu.is-open .kh-menu__list a {
+  transform: translateY(0);
+  opacity: 1;
+}
+.kh-menu.is-open .kh-menu__list li:nth-child(1) a {
+  transition-delay: 0.26s;
+}
+.kh-menu.is-open .kh-menu__list li:nth-child(2) a {
+  transition-delay: 0.33s;
+}
+.kh-menu.is-open .kh-menu__list li:nth-child(3) a {
+  transition-delay: 0.4s;
+}
+.kh-menu.is-open .kh-menu__list li:nth-child(4) a {
+  transition-delay: 0.47s;
+}
+
+.kh-menu__rule {
+  height: 1px;
+  background: rgba(42, 36, 29, 0.16);
+  margin: 2.2rem 0 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.9s var(--kh-ease);
+}
+.kh-menu.is-open .kh-menu__rule {
+  transform: scaleX(1);
+  transition-delay: 0.5s;
+}
+
+.kh-menu__foot {
+  margin-top: 2.2rem;
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    transform 0.8s var(--kh-ease),
+    opacity 0.6s ease;
+}
+.kh-menu.is-open .kh-menu__foot {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.56s;
+}
+.kh-menu__foot .kh-btn-play {
+  padding: 0.95rem 1.6rem;
+  font-size: 1rem;
+}
+
+/* Scroll lock behind the open panel. */
+body.kh-menu-open {
+  overflow: hidden;
+}
+
+/* -------------------------------------------------------------------------
+   7. Responsive — spec §10.
+   ------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .kh-nav__links {
+    display: none;
+  }
+  .kh-nav__right .kh-btn-play {
+    display: none;
+  }
+  .kh-burger {
+    display: block;
+  }
+  /* Khayaal's footage keeps the grandmother on the right of the frame, so the
+     plate is cropped toward her rather than to the centre. */
+  .kh-hero__media > img,
+  .kh-hero__media > video {
+    object-position: 72% 0%;
+  }
+  .kh-hero__inner {
+    align-items: flex-start;
+  }
+  .kh-line {
+    white-space: normal;
+  }
+  .kh-headline {
+    font-size: clamp(2.4rem, 6.4vw, 3.6rem);
+    max-width: 15ch;
+  }
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+  /* A 16:9 clip stretched over a phone shows a sliver of its width, so the
+     plate is bottom-anchored at a sane scale and its top edge is feathered
+     into the field above it. */
+  .kh-hero__media > img,
+  .kh-hero__media > video {
+    top: auto;
+    bottom: 0;
+    height: 60svh;
+    object-position: 72% 62%;
+    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 2%, #000 6%);
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 2%, #000 6%);
+  }
+}
+
+@media (max-width: 560px) {
+  .kh-headline {
+    font-size: clamp(2.15rem, 9.4vw, 3.1rem);
+    line-height: 1.12;
+    max-width: 11ch;
+  }
+  .kh-hero__inner {
+    padding-top: clamp(1.75rem, 7vh, 3rem);
+  }
+  .kh-hero__media > img,
+  .kh-hero__media > video {
+    object-position: 72% 0%;
+  }
+}
+
+@media (max-width: 380px) {
+  .kh-headline {
+    font-size: 2rem;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .kh-headline {
+    font-size: clamp(1.7rem, 5vw, 2.4rem);
+    max-width: 22ch;
+  }
+  .kh-hero__inner {
+    padding-top: 0.75rem;
+  }
+  .kh-menu__list a {
+    font-size: clamp(1.4rem, 5vw, 1.9rem);
+  }
+  .kh-menu__rule {
+    margin-top: 1.2rem;
+  }
+  .kh-menu__foot {
+    margin-top: 1.2rem;
+  }
+  .kh-hero__media {
+    --kh-plate-top: 200px;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   8. Reduced motion — spec §8(d).
+   Durations and delays collapse to nothing, and every element that the
+   entrance choreography leaves hidden is reset to its visible, static state.
+   ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .kh-hero *,
+  .kh-hero *::before,
+  .kh-hero *::after,
+  .kh-menu *,
+  .kh-menu *::before,
+  .kh-menu *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+  .kh-hero__media {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .kh-line > span {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .kh-rise {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .kh-menu__list a,
+  .kh-menu__rule,
+  .kh-menu__foot {
+    transition: none !important;
+  }
+  .kh-menu.is-open .kh-menu__list a {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+  }
+  .kh-menu.is-open .kh-menu__rule {
+    transform: scaleX(1) !important;
+  }
+  .kh-menu.is-open .kh-menu__foot {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+}

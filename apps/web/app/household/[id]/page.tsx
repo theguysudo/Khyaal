@@ -13,6 +13,8 @@ import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import '../motion.css';
+import '../hero.css';
+import DashboardHero from './DashboardHero';
 import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/dashboard/bento';
 import NightWatchCard from '@/components/dashboard/NightWatchCard';
 import TalkbackCard from '@/components/dashboard/TalkbackCard';
@@ -77,156 +79,174 @@ export default function DashboardPage() {
 
   return (
     <main
-      className="kh-dash min-h-screen px-4 pb-16 pt-6 transition-colors duration-700 motion-reduce:transition-none sm:px-8"
+      className="kh-dash min-h-screen transition-colors duration-700 motion-reduce:transition-none"
       style={{
         // The tint rides on background-color (which transition-colors can
         // actually animate); the paper wash above it is a static gradient.
         // Together they render pixel-identically to a hard-coded gradient —
         // but a tier change now cross-fades instead of snapping.
         backgroundColor: meta.soft,
-        backgroundImage: 'linear-gradient(180deg, rgba(250,246,239,0) 0%, #faf6ef 40%)',
       }}
     >
-      <div className="mx-auto max-w-5xl">
-        {/* header */}
-        <header className="flex items-center justify-between">
-          <Link href="/login" className="flex items-center gap-2 rounded-full px-1 py-0.5">
-            <span className="font-heading text-lg tracking-tight text-ink">Khayaal</span>
-            <span className="text-clay">✳︎</span>
-          </Link>
-          <div className="flex items-center gap-3 text-sm">
-            {hh.simTimeOffsetMs !== 0 && (
-              <span className="rounded-full bg-dusk/10 px-3 py-1 text-xs text-dusk">demo clock · {fmtClock(bundle.simNowTs)}</span>
-            )}
-            <Link
-              href={`/household/${id}/settings`}
-              className={`kh-press rounded-full border border-ink/15 bg-white/70 px-4 py-1.5 text-ink/70 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
-            >
-              Settings
-            </Link>
-          </div>
-        </header>
+      {/*
+        The hero band: a full-viewport plate with the headline and the nav.
+        It collapses to a slim strip whenever a tier-3 alert is up, so the
+        "Needs attention" banner below stays the first thing on screen.
+      */}
+      <DashboardHero isAlert={isAlert} />
 
-        {/*
-          tier-3 alert — the only thing allowed to shout.
-          The section stays mounted and collapses through a grid row so the
-          bento below glides aside instead of teleporting when a poll flips
-          the tier; when collapsed it is inert, so the hidden buttons can
-          neither be tabbed into nor clicked.
-        */}
-        <div
-          className="grid transition-[grid-template-rows] duration-500 ease-out motion-reduce:transition-none"
-          style={{ gridTemplateRows: isAlert ? '1fr' : '0fr' }}
-          aria-hidden={!isAlert}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <section
-              inert={!isAlert}
-              className={`mt-6 rounded-[24px] border border-[#b23a2f]/25 border-l-4 border-l-[#b23a2f] bg-white p-5 shadow-[0_12px_44px_rgba(178,58,47,0.14)] transition-opacity duration-500 motion-reduce:transition-none sm:p-6 ${
-                isAlert ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="max-w-xl">
-                  {/*
-                    Masked line reveal: each line slides out of its own
-                    overflow mask while the banner collapses open. The key on
-                    the alert state restarts the animation exactly once, when
-                    the tier flips — polls that keep the banner up never
-                    re-fire it.
-                  */}
-                  <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#b23a2f]">
-                    <span className="inline-block h-2 w-2 rounded-full bg-[#b23a2f]" aria-hidden />
-                    <span className="kh-line-mask">
-                      <span key={isAlert ? 'eyebrow-in' : 'eyebrow-out'} className={isAlert ? 'kh-line-rise' : undefined}>
-                        Needs attention
-                      </span>
-                    </span>
-                  </p>
-                  <p className="mt-2 font-heading text-xl text-ink">
-                    <span className="kh-line-mask">
-                      <span
-                        key={isAlert ? 'head-in' : 'head-out'}
-                        className={isAlert ? 'kh-line-rise' : undefined}
-                        style={{ '--kh-line-delay': '80ms' } as React.CSSProperties}
-                      >
-                        {hh.parentName} hasn't responded to the nudge or the check-in.
-                      </span>
-                    </span>
-                  </p>
-                  <p className="mt-1.5 text-sm leading-relaxed text-ink/60">
-                    <span className="kh-line-mask">
-                      <span
-                        key={isAlert ? 'sub-in' : 'sub-out'}
-                        className={isAlert ? 'kh-line-rise' : undefined}
-                        style={{ '--kh-line-delay': '160ms' } as React.CSSProperties}
-                      >
-                        {state.ack
-                          ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
-                          : hh.callPlan
-                            ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
-                            : 'A call is usually the right next step.'}
-                      </span>
-                    </span>
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2.5">
-                  <a
-                    href="#"
-                    onClick={(e) => e.preventDefault()}
-                    title="Wire your number in settings — this demo cannot place calls"
-                    className={`kh-press kh-lift rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#9e352b] ${FOCUS_ON_RED}`}
-                  >
-                    📞 Call {hh.parentName}
-                  </a>
-                  <button
-                    onClick={ack}
-                    disabled={acking}
-                    className={`kh-press rounded-full border border-[#b23a2f]/35 bg-[#b23a2f]/[0.05] px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 disabled:opacity-50 ${FOCUS_ON_RED}`}
-                  >
-                    {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
-                  </button>
-                  <button
-                    onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
-                    className={`kh-press rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
-                  >
-                    Snooze 1 h
-                  </button>
-                </div>
-              </div>
-              {circle.length > 0 && (
-                <p className="mt-3 border-t border-[#b23a2f]/15 pt-3 text-xs text-ink/50">
-                  Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
-                </p>
+      <div
+        className="pb-16"
+        style={{ backgroundImage: 'linear-gradient(180deg, rgba(250,246,239,0) 0%, #faf6ef 40%)' }}
+      >
+        <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-8">
+          {/* header — the wordmark now lives in the hero's nav */}
+          <header className="flex items-center justify-end">
+            <div className="flex items-center gap-3 text-sm">
+              {hh.simTimeOffsetMs !== 0 && (
+                <span className="rounded-full bg-dusk/10 px-3 py-1 text-xs text-dusk">demo clock · {fmtClock(bundle.simNowTs)}</span>
               )}
-            </section>
+              <Link
+                href={`/household/${id}/settings`}
+                className={`kh-press rounded-full border border-ink/15 bg-white/70 px-4 py-1.5 text-ink/70 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
+              >
+                Settings
+              </Link>
+            </div>
+          </header>
+
+          {/*
+            tier-3 alert — the only thing allowed to shout.
+            The section stays mounted and collapses through a grid row so the
+            bento below glides aside instead of teleporting when a poll flips
+            the tier; when collapsed it is inert, so the hidden buttons can
+            neither be tabbed into nor clicked.
+          */}
+          <div
+            className="grid transition-[grid-template-rows] duration-500 ease-out motion-reduce:transition-none"
+            style={{ gridTemplateRows: isAlert ? '1fr' : '0fr' }}
+            aria-hidden={!isAlert}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <section
+                inert={!isAlert}
+                className={`mt-6 rounded-[24px] border border-[#b23a2f]/25 border-l-4 border-l-[#b23a2f] bg-white p-5 shadow-[0_12px_44px_rgba(178,58,47,0.14)] transition-opacity duration-500 motion-reduce:transition-none sm:p-6 ${
+                  isAlert ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-xl">
+                    {/*
+                      Masked line reveal: each line slides out of its own
+                      overflow mask while the banner collapses open. The key on
+                      the alert state restarts the animation exactly once, when
+                      the tier flips — polls that keep the banner up never
+                      re-fire it.
+                    */}
+                    <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#b23a2f]">
+                      <span className="inline-block h-2 w-2 rounded-full bg-[#b23a2f]" aria-hidden />
+                      <span className="kh-line-mask">
+                        <span key={isAlert ? 'eyebrow-in' : 'eyebrow-out'} className={isAlert ? 'kh-line-rise' : undefined}>
+                          Needs attention
+                        </span>
+                      </span>
+                    </p>
+                    <p className="mt-2 font-heading text-xl text-ink">
+                      <span className="kh-line-mask">
+                        <span
+                          key={isAlert ? 'head-in' : 'head-out'}
+                          className={isAlert ? 'kh-line-rise' : undefined}
+                          style={{ '--kh-line-delay': '80ms' } as React.CSSProperties}
+                        >
+                          {hh.parentName} hasn't responded to the nudge or the check-in.
+                        </span>
+                      </span>
+                    </p>
+                    <p className="mt-1.5 text-sm leading-relaxed text-ink/60">
+                      <span className="kh-line-mask">
+                        <span
+                          key={isAlert ? 'sub-in' : 'sub-out'}
+                          className={isAlert ? 'kh-line-rise' : undefined}
+                          style={{ '--kh-line-delay': '160ms' } as React.CSSProperties}
+                        >
+                          {state.ack
+                            ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
+                            : hh.callPlan
+                              ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
+                              : 'A call is usually the right next step.'}
+                        </span>
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    <a
+                      href="#"
+                      onClick={(e) => e.preventDefault()}
+                      title="Wire your number in settings — this demo cannot place calls"
+                      className={`kh-press kh-lift rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#9e352b] ${FOCUS_ON_RED}`}
+                    >
+                      📞 Call {hh.parentName}
+                    </a>
+                    <button
+                      onClick={ack}
+                      disabled={acking}
+                      className={`kh-press rounded-full border border-[#b23a2f]/35 bg-[#b23a2f]/[0.05] px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 disabled:opacity-50 ${FOCUS_ON_RED}`}
+                    >
+                      {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
+                    </button>
+                    <button
+                      onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
+                      className={`kh-press rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
+                    >
+                      Snooze 1 h
+                    </button>
+                  </div>
+                </div>
+                {circle.length > 0 && (
+                  <p className="mt-3 border-t border-[#b23a2f]/15 pt-3 text-xs text-ink/50">
+                    Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
+                  </p>
+                )}
+              </section>
+            </div>
           </div>
-        </div>
 
-        {/* the bento — kh-bento drives the once-only entrance stagger (see motion.css) */}
-        <div className="kh-bento mt-6 grid grid-cols-12 gap-4 sm:gap-5">
-          <StatusCard bundle={bundle} />
-          <TrendCard bundle={bundle} />
-          <CommandsCard id={id} bundle={bundle} />
-          <TalkbackCard id={id} parentName={hh.parentName} childName={hh.childName} />
-          <RhythmCard bundle={bundle} />
-          <LadderCard tier={state.tier} />
-          <ExplainCard bundle={bundle} />
-          <NightWatchCard events={bundle.sleepSound} />
-          <MovementCard movement={bundle.movement} nowTs={bundle.simNowTs} />
-          <BlueprintMap id={id} />
-          <CsiScope id={id} />
-          <AnalysisCard id={id} bundle={bundle} />
-          <CircleCard id={id} bundle={bundle} />
-          <PushCard id={id} />
-          <EventsCard bundle={bundle} />
-          <SourcesCard id={id} bundle={bundle} />
-        </div>
+          {/* the bento — kh-bento drives the once-only entrance stagger (see motion.css) */}
+          <div className="kh-bento mt-6 grid grid-cols-12 gap-4 sm:gap-5">
+            {/* the sections the hero's nav jumps to, plus its primary action */}
+            <div id="kh-current-status" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
+              <StatusCard bundle={bundle} />
+            </div>
+            <div id="kh-day-trend" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-7 [&>section]:h-full">
+              <TrendCard bundle={bundle} />
+            </div>
+            <div id="kh-reach-her" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-7 [&>section]:h-full">
+              <CommandsCard id={id} bundle={bundle} />
+            </div>
+            <TalkbackCard id={id} parentName={hh.parentName} childName={hh.childName} />
+            <div id="kh-rhythm" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
+              <RhythmCard bundle={bundle} />
+            </div>
+            <LadderCard tier={state.tier} />
+            <ExplainCard bundle={bundle} />
+            <NightWatchCard events={bundle.sleepSound} />
+            <MovementCard movement={bundle.movement} nowTs={bundle.simNowTs} />
+            <BlueprintMap id={id} />
+            <CsiScope id={id} />
+            <AnalysisCard id={id} bundle={bundle} />
+            <div id="kh-care-circle" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
+              <CircleCard id={id} bundle={bundle} />
+            </div>
+            <PushCard id={id} />
+            <EventsCard bundle={bundle} />
+            <SourcesCard id={id} bundle={bundle} />
+          </div>
 
-        <p className="mt-10 text-center text-xs leading-relaxed text-ink/40">
-          Khayaal never shows a feed, a map or a recording — this page only ever sees what you see. Signals are
-          AES-256-GCM encrypted at rest and discarded after 7 days.
-        </p>
+          <p className="mt-10 text-center text-xs leading-relaxed text-ink/40">
+            Khayaal never shows a feed, a map or a recording — this page only ever sees what you see. Signals are
+            AES-256-GCM encrypted at rest and discarded after 7 days.
+          </p>
+        </div>
       </div>
     </main>
   );
@@ -239,7 +259,7 @@ function StatusCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
   const { state, household: hh } = bundle;
   const meta = TIER_META[state.tier];
   return (
-    <BentoCard label="Current status" className="col-span-12 lg:col-span-5">
+    <BentoCard label="Current status">
       <div className="flex h-full flex-col">
         <CardTitle note={state.learning ? undefined : `confidence ${Math.round(state.confidence * 100)}%`}>{meta.label}</CardTitle>
         <div className="mt-4 flex items-end gap-2">
@@ -268,7 +288,7 @@ function StatusCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
 function TrendCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
   if (!bundle) return null;
   return (
-    <BentoCard label="24 hour score trend" className="col-span-12 lg:col-span-7">
+    <BentoCard label="24 hour score trend">
       <CardTitle note="last 24 h">The day so far</CardTitle>
       <TrendChart trend={bundle.state.scoreTrend} nowTs={bundle.simNowTs} />
     </BentoCard>
@@ -299,7 +319,7 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
   const pending = bundle.commands;
 
   return (
-    <BentoCard label="Reach her phone" className="col-span-12 lg:col-span-7">
+    <BentoCard label="Reach her phone">
       <CardTitle note={pending.length > 0 ? `${pending.length} awaiting her phone` : 'delivered over the commands channel'}>
         Reach her phone
       </CardTitle>
@@ -386,7 +406,7 @@ function RhythmCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
   const max = Math.max(1, ...activity);
   const nowHour = new Date(bundle.simNowTs).getHours();
   return (
-    <BentoCard label="Rhythm map" className="col-span-12 lg:col-span-5">
+    <BentoCard label="Rhythm map">
       <CardTitle note="today, hour by hour">Rhythm map</CardTitle>
       <div className="mt-4 flex h-20 items-end gap-[3px]">
         {activity.map((v, h) => (
@@ -578,7 +598,7 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
   };
 
   return (
-    <BentoCard label="Care circle" className="col-span-12 lg:col-span-5">
+    <BentoCard label="Care circle">
       <CardTitle note="neighbours who can check in">Care circle</CardTitle>
       <ul className="mt-4 space-y-2">
         {circle.length === 0 && (
