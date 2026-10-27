@@ -10,7 +10,9 @@
  */
 #include "csi_sensor.h"
 
+#include <Arduino.h>
 #include <cmath>
+#include <cstring>
 
 extern "C" {
 #include <esp_idf_version.h>

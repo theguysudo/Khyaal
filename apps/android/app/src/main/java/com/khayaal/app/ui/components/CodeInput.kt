@@ -49,9 +49,7 @@ fun CodeInput(
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    val codeDescription = androidx.compose.ui.res.stringResource(
-        com.khayaal.app.R.string.a11y_code_input,
-    )
+    val codeDescription = stringResource(R.string.a11y_code_input)
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         BasicTextField(
@@ -73,7 +71,7 @@ fun CodeInput(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics { contentDescription = "Six digit pairing code" }
+                .semantics { contentDescription = codeDescription }
                 .height(72.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },

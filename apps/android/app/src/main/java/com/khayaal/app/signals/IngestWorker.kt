@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.khayaal.app.KhayaalApp
+import com.khayaal.app.data.repo.FlushOutcome
 
 /**
  * Drains the signal queue into the backend. Runs three ways: the 15-minute
@@ -23,11 +24,11 @@ class IngestWorker(
         AppUsageCollector.drainInto(applicationContext, container.pairingStore, container.signalQueue)
 
         return when (container.repository.flushQueue()) {
-            com.khayaal.app.data.repo.FlushOutcome.Uploaded,
-            com.khayaal.app.data.repo.FlushOutcome.NothingToDo,
-            com.khayaal.app.data.repo.FlushOutcome.Rejected,
+            FlushOutcome.Uploaded,
+            FlushOutcome.NothingToDo,
+            FlushOutcome.Rejected,
             -> Result.success()
-            com.khayaal.app.data.repo.FlushOutcome.RetryLater -> Result.retry()
+            FlushOutcome.RetryLater -> Result.retry()
         }
     }
 }

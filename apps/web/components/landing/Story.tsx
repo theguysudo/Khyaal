@@ -164,6 +164,24 @@ export default function Story() {
     return () => io.disconnect();
   }, []);
 
+  // The rail must never linger outside the story: when the story wrapper
+  // itself leaves the viewport (hero above, footer below), fade it out.
+  // Without this it stays fixed mid-screen and overlaps the zoom and hero.
+  // The top margin is negative so the story must actually reach into the
+  // viewport — at the footer its tail sits above the fold and must not count.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) setActive(null);
+      },
+      { rootMargin: '-6% 0px 12% 0px' },
+    );
+    io.observe(root);
+    return () => io.disconnect();
+  }, []);
+
   const jump = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };

@@ -1,0 +1,1 @@
+{"endpoint": "http://localhost:3100/api/v1/ingest", "householdId": "hh_REPLACE_ME", "sourceId": "src_REPLACE_ME", "apiKey": "sk_REPLACE_ME_SHOWN_ONCE"}

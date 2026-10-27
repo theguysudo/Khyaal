@@ -29,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +60,7 @@ fun HomeScreen(
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
+    val okDescription = stringResource(R.string.a11y_im_ok_button)
 
     RequestCarePermissions()
 
@@ -138,7 +138,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .heightIn(min = 84.dp)
                     .semantics {
-                        contentDescription = "Tell your family you are okay"
+                        contentDescription = okDescription
                     },
                 shape = RoundedCornerShape(28.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Clay),

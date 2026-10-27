@@ -37,9 +37,9 @@ class CsiSensor {
   static void rxCallback(void *ctx, void *info);  // wifi_csi_info_t*, opaque
 
   float window_[KH_CSI_WINDOW];
-  uint32_t mux_;                 // portMUX_TYPE, kept opaque for the header
-  volatile size_t count_ = 0;
-  volatile size_t head_ = 0;
+  uint32_t mux_;                    // portMUX_TYPE, kept opaque for the header
+  volatile uint16_t count_ = 0;
+  volatile uint16_t head_ = 0;
   volatile uint32_t totalPackets_ = 0;
   uint32_t lastStatsTotal_ = 0;
   uint32_t lastStatsMs_ = 0;

@@ -57,7 +57,8 @@ fun StatusCard(
             )
             Spacer(Modifier.size(10.dp))
             Text(
-                text = statusHeadline(state),
+                text = state?.status?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.home_all_well),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -90,9 +91,6 @@ fun StatusCard(
         }
     }
 }
-
-private fun statusHeadline(state: StateDto?): String =
-    state?.status?.takeIf { it.isNotBlank() } ?: "All is well"
 
 /**
  * The tier-appropriate gentle nudge. Tier 1 is a soft hello, tier 2 asks the
