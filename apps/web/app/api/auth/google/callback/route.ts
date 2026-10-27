@@ -50,7 +50,11 @@ export async function GET(req: Request) {
     createdAtTs: existing?.createdAtTs ?? Date.now(),
   });
 
-  const res = NextResponse.redirect(`${origin}/login`);
+  // Sign-up lands on family creation; a returning sign-in goes to /login,
+  // which forwards straight into their existing household.
+  const mode = (req.headers.get('cookie') ?? '').match(/kh_oauth_mode=(signup|login)/)?.[1];
+  const dest = mode === 'signup' ? '/onboarding?welcome=1' : '/login';
+  const res = NextResponse.redirect(`${origin}${dest}`);
   res.headers.append('Set-Cookie', sessionCookieHeader(signSession({
     sub: profile.sub,
     email: profile.email ?? '',
@@ -58,5 +62,6 @@ export async function GET(req: Request) {
     picture: profile.picture,
   })));
   res.headers.append('Set-Cookie', 'kh_oauth_state=; Path=/; Max-Age=0');
+  res.headers.append('Set-Cookie', 'kh_oauth_mode=; Path=/; Max-Age=0');
   return res;
 }

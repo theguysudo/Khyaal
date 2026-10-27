@@ -15,9 +15,9 @@ Every `/api/v1/household/{id}/*` route accepted any caller who knew or guessed t
 - `requireFamily` — HMAC-signed session cookie whose subject is linked to the household (owner or claimed care-circle member). Governs: commands POST, circle, config, demo, sources, analysis, ack, push-subscribe.
 - `requireHouseholdMember` — family session **or** device credentials (`x-kh-source` + `x-kh-key`, constant-time compared via SHA-256 + `timingSafeEqual`). Governs: state, checkin, snooze, command-ack, devices, assistant.
 - Unknown/unauthorised ids answer **404 "Household not found"** (never 401/403) so existence is not confirmable.
-- The `/demo` console runs without a Google login on purpose, so `pair {action:'demo'|'create'}` now issues a **signed, household-bound demo cookie** (`kh_demo`, HMAC-SHA256, HttpOnly, 1 day) that authorizes exactly that household — verified to confer no power over any other household.
+- **Families belong to a Google account** (OAuth-first): `pair {action:'create'}` requires a family session, so a returning sign-in always lands back in the account's own households. The only session-free path is the `/demo` console, where `pair {action:'demo'}` issues a **signed, household-bound demo cookie** (`kh_demo`, HMAC-SHA256, HttpOnly, 1 day) authorizing exactly that household — verified to confer no power over any other household.
 
-Verified by the 14 "anonymous route blocked" and 3 "demo console isolation" pen-test checks.
+Verified by the "anonymous family creation rejected", 14 "anonymous route blocked" and 3 "demo console isolation" pen-test checks.
 
 ### F2 · Source creation minted API keys to anyone (Critical — fixed)
 `POST /household/{id}/sources` returned a fresh `sk_…` API key to any unauthenticated caller holding the household id. That key is the credential for ingest and every device route.

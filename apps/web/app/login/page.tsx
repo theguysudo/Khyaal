@@ -7,6 +7,7 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { postJSON } from '@/lib/api';
 
@@ -16,6 +17,7 @@ interface MyHouseholds {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [data, setData] = useState<MyHouseholds | null>(null);
   const [googleNote, setGoogleNote] = useState<string | null>(null);
   const [claimCode, setClaimCode] = useState('');
@@ -68,6 +70,15 @@ export default function LoginPage() {
   };
 
   const signedIn = !!data?.user;
+
+  // The whole point of the account: a returning sign-in lands you straight
+  // back in your family. One household → forward immediately; several → the
+  // list below picks (auto-redirect only on the first load).
+  useEffect(() => {
+    if (signedIn && data && data.households.length === 1) {
+      router.replace(`/household/${data.households[0].id}`);
+    }
+  }, [signedIn, data, router]);
 
   return (
     <main className="min-h-screen bg-paper px-4 py-10 sm:px-8" style={{ background: 'linear-gradient(180deg, #f3ecdf 0%, #faf6ef 30%)' }}>

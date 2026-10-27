@@ -29,5 +29,11 @@ export async function GET(req: Request) {
     'Set-Cookie',
     `kh_oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
   );
+  // The callback needs to know whether this was a sign-up (→ family creation)
+  // or a returning sign-in (→ straight to their families).
+  res.headers.append(
+    'Set-Cookie',
+    `kh_oauth_mode=${mode ? 'signup' : 'login'}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
+  );
   return res;
 }

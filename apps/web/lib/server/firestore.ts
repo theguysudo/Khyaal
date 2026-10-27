@@ -244,8 +244,13 @@ export class FirestoreStore implements Store {
     await setDoc(`users/${user.sub}`, user);
   }
   async linkHouseholdToUser(subId: string, householdId: string): Promise<void> {
-    const user = await this.getUser(subId);
-    if (user && !user.householdIds.includes(householdId)) {
+    // Upsert a stub user if the row doesn't exist yet — same as MemoryStore.
+    let user = await this.getUser(subId);
+    if (!user) {
+      user = { sub: subId, email: '', name: 'Family', householdIds: [], createdAtTs: Date.now() };
+      await this.upsertUser(user);
+    }
+    if (!user.householdIds.includes(householdId)) {
       await this.upsertUser({ ...user, householdIds: [...user.householdIds, householdId] });
     }
     const hh = await this.getHousehold(householdId);

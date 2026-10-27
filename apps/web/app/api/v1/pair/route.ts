@@ -6,10 +6,10 @@ import { rateLimit } from '@/lib/server/rate-limit';
 
 /**
  * POST /api/v1/pair
- *  { action: 'create', parentName, childName, wakeHour?, chargeStartHour?, quietStart?, quietEnd? }
- *  { action: 'join',   code }            — a parent device pairing in
- *  { action: 'demo' }                    — demo quick-start
- * Creating while signed in with Google links the household to the account.
+ *  { action: 'create', ... }   — family creation, requires a Google session
+ *                                (OAuth-first; the family stays with the account)
+ *  { action: 'join',   code }  — a parent device pairing in
+ *  { action: 'demo' }          — demo quick-start (household-bound cookie)
  */
 export async function POST(req: Request) {
   if (!rateLimit(`pair:${req.headers.get('x-forwarded-for') ?? 'local'}`, 10, 60_000)) {
@@ -26,6 +26,14 @@ export async function POST(req: Request) {
   const action = body.action;
 
   if (action === 'create') {
+    // OAuth-first: a family always belongs to a Google account, so a
+    // returning sign-in lands straight back in it. No anonymous creation.
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Sign in with Google first, then create your family.' },
+        { status: 401 },
+      );
+    }
     const hh = await createHousehold({
       parentName: String(body.parentName ?? ''),
       childName: String(body.childName ?? ''),
@@ -33,13 +41,9 @@ export async function POST(req: Request) {
       chargeStartHour: num(body.chargeStartHour),
       quietStart: num(body.quietStart),
       quietEnd: num(body.quietEnd),
-      ownerSub: session?.sub,
+      ownerSub: session.sub,
     });
-    const res = NextResponse.json({ household: hh });
-    // A creator who skipped sign-in still gets their dashboard for a day via
-    // the household-bound cookie; the durable path remains the account link.
-    res.headers.append('Set-Cookie', demoCookieHeader(hh.id));
-    return res;
+    return NextResponse.json({ household: hh });
   }
 
   if (action === 'join') {

@@ -156,11 +156,20 @@ export class MemoryStore implements Store {
     db().users.set(user.sub, { ...user });
   }
   async linkHouseholdToUser(sub: string, householdId: string): Promise<void> {
-    const user = db().users.get(sub);
-    if (!user) return;
+    // A session may exist before its user row (forged/test sessions, transfer
+    // edge cases) — create a stub so the link is never silently lost.
+    const existing = db().users.get(sub);
+    const user: KhayaalUser = existing ?? {
+      sub,
+      email: '',
+      name: 'Family',
+      householdIds: [],
+      createdAtTs: Date.now(),
+    };
     if (!user.householdIds.includes(householdId)) {
-      db().users.set(sub, { ...user, householdIds: [...user.householdIds, householdId] });
+      user.householdIds = [...user.householdIds, householdId];
     }
+    db().users.set(sub, user);
     const hh = db().households.get(householdId);
     if (hh) {
       const ownerSubs = new Set(hh.ownerSubs ?? []);
