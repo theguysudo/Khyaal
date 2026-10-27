@@ -3,11 +3,13 @@
 /**
  * Onboarding: a child creates the household, tells Khayaal about the parent,
  * and receives the pairing code the parent's phone will enter (Phase 2 app).
+ * The server's LAN address is shown next to the code — 10.0.2.2 only works
+ * inside the Android emulator; a physical phone needs this address.
  */
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { postJSON } from '@/lib/api';
 
 export default function OnboardingPage() {
@@ -16,6 +18,15 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ id: string; pairingCode: string; parentName: string } | null>(null);
+  const [lanBaseUrl, setLanBaseUrl] = useState<string | null>(null);
+
+  // The address a physical phone needs: this machine's LAN IP, not localhost.
+  useEffect(() => {
+    fetch('/api/v1/server-info')
+      .then((r) => r.json())
+      .then((d) => setLanBaseUrl(d.lanBaseUrl ?? null))
+      .catch(() => {});
+  }, []);
 
   const [parentName, setParentName] = useState('');
   const [childName, setChildName] = useState('');
@@ -143,6 +154,21 @@ export default function OnboardingPage() {
               <div className="mx-auto mt-8 max-w-sm rounded-3xl border border-ink/10 bg-white p-7 shadow-[0_2px_20px_rgba(42,36,29,0.05)]">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink/45">Pairing code for her phone</p>
                 <p className="mt-3 font-heading text-4xl tracking-[0.2em] text-clay">{created.pairingCode}</p>
+                {lanBaseUrl && (
+                  <>
+                    <p className="mt-5 text-[12px] font-semibold uppercase tracking-[0.14em] text-ink/45">Server address for the app</p>
+                    <p className="mt-2 cursor-pointer rounded-lg bg-paper px-3 py-2 font-mono text-sm text-ink/80 transition-colors hover:bg-mist"
+                       title="Tap to copy"
+                       onClick={() => navigator.clipboard?.writeText(lanBaseUrl)}>
+                      {lanBaseUrl}
+                    </p>
+                    <p className="mt-3 text-xs leading-relaxed text-ink/45">
+                      The app pre-fills <span className="font-mono">10.0.2.2:3100</span> — that only works on the
+                      Android emulator. On her physical phone, replace it with the address above
+                      (phone and this computer on the same Wi-Fi).
+                    </p>
+                  </>
+                )}
                 <p className="mt-3 text-xs leading-relaxed text-ink/45">
                   The Android app (Phase 2) asks for this code once. Everything after that is silent.
                 </p>

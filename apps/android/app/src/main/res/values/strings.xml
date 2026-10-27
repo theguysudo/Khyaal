@@ -9,7 +9,7 @@
     <string name="pairing_server_button">Server settings</string>
     <string name="pairing_server_hint">Where Khayaal\'s home is (the backend address)</string>
     <string name="pairing_error_code">That code didn\'t work — check it with your family.</string>
-    <string name="pairing_error_network">Couldn\'t reach home. Check the server address and the connection.</string>
+    <string name="pairing_error_network">Couldn\'t reach the server. On the emulator keep 10.0.2.2:3100 — on her physical phone use the laptop\'s address from the onboarding screen, with both on the same Wi-Fi.</string>
     <string name="pairing_error_generic">Something went wrong. Please try once more.</string>
     <string name="pairing_success_title">Khayaal is watching over her — quietly.</string>
     <string name="pairing_success_body">From now on, her phone shares only the gentle signals: unlocks, a little movement, the evening charge. Nothing else.</string>
