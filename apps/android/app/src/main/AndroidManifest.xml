@@ -23,6 +23,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
+    <!-- Tier-3 call chain: place calls directly when granted. Without it the
+         app falls back to ACTION_DIAL (dialer opens, she presses call). -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+
     <!-- Optional app-open signals (package names only, never screen content).
          A protected AppOps permission — the user grants it in Settings. -->
     <uses-permission
@@ -74,6 +78,18 @@
             android:name=".sleep.SleepWatchService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- "Hey Khayaal": opt-in on-device speech recognition for a few
+             voice commands. No audio stored; transcripts stay in memory. -->
+        <service
+            android:name=".voice.VoiceCommandService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- Call-chain notification's Cancel button. -->
+        <receiver
+            android:name=".care.CallChainActionReceiver"
+            android:exported="false" />
 
         <!-- FCM stub: instant tier pushes on top of the 10-minute poll. -->
         <service

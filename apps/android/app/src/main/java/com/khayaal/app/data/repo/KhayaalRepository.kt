@@ -4,11 +4,13 @@ import com.khayaal.app.data.api.ApiClient
 import com.khayaal.app.data.api.AssistantMessageDto
 import com.khayaal.app.data.api.AssistantRequest
 import com.khayaal.app.data.api.CommandAckRequest
+import com.khayaal.app.data.api.DeviceTokenRequest
 import com.khayaal.app.data.api.IngestRequest
 import com.khayaal.app.data.api.PairRequest
 import com.khayaal.app.data.api.SnoozeRequest
 import com.khayaal.app.data.api.SourceCreateRequest
 import com.khayaal.app.data.api.StateBundleDto
+import com.khayaal.app.data.datastore.CallChainState
 import com.khayaal.app.data.datastore.PairingInfo
 import com.khayaal.app.data.datastore.PairingStore
 import com.khayaal.app.data.queue.SignalQueue
@@ -60,10 +62,23 @@ class KhayaalRepository(
         )
         store.savePairing(info)
         store.setLastIngestError(null)
+        // If this phone already holds an FCM token, register it with the new
+        // household right away (idempotent — the token lives in DataStore).
+        store.currentFcmToken()?.let { token ->
+            runCatching { apiClient.api(info.baseUrl).registerDevice(info.householdId, DeviceTokenRequest(token)) }
+        }
         info
     }
 
     suspend fun unpair() {
+        // Best-effort token unregister — the household may already be gone.
+        val pairing = store.current()
+        val token = store.currentFcmToken()
+        if (pairing != null && token != null) {
+            runCatching {
+                apiClient.api(pairing.baseUrl).unregisterDevice(pairing.householdId, DeviceTokenRequest(token))
+            }
+        }
         queue.clear()
         store.clearPairing()
     }
@@ -140,7 +155,8 @@ class KhayaalRepository(
 
     // -- State -------------------------------------------------------------------
 
-    /** Polls the tick bundle; also re-syncs the demo time offset when present. */
+    /** Polls the tick bundle; re-syncs the demo time offset, the status string
+     *  (for voice) and the callOrder cache (for "call <name>" and the alarm). */
     suspend fun fetchState(): Result<StateBundleDto> = runCatching {
         val pairing = requireNotNull(store.current()) { "Not paired yet" }
         val bundle = apiClient.api(pairing.baseUrl).state(pairing.householdId)
@@ -149,6 +165,12 @@ class KhayaalRepository(
         if (simNow != null && realNow != null) {
             store.setTimeOffsetMs(simNow - realNow)
         }
+        bundle.state?.status?.takeIf { it.isNotBlank() }?.let { store.setLastStatus(it) }
+        val order = bundle.household?.callPlan?.callOrder
+            ?.filter { it.phone.isNotBlank() }
+            ?.map { CallChainState.Entry(name = it.name, phone = it.phone) }
+            .orEmpty()
+        store.cacheCallOrder(order)
         bundle
     }
 
@@ -170,6 +192,15 @@ class KhayaalRepository(
     suspend fun ackCommand(commandId: String): Result<Unit> = runCatching {
         val pairing = requireNotNull(store.current()) { "Not paired yet" }
         apiClient.api(pairing.baseUrl).ackCommand(pairing.householdId, CommandAckRequest(commandId))
+        Unit
+    }
+
+    // -- FCM device token ---------------------------------------------------------
+
+    /** Registers this phone's push token. Best-effort; callers wrap in runCatching. */
+    suspend fun registerDeviceToken(token: String): Result<Unit> = runCatching {
+        val pairing = requireNotNull(store.current()) { "Not paired yet" }
+        apiClient.api(pairing.baseUrl).registerDevice(pairing.householdId, DeviceTokenRequest(token))
         Unit
     }
 

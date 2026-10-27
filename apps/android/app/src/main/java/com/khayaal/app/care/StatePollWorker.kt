@@ -27,6 +27,8 @@ class StatePollWorker(
             }
 
         CheckInManager.handleState(applicationContext, bundle, container.pairingStore)
+        // Family→app commands (messages, reminders, tts, request-checkin).
+        runCatching { container.commandCoordinator.onBundle(bundle) }
         return Result.success()
     }
 }

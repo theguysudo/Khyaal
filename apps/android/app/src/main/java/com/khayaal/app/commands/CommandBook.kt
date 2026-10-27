@@ -30,6 +30,6 @@ data class CommandBook(
         const val CAP = 200
         const val HISTORY_CAP = 30
 
-        fun trim(ids: Set<String>): Set<String> = ids.takeLast(CAP).toSet()
+        fun trim(ids: Set<String>): Set<String> = ids.toList().takeLast(CAP).toSet()
     }
 }

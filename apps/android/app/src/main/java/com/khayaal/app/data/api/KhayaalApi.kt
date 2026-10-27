@@ -1,6 +1,7 @@
 package com.khayaal.app.data.api
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -49,4 +50,18 @@ interface KhayaalApi {
         @Path("id") householdId: String,
         @Body body: AssistantRequest,
     ): AssistantResponse
+
+    /** Registers this phone's FCM token for instant tier pushes. */
+    @POST("api/v1/household/{id}/devices")
+    suspend fun registerDevice(
+        @Path("id") householdId: String,
+        @Body body: DeviceTokenRequest,
+    ): DeviceTokenResponse
+
+    /** Unregisters the FCM token (unpair). */
+    @DELETE("api/v1/household/{id}/devices")
+    suspend fun unregisterDevice(
+        @Path("id") householdId: String,
+        @Body body: DeviceTokenRequest,
+    ): DeviceTokenResponse
 }

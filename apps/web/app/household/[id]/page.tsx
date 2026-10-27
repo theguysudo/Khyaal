@@ -11,7 +11,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/dashboard/bento';
 import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
 
@@ -123,6 +123,7 @@ export default function DashboardPage() {
           <SleepSoundCard bundle={bundle} />
           <AnalysisCard id={id} bundle={bundle} />
           <CircleCard id={id} bundle={bundle} />
+          <PushCard id={id} />
           <EventsCard bundle={bundle} />
           <SourcesCard bundle={bundle} />
         </div>
@@ -181,6 +182,7 @@ function TrendCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['b
 
 function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
   const [type, setType] = useState<'message' | 'reminder' | 'tts' | 'request_checkin'>('message');
+  const [lang, setLang] = useState<'en' | 'hi'>('en');
   const [text, setText] = useState('');
   const [sent, setSent] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -190,7 +192,7 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
     if (!text.trim()) return;
     setBusy(true);
     try {
-      await postJSON(`/api/v1/household/${id}/commands`, { type, text: text.trim() });
+      await postJSON(`/api/v1/household/${id}/commands`, { type, text: text.trim(), lang });
       setSent(text.trim());
       setText('');
       setTimeout(() => setSent(null), 2500);
@@ -224,20 +226,37 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
           </button>
         ))}
       </div>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex items-center gap-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, 280))}
           onKeyDown={(e) => e.key === 'Enter' && send()}
           placeholder={
             type === 'tts'
-              ? 'Will be spoken aloud on her phone…'
+              ? lang === 'hi'
+                ? 'हिंदी में लिखें — फ़ोन पर बोलकर सुनाया जाएगा…'
+                : 'Will be spoken aloud on her phone…'
               : type === 'reminder'
-                ? 'Take your blood pressure pill at 8'
-                : 'A short, warm message…'
+                ? lang === 'hi'
+                  ? 'सुबह 8 बजे दवा लेना…'
+                  : 'Take your blood pressure pill at 8'
+                : lang === 'hi'
+                  ? 'एक छोटा, प्यारा संदेश…'
+                  : 'A short, warm message…'
           }
           className="flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-clay"
         />
+        <div className="flex overflow-hidden rounded-full border border-ink/15 text-xs">
+          {(['en', 'hi'] as const).map((l) => (
+            <button
+              key={l}
+              onClick={() => setLang(l)}
+              className={`px-3 py-2.5 transition-colors ${lang === l ? 'bg-ink text-paper' : 'text-ink/50 hover:bg-paper'}`}
+            >
+              {l === 'en' ? 'EN' : 'हिं'}
+            </button>
+          ))}
+        </div>
         <button onClick={send} disabled={busy || !text.trim()} className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40">
           {busy ? 'Sending…' : 'Send'}
         </button>
@@ -451,6 +470,7 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
 function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'family' | 'neighbor'>('neighbor');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -461,9 +481,16 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
     setBusy(true);
     setError(null);
     try {
-      await postJSON(`/api/v1/household/${id}/circle`, { action, name, email: memberEmail ?? email, role });
+      await postJSON(`/api/v1/household/${id}/circle`, {
+        action,
+        name,
+        email: memberEmail ?? email,
+        phone: action === 'add' ? phone.trim() || undefined : undefined,
+        role,
+      });
       setName('');
       setEmail('');
+      setPhone('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed');
     } finally {
@@ -484,6 +511,10 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
           <li key={m.email} className="flex items-center justify-between rounded-xl border border-ink/10 bg-paper px-3.5 py-2.5 text-sm">
             <span>
               {m.name} <span className="text-xs text-ink/40">({m.role})</span>
+              <span className="block text-xs text-ink/40">
+                {m.email}
+                {m.phone ? ` · ${m.phone}` : ''}
+              </span>
             </span>
             <button onClick={() => manage('remove', m.email)} disabled={busy} className="text-xs text-ink/40 transition-colors hover:text-[#b23a2f]">
               remove
@@ -494,6 +525,7 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
       <div className="mt-3 space-y-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (they sign in with Google)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (for the alert call chain)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none focus:border-clay" />
         <div className="flex items-center justify-between gap-2">
           <select value={role} onChange={(e) => setRole(e.target.value as 'family' | 'neighbor')} className="rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none">
             <option value="neighbor">Neighbour</option>
@@ -506,9 +538,79 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
         {error && <p className="text-xs text-[#b23a2f]">{error}</p>}
         <p className="text-[11px] leading-relaxed text-ink/40">
           Circle members sign in at /login and claim this household with its pairing code. On a real alert they are
-          notified alongside the family — a neighbour can be the fastest help there is.
+          notified alongside the family — a neighbour can be the fastest help there is. Phone numbers power the
+          escalation call chain (free dialer hand-off, no SMS gateway needed).
         </p>
       </div>
+    </BentoCard>
+  );
+}
+
+function PushCard({ id }: { id: string }) {
+  const [status, setStatus] = useState<'idle' | 'on' | 'unsupported' | 'denied'>('idle');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setStatus('unsupported');
+      return;
+    }
+    navigator.serviceWorker
+      .ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setStatus(sub ? 'on' : 'idle'))
+      .catch(() => setStatus('idle'));
+  }, []);
+
+  const subscribe = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const info = await fetch('/api/v1/server-info').then((r) => r.json());
+      const key = info.vapidPublicKey as string | null;
+      if (!key) {
+        setNote('Push keys are not configured on this server yet.');
+        return;
+      }
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await reg.update();
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      }
+      await postJSON(`/api/v1/household/${id}/push-subscribe`, sub.toJSON());
+      setStatus('on');
+      setNote("This browser will now receive urgent alerts — even with the tab closed.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setNote(/permission|denied/i.test(msg) ? 'Notification permission was denied in the browser.' : msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <BentoCard label="Alerts on this device" className="col-span-12 lg:col-span-5">
+      <CardTitle note="free browser push, no SMS gateway">Alerts on this device</CardTitle>
+      <p className="mt-3 text-sm leading-relaxed text-ink/55">
+        When an urgent alert fires, this laptop or tablet is nudged too — the notification arrives even with
+        Khayaal closed, straight from the browser's own push channel.
+      </p>
+      <div className="mt-4 flex items-center gap-3">
+        {status === 'unsupported' ? (
+          <span className="text-sm text-ink/40">This browser can't receive push notifications.</span>
+        ) : (
+          <button
+            onClick={subscribe}
+            disabled={busy || status === 'on'}
+            className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            {status === 'on' ? 'Alerts are on ✓' : busy ? 'Enabling…' : 'Enable urgent alerts here'}
+          </button>
+        )}
+      </div>
+      {note && <p className="mt-3 text-xs leading-relaxed text-ink/50">{note}</p>}
     </BentoCard>
   );
 }

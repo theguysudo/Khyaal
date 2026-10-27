@@ -16,6 +16,7 @@ import {
   MIN,
   randomId,
 } from '@khayaal/engine';
+import { dispatchTierAlert } from './notify';
 import { getStore } from './store';
 
 export const SIGNAL_WINDOW_MS = 7 * 24 * HOUR;
@@ -78,6 +79,18 @@ export async function tickHousehold(householdId: string): Promise<TickBundle | n
 
   await store.setState(householdId, state);
   for (const e of events) await store.appendEvent(householdId, e);
+
+  // Tier-3 escalation also fans out to the free channels: FCM push to the
+  // Android app, VAPID push to the family browser, SMTP email to the care
+  // circle. All fire-and-forget — a notify outage must never block a tick,
+  // and without creds every channel is a silent no-op.
+  const escalated = events.find((e) => e.type === 'tier_change' && e.to === 3);
+  if (escalated) {
+    const alertHousehold = { ...household, tierSinceTs: state.tierSinceTs };
+    void dispatchTierAlert(alertHousehold, escalated.meta ?? 'Escalation to urgent care.').catch(
+      () => undefined,
+    );
+  }
 
   const recentEvents = await store.getEvents(householdId, nowTs - 24 * HOUR, 60);
 

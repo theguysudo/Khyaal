@@ -74,6 +74,11 @@ object CheckInManager {
             parentName = bundle.household?.parentName.orEmpty(),
             childName = bundle.household?.childName.orEmpty(),
         )
+
+        // Tier 3 and a callPlan: arm the free call chain (cancellable at every step).
+        if (tier >= 3) {
+            runCatching { CallChainManager.arm(context, store, bundle.household) }
+        }
     }
 
     /** Public so the FCM stub can wake the phone directly from a data push. */

@@ -14,7 +14,7 @@ export type SignalType =
   | 'charging' // phone on charger (true) or off (false)
   | 'app_usage' // an app was opened (name only, never content)
   | 'location_zone' // 'home' | 'away' — presence, never a trail
-  | 'presence' // ESP32 Wi-Fi sensing: 'motion' | 'idle' | 'lost'
+  | 'presence' // ESP32 Wi-Fi sensing: 'motion' | 'idle' | 'lost' | 'fall'
   | 'manual_checkin' // parent tapped "I'm OK"
   | 'sleep_event' // on-device classifier: 'asleep' | 'awake' | 'restless' | 'woke'
   | 'sound_event'; // on-device loudness: 'quiet' | 'noise' | 'loud' — never audio
@@ -69,6 +69,7 @@ export interface Household {
 export interface CareCircleMember {
   name: string;
   email: string;
+  phone?: string; // for the on-device auto-dial call chain
   role: 'family' | 'neighbor';
   addedTs: number;
 }
@@ -79,6 +80,7 @@ export interface AppCommand {
   ts: number;
   type: 'message' | 'reminder' | 'tts' | 'request_checkin';
   text: string;
+  lang?: 'hi' | 'en'; // TTS language for spoken reminders
   ackTs: number | null;
 }
 

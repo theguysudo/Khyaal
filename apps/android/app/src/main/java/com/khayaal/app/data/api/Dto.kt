@@ -51,6 +51,8 @@ data class HouseholdDto(
 data class CareCircleMemberDto(
     val name: String = "",
     val email: String = "",
+    /** Present on newer backends — powers "call <name>" and the call chain. */
+    val phone: String? = null,
     val role: String = "",
     val addedTs: Long? = null,
 )
@@ -59,6 +61,14 @@ data class CareCircleMemberDto(
 data class CallPlanDto(
     val callElderAfterMin: Long? = null,
     val alertCircleAfterMin: Long? = null,
+    /** The free call chain: who to call, in order. Absent on older backends. */
+    val callOrder: List<CallOrderEntryDto> = emptyList(),
+)
+
+@Serializable
+data class CallOrderEntryDto(
+    val name: String = "",
+    val phone: String = "",
 )
 
 @Serializable
@@ -141,6 +151,8 @@ data class CommandDto(
     val text: String = "",
     val ts: Long = 0,
     val ackTs: Long? = null,
+    /** "hi" | "en" — the language the text should be spoken in. Default "en". */
+    val lang: String? = null,
 ) {
     object Types {
         const val MESSAGE = "message"
@@ -174,6 +186,16 @@ data class AssistantRequest(
 @Serializable
 data class AssistantResponse(
     val reply: String? = null,
+    val error: String? = null,
+)
+
+/** POST/DELETE /household/{id}/devices — FCM token registration. */
+@Serializable
+data class DeviceTokenRequest(val token: String)
+
+@Serializable
+data class DeviceTokenResponse(
+    val ok: Boolean? = null,
     val error: String? = null,
 )
 

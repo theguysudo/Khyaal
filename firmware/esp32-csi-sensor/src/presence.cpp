@@ -10,6 +10,8 @@ const char *presenceValue(Presence p) {
       return "motion";
     case Presence::Lost:
       return "lost";
+    case Presence::Fall:
+      return "fall";
     case Presence::Idle:
     case Presence::Init:
       return "idle";
@@ -22,6 +24,7 @@ Presence PresenceStateMachine::update(bool wifiUp, bool haveData,
   // Wi-Fi down overrides everything: without a link we cannot sense.
   if (!wifiUp) {
     aboveSinceMs_ = belowSinceMs_ = 0;
+    spikeSinceMs_ = stillSinceMs_ = 0;
     if (state_ != Presence::Lost) {
       state_ = Presence::Lost;
       return state_;
@@ -38,10 +41,58 @@ Presence PresenceStateMachine::update(bool wifiUp, bool haveData,
   if (state_ == Presence::Init || state_ == Presence::Lost) {
     state_ = Presence::Idle;
     aboveSinceMs_ = belowSinceMs_ = 0;
+    spikeSinceMs_ = stillSinceMs_ = 0;
+    spikePeak_ = 0;
+    rollingMean_ = variance;
     return state_;
   }
 
   const bool above = variance > params_.threshold;
+
+  // --- fall detector ------------------------------------------------------
+  // A fall is one large, brief disturbance followed by continued stillness —
+  // unlike walking (sustained medium disturbance) or dropping an object
+  // (small disturbance). Baseline is a slow EMA, so a single event barely
+  // moves it. After a confirmed fall the baseline resets to the still level
+  // so the same event cannot fire twice.
+  const bool spiking =
+      variance > params_.threshold &&
+      variance > params_.fallSpikeRatio * rollingMean_;
+  if (spiking) {
+    if (spikeSinceMs_ == 0) {
+      spikeSinceMs_ = nowMs;
+      spikePeak_ = variance;
+    } else if (variance > spikePeak_) {
+      spikePeak_ = variance;
+    }
+    stillSinceMs_ = 0;
+  } else if (spikeSinceMs_ != 0) {
+    if (!above) {
+      if (stillSinceMs_ == 0) stillSinceMs_ = nowMs;
+      const bool spikeLongEnough = (nowMs - spikeSinceMs_) >= params_.fallSpikeMs;
+      const bool spikeStrongEnough = spikePeak_ > params_.threshold;
+      if (spikeLongEnough && spikeStrongEnough &&
+          (nowMs - stillSinceMs_) >= params_.fallStillMs) {
+        spikeSinceMs_ = stillSinceMs_ = 0;
+        spikePeak_ = 0;
+        rollingMean_ = variance;
+        state_ = Presence::Idle;
+        return Presence::Fall;
+      }
+    } else {
+      // Movement resumed right after the spike — that is a person walking,
+      // not someone lying on the floor. Stand the fall detector down.
+      stillSinceMs_ = 0;
+      spikeSinceMs_ = 0;
+      spikePeak_ = 0;
+    }
+    // A spike that never settles (sustained activity) is not a fall.
+    if (spikeSinceMs_ != 0 && (nowMs - spikeSinceMs_) > 10 * params_.fallSpikeMs) {
+      spikeSinceMs_ = 0;
+      spikePeak_ = 0;
+    }
+  }
+  rollingMean_ = 0.97f * rollingMean_ + 0.03f * variance;
 
   if (state_ == Presence::Idle) {
     if (above) {

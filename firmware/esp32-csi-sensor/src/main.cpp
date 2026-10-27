@@ -249,6 +249,7 @@ void printHelp() {
   Serial.println("  key <sk_...>    apiKey (LAN mode), saved");
   Serial.println("  mode <lan|serial>   transport, saved");
   Serial.println("  factory         clear NVS, back to compiled defaults");
+  Serial.println("  falltest        emit one 'fall' event (demo/test hook)");
 }
 
 void printShow() {
@@ -335,6 +336,9 @@ void dispatchCli(char *line) {
     } else {
       klog("usage: mode <lan|serial>");
     }
+  } else if (strcmp(line, "falltest") == 0) {
+    klog("falltest: emitting one 'fall' presence event");
+    emitPresence("fall");
   } else if (strcmp(line, "factory") == 0) {
     store.factoryReset(&cfg);
     klog("NVS cleared; compiled defaults restored");
@@ -430,6 +434,7 @@ void loop() {
         sm.update(wifiUp, haveData, lastVariance, nowMs);
     if (after != before) {
       if (after == Presence::Lost) klog("presence lost (no Wi-Fi link)");
+      if (after == Presence::Fall) klog("FALL pattern detected (spike then stillness)");
       emitPresence(presenceValue(after));
     }
     if (nowMs - lastStatusMs >= kStatusPeriodMs) {

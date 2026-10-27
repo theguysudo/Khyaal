@@ -131,6 +131,25 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
       }
     }
 
+    // --- Fall override -----------------------------------------------------
+    // A freshly sensed fall skips the ladder, the dwell timers, quiet hours
+    // and the confidence gate: the sensor saw an impact pattern, and that is
+    // precisely the moment the family must be called — even at 3am.
+    const lastFall = [...signals]
+      .reverse()
+      .find((s) => s.type === 'presence' && s.value === 'fall');
+    if (lastFall && nowTs - lastFall.ts < 15 * MIN && tier < 3) {
+      pushEvent({
+        ts: nowTs,
+        type: 'tier_change',
+        from: tier,
+        to: 3,
+        meta: 'Possible fall detected by the room sensor — family alerted immediately.',
+      });
+      tier = 3;
+      tierSinceTs = nowTs;
+    }
+
     // (A snooze is never cleared by parent activity — it is a promise the
     // family made to themselves; it expires on its own.)
   }

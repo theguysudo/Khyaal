@@ -32,9 +32,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (circle.some((m) => m.email === email)) {
       return NextResponse.json({ error: 'Already in the circle' }, { status: 409 });
     }
+    const rawPhone = typeof body.phone === 'string' ? body.phone.replace(/[^\d+\- ()]/g, '').trim() : '';
+    if (rawPhone.length > 24) {
+      return NextResponse.json({ error: 'Phone number looks too long' }, { status: 400 });
+    }
     const member: CareCircleMember = {
       name: typeof body.name === 'string' && body.name.trim() ? body.name.trim() : email.split('@')[0],
       email,
+      ...(rawPhone ? { phone: rawPhone } : {}),
       role: body.role === 'neighbor' ? 'neighbor' : 'family',
       addedTs: Date.now(),
     };

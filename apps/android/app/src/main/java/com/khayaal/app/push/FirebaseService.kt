@@ -2,7 +2,12 @@ package com.khayaal.app.push
 
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.khayaal.app.KhayaalApp
 import com.khayaal.app.care.CheckInManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * FCM stub — an instant wake-up on top of the 10-minute state poll, not a
@@ -14,6 +19,8 @@ import com.khayaal.app.care.CheckInManager
  *   { "tier": "2", "parentName": "Amma", "childName": "Aditya", "status": "Waiting for Amma's check-in" }
  */
 class FirebaseService : FirebaseMessagingService() {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onMessageReceived(message: RemoteMessage) {
         val tier = message.data[TIER_KEY]?.toIntOrNull() ?: return
@@ -27,9 +34,15 @@ class FirebaseService : FirebaseMessagingService() {
     }
 
     override fun onNewToken(token: String) {
-        // TODO(fcm-config): once the backend gains a device-token endpoint
-        // (e.g. POST /api/v1/household/{id}/devices), register this token so
-        // escalations can push instantly. Until then polling covers it.
+        // Remember the token (idempotent re-registration) and try to register
+        // it right away. The endpoint may not exist yet, the phone may not be
+        // paired, google-services.json may be absent — every failure is a
+        // silent no-op; pairing re-registers the stored token automatically.
+        scope.launch {
+            val container = (applicationContext as? KhayaalApp)?.container ?: return@launch
+            container.pairingStore.setFcmToken(token)
+            runCatching { container.repository.registerDeviceToken(token) }
+        }
         super.onNewToken(token)
     }
 

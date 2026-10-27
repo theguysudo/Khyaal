@@ -47,7 +47,7 @@ class CommandCoordinator(
         // 1. Surface anything new.
         val fresh = book.unseen(commands)
         for (command in fresh) {
-            if (command.type == CommandDto.Types.TTS) tts.speak(command.text)
+            if (command.type == CommandDto.Types.TTS) tts.speak(command.text, command.lang)
             notifyCommand(command)
         }
         if (fresh.isNotEmpty()) {
@@ -109,20 +109,23 @@ class CommandCoordinator(
     /** One notification slot per command id so reminders don't overwrite each other. */
     private fun notificationId(command: CommandDto): Int = 4000 + (command.id.hashCode() and 0xFFFF)
 
-    private fun ensureChannel() {
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        val channel = NotificationChannel(
-            CHANNEL_COMMANDS,
-            context.getString(R.string.channel_commands_name),
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = context.getString(R.string.channel_commands_description)
-        }
-        manager.createNotificationChannel(channel)
-    }
+    private fun ensureChannel() = ensureChannelStatic(context)
 
     companion object {
         const val CHANNEL_COMMANDS = "khayaal-commands"
         const val COMMAND_OPEN_REQUEST_CODE = 6401
+
+        /** Channel creation is idempotent; Application.onCreate calls this early. */
+        fun ensureChannelStatic(context: Context) {
+            val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            val channel = NotificationChannel(
+                CHANNEL_COMMANDS,
+                context.getString(R.string.channel_commands_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = context.getString(R.string.channel_commands_description)
+            }
+            manager.createNotificationChannel(channel)
+        }
     }
 }

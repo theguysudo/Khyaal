@@ -20,8 +20,10 @@ class IngestWorker(
     override suspend fun doWork(): Result {
         val container = (applicationContext as? KhayaalApp)?.container ?: return Result.failure()
 
-        // App-open signals are read in bulk at flush time (see AppUsageCollector).
+        // App-open signals are read in bulk at flush time (see AppUsageCollector);
+        // the daily absolute step total rides the same heartbeat.
         AppUsageCollector.drainInto(applicationContext, container.pairingStore, container.signalQueue)
+        StepsCollector.drainInto(container.pairingStore, container.signalQueue)
 
         return when (container.repository.flushQueue()) {
             FlushOutcome.Uploaded,

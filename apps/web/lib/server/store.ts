@@ -9,6 +9,7 @@ import type {
   Source,
 } from '@khayaal/shared';
 import { decrypt, encrypt } from './crypto-box';
+import { FirestoreStore, firestoreConfigured } from './firestore';
 
 /**
  * One storage interface, two implementations:
@@ -35,6 +36,15 @@ export interface Store {
   getCommands(householdId: string, limit?: number): Promise<AppCommand[]>;
   ackCommand(householdId: string, commandId: string, ackTs: number): Promise<void>;
   clearCommands(householdId: string): Promise<void>;
+
+  // device tokens (FCM)
+  addDeviceToken(householdId: string, token: string): Promise<void>;
+  removeDeviceToken(householdId: string, token: string): Promise<void>;
+  getDeviceTokens(householdId: string): Promise<string[]>;
+
+  // browser push (VAPID)
+  addWebPushSubscriber(householdId: string, sub: unknown): Promise<void>;
+  getWebPushSubscribers(householdId: string): Promise<unknown[]>;
 
   // signals
   appendSignal(householdId: string, signal: Signal): Promise<void>;
@@ -76,6 +86,8 @@ interface MemoryDb {
   baselines: Map<string, Baseline>;
   users: Map<string, KhayaalUser>;
   commands: Map<string, AppCommand[]>;
+  deviceTokens: Map<string, string[]>;
+  webPushSubs: Map<string, unknown[]>;
 }
 
 const g = globalThis as unknown as { __khayaalDb?: MemoryDb };
@@ -91,6 +103,8 @@ function db(): MemoryDb {
       baselines: new Map(),
       users: new Map(),
       commands: new Map(),
+      deviceTokens: new Map(),
+      webPushSubs: new Map(),
     };
   }
   return g.__khayaalDb;
@@ -154,6 +168,36 @@ export class MemoryStore implements Store {
   }
   async clearCommands(householdId: string): Promise<void> {
     db().commands.set(householdId, []);
+  }
+
+  async addDeviceToken(householdId: string, token: string): Promise<void> {
+    const t = db().deviceTokens.get(householdId) ?? [];
+    db().deviceTokens.set(householdId, [...new Set([...t, token])].slice(-20));
+  }
+  async removeDeviceToken(householdId: string, token: string): Promise<void> {
+    const t = db().deviceTokens.get(householdId) ?? [];
+    db().deviceTokens.set(householdId, t.filter((x) => x !== token));
+  }
+  async getDeviceTokens(householdId: string): Promise<string[]> {
+    return db().deviceTokens.get(householdId) ?? [];
+  }
+
+  async addWebPushSubscriber(householdId: string, sub: unknown): Promise<void> {
+    const list = db().webPushSubs.get(householdId) ?? [];
+    const endpoint =
+      typeof sub === 'object' && sub !== null && 'endpoint' in sub
+        ? String((sub as { endpoint: unknown }).endpoint)
+        : null;
+    if (!endpoint) return; // a subscription without an endpoint cannot receive anything
+    const rest = list.filter(
+      (s) =>
+        !(typeof s === 'object' && s !== null && 'endpoint' in s &&
+          String((s as { endpoint: unknown }).endpoint) === endpoint),
+    );
+    db().webPushSubs.set(householdId, [...rest, sub].slice(-10));
+  }
+  async getWebPushSubscribers(householdId: string): Promise<unknown[]> {
+    return db().webPushSubs.get(householdId) ?? [];
   }
 
   async appendSignal(householdId: string, signal: Signal): Promise<void> {
@@ -242,6 +286,6 @@ let store: Store | null = null;
 
 /** Memory by default; Firestore when configured. One instance per process. */
 export function getStore(): Store {
-  if (!store) store = new MemoryStore();
+  if (!store) store = firestoreConfigured() ? new FirestoreStore() : new MemoryStore();
   return store;
 }

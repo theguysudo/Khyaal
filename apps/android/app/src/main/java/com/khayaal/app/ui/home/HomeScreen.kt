@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -43,26 +44,60 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.khayaal.app.R
+import com.khayaal.app.care.FamilyCall
+import com.khayaal.app.sleep.SleepWatchManager
 import com.khayaal.app.ui.theme.Clay
 import com.khayaal.app.ui.theme.ClayDeep
 import com.khayaal.app.ui.theme.Ink
 import com.khayaal.app.ui.theme.Paper
 import com.khayaal.app.ui.theme.Sage
+import android.widget.Toast
 
 /**
- * Her daily view, deliberately near-empty: a greeting, one calm card, one
- * big "I'm OK", a small snooze. A quiet gear opens the only settings.
- * The app never shows raw signals, a score, or anything that watches her.
+ * Her daily view: a greeting, one calm status card, the "I'm OK" button, a
+ * grid of gentle helpers (call, chat, night watch, reminders) and the night
+ * watch card with its plain-words disclosure. A small gear opens settings.
+ * The app never shows raw signals or anything that watches her.
  */
 @Composable
 fun HomeScreen(
+    onAskKhayaal: () -> Unit,
+    onReminders: () -> Unit,
     viewModel: HomeViewModel = viewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val okDescription = stringResource(R.string.a11y_im_ok_button)
+    val voiceAvailable = remember { VoiceAvailability.check(context) }
+
+    // RECORD_AUDIO results for the two opt-in listeners (night watch, voice).
+    var micCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
+    val micLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> micCallback?.invoke(granted) }
+
+    fun requestMicThen(callback: (Boolean) -> Unit) {
+        micCallback = callback
+        micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
 
     RequestCarePermissions()
+    RequestCallPhonePermission()
+
+    // A user opt-in survives process death: if the toggle is on but the
+    // service isn't running (fresh boot killed it), bring it back while the
+    // app is in the foreground — mic FGS may not start from the background.
+    LaunchedEffect(ui.nightWatchEnabled, ui.nightWatchActive) {
+        if (ui.nightWatchEnabled && !ui.nightWatchActive && SleepWatchManager.hasRecordPermission(context)) {
+            viewModel.setNightWatch(true)
+        }
+    }
+    LaunchedEffect(ui.voiceEnabled, ui.voiceActive) {
+        if (ui.voiceEnabled && !ui.voiceActive && SleepWatchManager.hasRecordPermission(context) && voiceAvailable) {
+            viewModel.setVoiceCommands(true)
+        }
+    }
 
     Scaffold(containerColor = Paper) { padding ->
         Column(
@@ -113,7 +148,16 @@ fun HomeScreen(
                 offline = ui.offline && !ui.loading,
             )
 
-            if ((ui.state?.tier ?: 0) >= 1) {
+            if (ui.stepsToday > 0) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.status_steps_today, ui.stepsToday.toString()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.copy(alpha = 0.55f),
+                )
+            }
+
+            if ((ui.state?.tier ?: 0) >= 1 && (ui.state?.tier ?: 0) < 3) {
                 Spacer(Modifier.height(16.dp))
                 NudgeCard(tier = ui.state?.tier ?: 0, childName = ui.childName)
             }
@@ -161,6 +205,63 @@ fun HomeScreen(
                 )
             }
 
+            Spacer(Modifier.height(24.dp))
+
+            QuickActions(
+                nightWatchOn = ui.nightWatchEnabled,
+                onCallFamily = { FamilyCall.openDialer(context, null) },
+                onAskKhayaal = onAskKhayaal,
+                onToggleNightWatch = { enable ->
+                    if (enable && !SleepWatchManager.hasRecordPermission(context)) {
+                        requestMicThen { granted ->
+                            viewModel.setNightWatch(granted)
+                            if (!granted) {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.night_watch_permission_needed),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
+                    } else {
+                        viewModel.setNightWatch(enable)
+                    }
+                },
+                onReminders = onReminders,
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            SleepCard(
+                nightWatchOn = ui.nightWatchEnabled,
+                voiceOn = ui.voiceEnabled,
+                voiceAvailable = voiceAvailable,
+                lastSleep = ui.lastSleep,
+                onToggleNightWatch = { enable ->
+                    if (enable && !SleepWatchManager.hasRecordPermission(context)) {
+                        requestMicThen { granted ->
+                            viewModel.setNightWatch(granted)
+                            if (!granted) {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.night_watch_permission_needed),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
+                    } else {
+                        viewModel.setNightWatch(enable)
+                    }
+                },
+                onToggleVoice = { enable ->
+                    if (enable && !SleepWatchManager.hasRecordPermission(context)) {
+                        requestMicThen { granted -> viewModel.setVoiceCommands(granted) }
+                    } else {
+                        viewModel.setVoiceCommands(enable)
+                    }
+                },
+            )
+
             Spacer(Modifier.height(8.dp))
             TextButton(
                 onClick = viewModel::snoozeOneHour,
@@ -175,7 +276,7 @@ fun HomeScreen(
                 )
             }
 
-            ui.ingestError?.let { error ->
+            ui.ingestError?.let {
                 Spacer(Modifier.height(12.dp))
                 Text(
                     text = stringResource(R.string.home_ingest_error),
@@ -184,6 +285,19 @@ fun HomeScreen(
                 )
             }
         }
+
+        // Tier 3: the alarm owns the screen until she says otherwise.
+        AlarmOverlay(
+            tier = ui.state?.tier ?: 0,
+            callPlan = ui.callPlan,
+            careCircle = ui.careCircle,
+            callChain = ui.callChain,
+            justCheckedIn = ui.justCheckedIn,
+            onCheckIn = viewModel::checkIn,
+            onCallFamily = { FamilyCall.openDialer(context, null) },
+            onCancelCallChain = viewModel::cancelCallChain,
+            modifier = Modifier.padding(padding),
+        )
     }
 
     if (showSettings) {
@@ -222,4 +336,25 @@ private fun RequestCarePermissions() {
             activityLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
         }
     }
+}
+
+/**
+ * CALL_PHONE is optional — the call chain works without it by opening the
+ * dialer. Ask once here so the tier-3 chain can dial directly if allowed.
+ */
+@Composable
+private fun RequestCallPhonePermission() {
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    LaunchedEffect(Unit) {
+        launcher.launch(Manifest.permission.CALL_PHONE)
+    }
+}
+
+/** Whether "Hey Khayaal" on-device recognition exists on this phone. */
+private object VoiceAvailability {
+    fun check(context: android.content.Context): Boolean =
+        runCatching { com.khayaal.app.voice.VoiceCommandManager.isAvailable(context) }
+            .getOrDefault(false)
 }

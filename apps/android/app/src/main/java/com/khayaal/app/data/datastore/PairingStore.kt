@@ -14,6 +14,7 @@ import com.khayaal.app.BuildConfig
 import com.khayaal.app.commands.CommandBook
 import com.khayaal.app.data.api.CommandDto
 import com.khayaal.app.data.crypto.PairingCipher
+import com.khayaal.app.signals.SignalEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -68,11 +69,29 @@ class PairingStore(private val context: Context) {
         val COMMAND_SEEN = stringPreferencesKey("command_seen")
         val COMMAND_ACKED = stringPreferencesKey("command_acked")
         val COMMAND_HISTORY = stringPreferencesKey("command_history")
+
+        // FCM device token (idempotent re-registration after pairing).
+        val FCM_TOKEN = stringPreferencesKey("fcm_token")
+
+        // "Hey Khayaal" voice commands (opt-in, default off).
+        val VOICE_COMMANDS_ENABLED = booleanPreferencesKey("voice_commands_enabled")
+        val VOICE_ACTIVE = booleanPreferencesKey("voice_active")
+
+        // The backend's status string, cached so voice commands can read it aloud.
+        val LAST_STATUS = stringPreferencesKey("last_status")
+
+        // The scheduled call chain: who to call and how far we got.
+        val CALL_CHAIN = stringPreferencesKey("call_chain")
+
+        // The callOrder contacts, cached on every state poll so voice commands
+        // ("call Aditya") and the alarm can dial without a network round-trip.
+        val CALL_ORDER_CACHE = stringPreferencesKey("call_order_cache")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
     private val cipher by lazy { PairingCipher(context) }
 
+    @kotlinx.serialization.Serializable
     private data class PairingRecord(
         val householdId: String,
         val sourceId: String,
@@ -177,6 +196,12 @@ class PairingStore(private val context: Context) {
             prefs.remove(Keys.NIGHT_WATCH_ENABLED)
             prefs.remove(Keys.NIGHT_WATCH_ACTIVE)
             prefs.remove(Keys.NIGHT_WATCH_STARTED_AT)
+            prefs.remove(Keys.FCM_TOKEN)
+            prefs.remove(Keys.VOICE_COMMANDS_ENABLED)
+            prefs.remove(Keys.VOICE_ACTIVE)
+            prefs.remove(Keys.LAST_STATUS)
+            prefs.remove(Keys.CALL_CHAIN)
+            prefs.remove(Keys.CALL_ORDER_CACHE)
         }
     }
 
@@ -385,6 +410,90 @@ class PairingStore(private val context: Context) {
 
     private fun encodeIds(ids: Set<String>): String =
         json.encodeToString(ListSerializer(String.serializer()), ids.toList())
+
+    // -- FCM device token ---------------------------------------------------------
+
+    val fcmTokenFlow: Flow<String?> = context.dataStore.data.map { it[Keys.FCM_TOKEN] }
+
+    suspend fun currentFcmToken(): String? = fcmTokenFlow.first()
+
+    suspend fun setFcmToken(token: String?) {
+        context.dataStore.edit { prefs ->
+            if (token.isNullOrBlank()) prefs.remove(Keys.FCM_TOKEN) else prefs[Keys.FCM_TOKEN] = token
+        }
+    }
+
+    // -- Voice commands ("Hey Khayaal") ---------------------------------------------
+
+    val voiceCommandsEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.VOICE_COMMANDS_ENABLED] ?: false
+    }
+
+    suspend fun currentVoiceCommandsEnabled(): Boolean = voiceCommandsEnabledFlow.first()
+
+    suspend fun setVoiceCommandsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VOICE_COMMANDS_ENABLED] = enabled }
+    }
+
+    /** Live state, set by the service itself — the UI mirrors reality. */
+    val voiceActiveFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.VOICE_ACTIVE] ?: false
+    }
+
+    suspend fun setVoiceActive(active: Boolean) {
+        context.dataStore.edit { it[Keys.VOICE_ACTIVE] = active }
+    }
+
+    // -- Cached status (read aloud by voice commands) ---------------------------------
+
+    val lastStatusFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LAST_STATUS].orEmpty()
+    }
+
+    suspend fun setLastStatus(status: String) {
+        context.dataStore.edit { prefs ->
+            if (status.isBlank()) prefs.remove(Keys.LAST_STATUS) else prefs[Keys.LAST_STATUS] = status
+        }
+    }
+
+    // -- Call chain --------------------------------------------------------------------
+
+    val callChainFlow: Flow<CallChainState?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.CALL_CHAIN]?.let { raw ->
+            runCatching { json.decodeFromString(CallChainState.serializer(), raw) }.getOrNull()
+        }
+    }
+
+    suspend fun currentCallChain(): CallChainState? = callChainFlow.first()
+
+    suspend fun saveCallChain(state: CallChainState?) {
+        context.dataStore.edit { prefs ->
+            if (state == null) prefs.remove(Keys.CALL_CHAIN) else prefs[Keys.CALL_CHAIN] = json.encodeToString(CallChainState.serializer(), state)
+        }
+    }
+
+    // -- Cached callOrder (voice commands + alarm dial targets) ------------------
+
+    val callOrderCacheFlow: Flow<List<CallChainState.Entry>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.CALL_ORDER_CACHE]?.let { raw ->
+            runCatching {
+                json.decodeFromString(ListSerializer(CallChainState.Entry.serializer()), raw)
+            }.getOrDefault(emptyList())
+        } ?: emptyList()
+    }
+
+    suspend fun cacheCallOrder(entries: List<CallChainState.Entry>) {
+        context.dataStore.edit { prefs ->
+            if (entries.isEmpty()) {
+                prefs.remove(Keys.CALL_ORDER_CACHE)
+            } else {
+                prefs[Keys.CALL_ORDER_CACHE] =
+                    json.encodeToString(ListSerializer(CallChainState.Entry.serializer()), entries.take(10))
+            }
+        }
+    }
+
+    suspend fun currentCallOrder(): List<CallChainState.Entry> = callOrderCacheFlow.first()
 }
 
 /** The phone's identity inside one household. */
@@ -404,3 +513,21 @@ data class StepsState(
     val dayTotal: Long,
     val lastCumulative: Double,
 )
+
+/**
+ * The tier-3 call chain as scheduled on this phone: a snapshot of who to call
+ * (in order), how far the chain has progressed, and whether she cancelled it.
+ * Survives process death; the worker reads this instead of the network.
+ */
+@kotlinx.serialization.Serializable
+data class CallChainState(
+    val entries: List<Entry> = emptyList(),
+    /** Index of the NEXT entry to dial. */
+    val nextIndex: Int = 0,
+    val cancelled: Boolean = false,
+    val callElderAfterMin: Long = 0,
+    val alertCircleAfterMin: Long = 0,
+) {
+    @kotlinx.serialization.Serializable
+    data class Entry(val name: String = "", val phone: String = "")
+}

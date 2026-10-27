@@ -31,8 +31,7 @@ import com.khayaal.app.ui.theme.tierColor
 
 /**
  * The calm card at the heart of the daily view: the backend's own status
- * string, a tier-colored dot, and the last check-in time. Dignity first —
- * no score, no contributions, nothing sensor-ish is ever shown here.
+ * string, a tier-colored dot, the score ring, and the last check-in time.
  */
 @Composable
 fun StatusCard(
@@ -61,7 +60,10 @@ fun StatusCard(
                     ?: stringResource(R.string.home_all_well),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
             )
+            Spacer(Modifier.size(12.dp))
+            ScoreRing(score = state?.scoreValue, tier = tier)
         }
 
         val ackTs = state?.ack?.ts

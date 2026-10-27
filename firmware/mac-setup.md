@@ -301,3 +301,56 @@ whenever the demo server restarted).
 
 The CP2102 driver instance is wedged. Unplug the board, count to five, replug.
 If it persists: `sudo pkill -f AppleUSBSLCOM` (needs your password) and replug.
+
+---
+
+## Judge-testable pipeline check (one command)
+
+```bash
+bash firmware/test-pipeline.sh
+```
+
+Three levels, each printing PASS/FAIL:
+
+1. **sim** — no hardware needed. A pseudo-terminal pretends to be the ESP32,
+   the *real* bridge (`tunnel/khayaal_serial_bridge.py`) reads it and POSTs to
+   the real backend, and the test verifies the fall event escalates the
+   household to tier 3. Proves parsing, ts-stamping, enrichment, ingest and
+   engine escalation end to end.
+2. **lan** — posts one fall event exactly the way the firmware does in
+   `mode lan` (direct HTTP to `/api/v1/ingest`) and checks it lands.
+3. **hardware** — probes the CP2102 port; if healthy, runs the bridge against
+   the real board. With a serial monitor open, type `falltest` (or walk past
+   the sensor) and watch the dashboard escalate.
+
+Run individual levels with `sim` / `lan` / `hardware`. `flash` erases and
+reflashes the board (see below). Exit code 0 = all requested levels passed.
+
+If the port is wedged (`Invalid argument (22)` on every baud rate — macOS
+CP2102 driver state bug), no software fix works: **unplug the ESP32, count to
+five, plug it back in**, then rerun. The script detects this and says so.
+
+## Flash + configure (original WROOM-32, micro-USB)
+
+```bash
+bash firmware/test-pipeline.sh flash     # erase-flash + write firmware
+```
+
+Then in a serial monitor (115200 baud) — e.g. `screen /dev/cu.usbserial-0001 115200`:
+
+```
+ssid <your-phone-hotspot-name>     # 2.4 GHz, "Maximize Compatibility" ON
+pass <hotspot-password>
+mode lan                           # or leave serial for the USB bridge
+host http://<mac-lan-ip>:3100      # ipconfig getifaddr en0
+hh <householdId>                   # from register_source.py
+src <sourceId>
+key <apiKey>
+show                               # verify: state=idle, wifi=up, time=synced
+cal                                # 60 s empty-room calibration → thr suggestion
+thr <suggested>
+falltest                           # one-shot fall event for demo purposes
+```
+
+Walk past the sensor → dashboard shows motion; `falltest` → tier-3 alert and
+the care-circle call chain fires.

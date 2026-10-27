@@ -175,6 +175,31 @@ export function computeRisk(input: RiskInput): RiskResult {
     }
   }
 
+  // --- 4b. Fall (CSI room sensor) — the one presence event that is a verdict
+  // rather than an absence. It is added after the away-softening block on
+  // purpose: a room sensor seeing a fall is never explained away by the phone
+  // reporting 'away', and it is never softened.
+  const lastFall = [...presences].reverse().find((p) => p.value === 'fall');
+  if (lastFall) {
+    const sinceFall = nowTs - lastFall.ts;
+    if (sinceFall < 15 * MIN) {
+      contributions.push({
+        signal: 'presence',
+        weight: 100,
+        effect: 100,
+        reason: `A possible fall was sensed in her room ${fmtDuration(sinceFall)} ago.`,
+      });
+      notes.push('Fall detection is active — the room sensor felt an impact pattern.');
+    } else if (sinceFall < 60 * MIN) {
+      contributions.push({
+        signal: 'presence',
+        weight: 70,
+        effect: 70,
+        reason: `A possible fall was sensed ${fmtDuration(sinceFall)} ago and no movement has followed it.`,
+      });
+    }
+  }
+
   // --- 5. Silence — the strongest single signal --------------------------
   const lastAny = Math.max(
     ...signals.map((s) => s.ts),

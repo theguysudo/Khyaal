@@ -360,3 +360,70 @@ describe('escalation', () => {
     expect(out.state.tier).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Fall detection (CSI room sensor)
+// ---------------------------------------------------------------------------
+
+describe('fall detection', () => {
+  const withFall = (fallAgeMs: number, now = dayAt(0, 11.5)) => {
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      ...dayOfSignals(0, { motionUntilHour: 11.3 }),
+      { sourceId: 'esp32', type: 'presence', value: 'fall', ts: now - fallAgeMs },
+    ];
+    return { signals, now };
+  };
+
+  it('a fresh fall saturates the score to tier 3', () => {
+    const { signals, now } = withFall(2 * MIN);
+    const r = risk(signals, now);
+    expect(r.score).toBe(100);
+    expect(r.tier).toBe(3);
+    expect(r.contributions.some((c) => c.signal === 'presence' && c.effect === 100)).toBe(true);
+  });
+
+  it('a fall bypasses the escalation ladder, quiet hours and low confidence', () => {
+    const { signals, now } = withFall(2 * MIN);
+    const r = risk(signals, now);
+    // tier 0, escalated 1 minute ago, in quiet hours, thin confidence —
+    // the fall still goes straight to tier 3.
+    const out = advanceState({
+      state: { ...emptyState(now), tierSinceTs: now - MIN, snoozeUntilTs: now + 30 * MIN },
+      risk: r,
+      household: hh(),
+      signals,
+      nowTs: now,
+    });
+    expect(out.state.tier).toBe(3);
+    const ev = out.events.find((e) => e.type === 'tier_change' && e.to === 3);
+    expect(ev?.meta).toContain('fall');
+  });
+
+  it('an hour-old fall with no movement after it stays elevated but not saturated', () => {
+    const { signals, now } = withFall(45 * MIN);
+    const r = risk(signals, now);
+    expect(r.score).toBeGreaterThanOrEqual(55);
+    expect(r.score).toBeLessThan(100);
+  });
+
+  it('movement right after a fall event stands down once she is active again', () => {
+    const now = dayAt(0, 11.5);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      ...dayOfSignals(0, { motionUntilHour: 11.3 }),
+      { sourceId: 'esp32', type: 'presence', value: 'fall', ts: now - 20 * MIN },
+      { sourceId: 'phone', type: 'screen_event', value: 'unlock', ts: now - 2 * MIN },
+    ];
+    const out = advanceState({
+      state: { ...emptyState(now), tier: 3, tierSinceTs: now - 10 * MIN },
+      risk: risk(signals, now),
+      household: hh(),
+      signals,
+      nowTs: now,
+    });
+    expect(out.state.tier).toBe(0);
+  });
+});

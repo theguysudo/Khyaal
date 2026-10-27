@@ -64,6 +64,93 @@
     <string name="notification_tier3_body">Please tap I\'m OK, or ask %1$s for a call.</string>
     <string name="notification_action_im_ok">I\'m OK</string>
     <string name="notification_action_snooze">Snooze 1h</string>
+    <string name="notification_action_call_family">Call family</string>
+
+    <!-- Family commands channel -->
+    <string name="channel_commands_name">Messages from family</string>
+    <string name="channel_commands_description">Notes, reminders and voice messages your family sends you</string>
+    <string name="command_message_title">A message from your family</string>
+    <string name="command_reminder_title">A gentle reminder</string>
+    <string name="command_tts_title">A voice note from your family</string>
+    <string name="command_request_checkin_title">Please check in</string>
+    <string name="tts_hindi_data_missing">Hindi voice isn\'t installed — reading in English. Install Hindi speech data in Settings → Accessibility → Text-to-speech.</string>
+
+    <!-- Night watch (opt-in, default off) -->
+    <string name="channel_night_watch_name">Night watch</string>
+    <string name="channel_night_watch_description">Shown while Khayaal listens for loud sounds at night</string>
+    <string name="night_watch_notification_title">Khayaal night watch is on</string>
+    <string name="night_watch_notification_body">Listens for loud sounds only. Nothing is recorded, stored, or uploaded.</string>
+    <string name="night_watch_title">Night watch</string>
+    <string name="night_watch_disclosure">Listens for loud sounds only. Nothing is recorded, stored, or uploaded — analysis happens on this device.</string>
+    <string name="night_watch_on">Night watch is on</string>
+    <string name="night_watch_off">Night watch is off</string>
+    <string name="night_watch_last_sleep">Fell asleep around %1$s</string>
+    <string name="night_watch_last_awake">Woke around %1$s</string>
+    <string name="night_watch_last_restless">A restless stretch around %1$s</string>
+    <string name="night_watch_last_woke">Got up around %1$s</string>
+    <string name="night_watch_permission_needed">Allow the microphone to turn on night watch</string>
+
+    <!-- Quick actions -->
+    <string name="qa_call_family">Call family</string>
+    <string name="qa_call_family_desc">Open the dialer to call your family</string>
+    <string name="qa_ask_khayaal">Ask Khayaal</string>
+    <string name="qa_ask_khayaal_desc">Chat with Khayaal, your gentle helper</string>
+    <string name="qa_night_watch">Night watch</string>
+    <string name="qa_night_watch_desc">Turn night listening on or off</string>
+    <string name="qa_reminders">Reminders</string>
+    <string name="qa_reminders_desc">See notes and reminders from your family</string>
+
+    <!-- Tier-3 alarm view -->
+    <string name="alarm_title">We\'re here with you</string>
+    <string name="alarm_body">Your family would like to hear your voice. There is no hurry — call them, or tap I\'m OK.</string>
+    <string name="alarm_call_family">Call family</string>
+    <string name="alarm_im_ok">I\'m OK</string>
+    <string name="alarm_escalation_title">What happens next</string>
+    <string name="alarm_escalation_call">%1$s will call you in about %2$d minutes.</string>
+    <string name="alarm_escalation_circle">Your care circle is alerted after about %1$d minutes.</string>
+    <string name="alarm_circle_with">Looking out for you: %1$s</string>
+
+    <!-- Call chain -->
+    <string name="call_chain_title">Khayaal is calling %1$s for you…</string>
+    <string name="call_chain_body_next">No answer? The next person on the list will be called in a few minutes.</string>
+    <string name="call_chain_body_last">This is the last number on the list.</string>
+    <string name="call_chain_cancel">Cancel</string>
+    <string name="call_chain_scheduled">Khayaal will call %1$s in about %2$d min</string>
+    <string name="call_chain_stop">Cancel the call chain</string>
+    <string name="call_chain_stopped">Call chain cancelled.</string>
+
+    <!-- "Hey Khayaal" voice commands -->
+    <string name="channel_voice_name">Voice commands</string>
+    <string name="channel_voice_description">Shown while Khayaal listens for "Hey Khayaal"</string>
+    <string name="voice_notification_title">Khayaal is listening for "Hey Khayaal"</string>
+    <string name="voice_notification_body">Say: "call family" · "status" · "main theek hoon". Nothing is stored.</string>
+    <string name="voice_title">Hey Khayaal</string>
+    <string name="voice_disclosure">Understood on this device — nothing is stored or uploaded. Say "Khayaal, call Aditya", "Khayaal, status" or "Khayaal, main theek hoon".</string>
+    <string name="voice_on">Voice commands are on</string>
+    <string name="voice_off">Voice commands are off</string>
+    <string name="voice_unavailable">Voice commands aren\'t available on this phone.</string>
+    <string name="voice_checkin_done">We told them you are okay.</string>
+    <string name="voice_status_unknown">Khayaal doesn\'t know the status just yet — try again in a few minutes.</string>
+
+    <!-- Ask Khayaal -->
+    <string name="assistant_title">Ask Khayaal</string>
+    <string name="assistant_subtitle">Your gentle helper — ask me anything.</string>
+    <string name="assistant_input_hint">Ask Khayaal…</string>
+    <string name="assistant_send_desc">Send your question</string>
+    <string name="assistant_back_desc">Go back to the daily view</string>
+    <string name="assistant_error">Khayaal couldn\'t reach home just now. Please try again in a little while.</string>
+    <string name="assistant_unpaired">Khayaal isn\'t set up on this phone yet.</string>
+    <string name="assistant_quick_medicine">What medicine is next?</string>
+    <string name="assistant_quick_joke">Tell me a joke</string>
+    <string name="assistant_quick_call">Call family</string>
+    <string name="assistant_welcome">Hello! I\'m Khayaal. Ask me about your day, your medicines, or tap a suggestion below.</string>
+
+    <!-- Reminders -->
+    <string name="reminders_title">From your family</string>
+    <string name="reminders_empty">Nothing yet — notes from your family will appear here.</string>
+
+    <!-- Status card extras -->
+    <string name="status_steps_today">Steps today · %1$s</string>
 
     <!-- Accessibility -->
     <string name="a11y_code_input">Six digit pairing code</string>

@@ -61,6 +61,18 @@
 // Heartbeat ("idle"/"motion" re-emission) interval.
 #define KH_HEARTBEAT_MS 30000u
 
+// -------------------------------------------------------------------- fall
+// Fall heuristic on the same variance stream (no extra hardware):
+//   1. a sharp spike — variance >= KH_FALL_SPIKE_RATIO x the rolling mean
+//      and above the motion threshold — lasting >= KH_FALL_SPIKE_MS
+//      (a fall is one big disturbance, not a walk);
+//   2. followed by stillness — variance below threshold — for
+//      >= KH_FALL_STILL_MS (the person did not get up).
+// Emits one "fall" event, then resumes the normal motion/idle machine.
+#define KH_FALL_SPIKE_RATIO 3.0f
+#define KH_FALL_SPIKE_MS 400u
+#define KH_FALL_STILL_MS (2UL * 1000UL)
+
 // ------------------------------------------------------------ csi pipeline
 // Rolling window of per-packet mean amplitudes used for the variance.
 #define KH_CSI_WINDOW 100

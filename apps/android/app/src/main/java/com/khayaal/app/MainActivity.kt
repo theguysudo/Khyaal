@@ -18,17 +18,19 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.khayaal.app.data.datastore.PairingInfo
+import com.khayaal.app.ui.assistant.AssistantScreen
 import com.khayaal.app.ui.home.HomeScreen
 import com.khayaal.app.ui.pairing.PairingScreen
+import com.khayaal.app.ui.reminders.RemindersScreen
 import com.khayaal.app.ui.theme.KhayaalTheme
 import com.khayaal.app.ui.theme.Paper
 import kotlinx.coroutines.flow.map
 
 /**
- * Two routes, decided by pairing state, not by menus: an unpaired phone sees
- * only the 6-digit pairing flow; a paired one lives on the near-empty daily
- * view. Unpairing is reactive — the moment DataStore empties, the flow
- * walks the UI back to pairing.
+ * Four routes, decided by pairing state, not by menus: an unpaired phone sees
+ * only the 6-digit pairing flow; a paired one lives on the daily view, with
+ * Ask Khayaal and Reminders a tap away. Unpairing is reactive — the moment
+ * DataStore empties, the flow walks the UI back to pairing.
  */
 class MainActivity : ComponentActivity() {
 
@@ -46,6 +48,8 @@ class MainActivity : ComponentActivity() {
 private object Routes {
     const val PAIRING = "pairing"
     const val HOME = "home"
+    const val ASSISTANT = "assistant"
+    const val REMINDERS = "reminders"
 }
 
 private sealed interface PairingUi {
@@ -75,7 +79,7 @@ private fun KhayaalRoot() {
             PairingUi.Unpaired -> if (currentRoute != Routes.PAIRING) {
                 navController.navigate(Routes.PAIRING) { popUpTo(0) { inclusive = true } }
             }
-            is PairingUi.Paired -> if (currentRoute != Routes.HOME) {
+            is PairingUi.Paired -> if (currentRoute == null || currentRoute == Routes.PAIRING) {
                 navController.navigate(Routes.HOME) { popUpTo(0) { inclusive = true } }
             }
         }
@@ -96,7 +100,22 @@ private fun KhayaalRoot() {
             )
         }
         composable(Routes.HOME) {
-            HomeScreen()
+            HomeScreen(
+                onAskKhayaal = { navController.navigate(Routes.ASSISTANT) },
+                onReminders = { navController.navigate(Routes.REMINDERS) },
+            )
+        }
+        composable(Routes.ASSISTANT) {
+            AssistantScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.REMINDERS) {
+            val container2 = (context.applicationContext as KhayaalApp).container
+            val commands by container2.pairingStore.commandHistoryFlow
+                .collectAsStateWithLifecycle(initialValue = emptyList())
+            RemindersScreen(
+                commands = commands,
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }

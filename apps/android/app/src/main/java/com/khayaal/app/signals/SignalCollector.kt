@@ -18,6 +18,7 @@ class SignalCollector(
     private val charging = ChargingCollector(context, store, recorder::record)
     private val motion = MotionCollector(context, recorder::record)
     private val wifi = WifiPresenceCollector(context, store, recorder::record)
+    private val steps = StepsCollector(context, store, recorder::record)
 
     /** Safe to call once per process; no-ops gracefully when already running. */
     fun start() {
@@ -25,6 +26,7 @@ class SignalCollector(
         charging.start()
         motion.start()
         wifi.start()
+        steps.start()
     }
 
     fun stop() {
@@ -32,5 +34,6 @@ class SignalCollector(
         charging.stop()
         motion.stop()
         wifi.stop()
+        steps.stop()
     }
 }
