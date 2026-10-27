@@ -24,12 +24,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.khayaal.app.R
 import com.khayaal.app.ui.theme.CardBorder
 import com.khayaal.app.ui.theme.Clay
 import com.khayaal.app.ui.theme.Ink
@@ -47,6 +49,9 @@ fun CodeInput(
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val codeDescription = androidx.compose.ui.res.stringResource(
+        com.khayaal.app.R.string.a11y_code_input,
+    )
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         BasicTextField(

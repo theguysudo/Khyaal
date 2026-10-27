@@ -1,6 +1,5 @@
 package com.khayaal.app.signals
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -51,14 +50,3 @@ data class SignalEvent(
             SignalEvent(Types.MANUAL_CHECKIN, JsonPrimitive(true), nowMs)
     }
 }
-
-/**
- * A source in the household: the phone registers itself once at pairing and
- * keeps its [apiKey] secret in DataStore. Never leaves the device otherwise.
- */
-@Serializable
-data class RegisteredSource(
-    val id: String,
-    @SerialName("type") val type: String = "phone",
-    @SerialName("label") val label: String = "",
-)

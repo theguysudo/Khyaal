@@ -145,14 +145,11 @@ export default function Hero() {
             </span>
           </Link>
 
-          <nav className="hidden items-center text-[15px] text-white/90 md:flex">
-            {NAV_LINKS.map((l, i) => (
-              <span key={l.label}>
-                <Link href={l.href} className="transition-opacity hover:opacity-60">
-                  {l.label}
-                </Link>
-                {i < NAV_LINKS.length - 1 && <span className="mx-1.5 text-white/40">,</span>}
-              </span>
+          <nav className="hidden items-center gap-7 text-[15px] text-white/90 md:flex">
+            {NAV_LINKS.map((l) => (
+              <Link key={l.label} href={l.href} className="transition-opacity hover:opacity-60">
+                {l.label}
+              </Link>
             ))}
           </nav>
 
@@ -203,8 +200,8 @@ export default function Hero() {
       </div>
 
       {/* ------------------------------------------------ Hero section */}
-      <section className="relative z-[1] flex h-screen flex-col justify-end overflow-hidden pb-12 md:justify-center md:pb-0">
-        <div className="relative z-10 max-w-xl px-1 sm:px-0 md:px-10 lg:px-0">
+      <section className="relative z-[1] flex h-screen flex-col justify-end overflow-hidden px-5 pb-12 sm:px-8 md:justify-center md:px-10 md:pb-0">
+        <div className="relative z-10 max-w-xl">
           {/* 1. Blurred intro label */}
           <p
             className="pointer-events-none mb-5 select-none sm:mb-6"
@@ -231,7 +228,6 @@ export default function Hero() {
               fontWeight: 400,
               minHeight: 'clamp(100px, 15vw, 118px)',
               fontFamily: 'var(--mf-body)',
-              textWrap: 'balance',
             }}
           >
             {displayed}

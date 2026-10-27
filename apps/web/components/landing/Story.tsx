@@ -201,7 +201,7 @@ export default function Story() {
             ['It learns her rhythm', 'A week of ordinary days becomes a baseline. Normal means her normal — a night owl and an early riser are never measured the same.'],
             ['It speaks up only when it matters', 'A nudge, then a question, and only then you — with the last-known signals attached, never a feed.'],
           ].map(([t, b], i) => (
-            <div key={t} data-reveal="fact" style={{ ['--d' as string]: `${0.1 + i * 0.12}s` }} className="kh-glass rounded-3xl p-7 transition-colors duration-300 hover:bg-white/[0.11]">
+            <div key={t} data-reveal="fact" style={{ ['--d' as string]: `${0.1 + i * 0.12}s` }} className="kh-glass-strong rounded-3xl p-7 transition-colors duration-300 hover:bg-white/[0.07]">
               <span className="font-heading text-[13px] tracking-[0.2em] text-[#e8a06b]">0{i + 1}</span>
               <h3 className="mt-4 font-heading text-[22px] leading-snug text-white">{t}</h3>
               <p className="mt-3 text-[14.5px] leading-relaxed text-white/65">{b}</p>
