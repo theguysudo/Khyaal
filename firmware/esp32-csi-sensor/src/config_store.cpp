@@ -26,6 +26,7 @@ void ConfigStore::load(KhConfig *out) {
   copyStr(out->apiKey, sizeof(out->apiKey), KH_API_KEY_DEFAULT);
   out->threshold = KH_MOTION_THRESHOLD_DEFAULT;
   out->transport = KH_TRANSPORT_DEFAULT;
+  out->encrypt = true;  // seal by default; `enc off` only for debugging
 
   Preferences prefs;
   prefs.begin(kNamespace, true);  // read-only
@@ -37,6 +38,7 @@ void ConfigStore::load(KhConfig *out) {
   if (prefs.isKey("key")) copyStr(out->apiKey, sizeof(out->apiKey), prefs.getString("key").c_str());
   if (prefs.isKey("thr")) out->threshold = prefs.getFloat("thr", out->threshold);
   if (prefs.isKey("mode")) out->transport = prefs.getUChar("mode", out->transport);
+  if (prefs.isKey("enc")) out->encrypt = prefs.getBool("enc", out->encrypt);
   prefs.end();
 }
 
@@ -78,6 +80,11 @@ void ConfigStore::saveThreshold(KhConfig *cfg, float v) {
 void ConfigStore::saveTransport(KhConfig *cfg, uint8_t v) {
   cfg->transport = v;
   Preferences p; p.begin(kNamespace, false); p.putUChar("mode", v); p.end();
+}
+
+void ConfigStore::saveEncrypt(KhConfig *cfg, bool v) {
+  cfg->encrypt = v;
+  Preferences p; p.begin(kNamespace, false); p.putBool("enc", v); p.end();
 }
 
 void ConfigStore::factoryReset(KhConfig *cfg) {

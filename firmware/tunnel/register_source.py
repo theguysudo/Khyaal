@@ -31,7 +31,13 @@ except ImportError:  # pragma: no cover
 
 
 def register(server: str, household_id: Optional[str], label: str) -> dict[str, Any]:
-    """Create a source on `server` and return the full ingest identity."""
+    """Create a source on `server` and return the full ingest identity.
+
+    Source creation mints an API key, so the server requires either a family
+    session or the household's current pairing code — here we take the demo
+    (or join) response's code and present it; the server rotates it after use.
+    """
+    pairing_code = None
     if not household_id:
         resp = requests.post(
             f"{server}/api/v1/pair",
@@ -39,12 +45,14 @@ def register(server: str, household_id: Optional[str], label: str) -> dict[str, 
             timeout=5,
         )
         resp.raise_for_status()
-        household_id = resp.json()["household"]["id"]
+        household = resp.json()["household"]
+        household_id = household["id"]
+        pairing_code = household.get("pairingCode")
         print(f"household: {household_id}")
 
     resp = requests.post(
         f"{server}/api/v1/household/{household_id}/sources",
-        json={"type": "esp32", "label": label},
+        json={"type": "esp32", "label": label, "pairingCode": pairing_code},
         timeout=5,
     )
     resp.raise_for_status()

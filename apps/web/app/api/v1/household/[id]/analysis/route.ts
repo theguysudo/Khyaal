@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { Signal } from '@khayaal/shared';
+import { requireFamily, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { tickHousehold } from '@/lib/server/runtime';
 import { rateLimit } from '@/lib/server/rate-limit';
@@ -10,6 +11,7 @@ import { rateLimit } from '@/lib/server/rate-limit';
  * contribution frequencies, sleep/sound counts, hourly activity shape) to
  * OpenRouter or NVIDIA — never raw content, there is none to send.
  * Key: body.apiKey, or env OPENROUTER_API_KEY / NVIDIA_API_KEY.
+ * Family-only (session) — an LLM spend is never an unauthenticated action.
  */
 const PROVIDERS = {
   openrouter: {
@@ -29,8 +31,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Slow down' }, { status: 429 });
   }
   const { id } = await params;
+  const guard = await requireFamily(req, id);
+  if (guard instanceof Response) return guard;
   const bundle = await tickHousehold(id);
-  if (!bundle) return NextResponse.json({ error: 'Household not found' }, { status: 404 });
+  if (!bundle) return unauthorized();
 
   let body: Record<string, unknown> = {};
   try {

@@ -63,7 +63,7 @@ print(f"{cfg['householdId']}\t{cfg['sourceId']}\t{cfg['apiKey']}")
 EOF
 }
 
-state_json() { curl -s --max-time 5 "$BASE/api/v1/household/$1/state"; }
+state_json() { curl -s --max-time 5 -H "x-kh-source: $2" -H "x-kh-key: $3" "$BASE/api/v1/household/$1/state"; }
 
 # ------------------------------------------------------------------ level 1
 level_sim() {
@@ -89,7 +89,7 @@ level_sim() {
 
   # pattern: idle, motion, idle, motion, fall, idle, motion, idle @0.6 s
   sleep 9
-  ST=$(state_json "$HH")
+  ST=$(state_json "$HH" "$SRC" "$KEY")
   chk "bridge forwarded presence events" '"presence"' "$ST"
   chk "fall event reached the engine" 'fall' "$ST"
   chk "fall escalated the household (tier 3)" '"tier":3' "$ST"
@@ -134,8 +134,41 @@ level_lan() {
   R=$(curl -s -X POST "$BASE/api/v1/ingest" -H 'Content-Type: application/json' \
     -d "{\"householdId\":\"$HH\",\"sourceId\":\"$SRC\",\"apiKey\":\"$KEY\",\"type\":\"presence\",\"value\":\"fall\",\"ts\":$TS}")
   chk "LAN-style direct ingest accepted" '"ok":true' "$R"
-  ST=$(state_json "$HH")
+  ST=$(state_json "$HH" "$SRC" "$KEY")
   chk "fall visible in engine state" 'fall' "$ST"
+}
+
+# ------------------------------------------------------------------ level enc
+# AES-256-GCM tunnel: sealed event accepted, replay + tamper + keyless
+# plaintext rejected — the security properties, not just the plumbing.
+level_enc() {
+  ensure_server
+  python3 tunnel/register_source.py --server "$BASE" > /dev/null 2>&1
+  python3 - "$BASE" << 'PYEOF'
+import base64, importlib.util, json, sys, time
+import requests
+spec = importlib.util.spec_from_file_location("bridge", "tunnel/khayaal_serial_bridge.py")
+bridge = importlib.util.module_from_spec(spec); spec.loader.exec_module(bridge)
+B = sys.argv[1]
+cfg = json.load(open("tunnel/config.json"))
+HH, SRC, KEY = cfg["householdId"], cfg["sourceId"], cfg["apiKey"]
+fails = 0
+now = int(time.time() * 1000)
+env = bridge.encrypt_event({"type": "presence", "value": "motion", "ts": now}, HH, SRC, KEY)
+r = requests.post(f"{B}/api/v1/ingest", json=env, timeout=10)
+print("PASS  sealed envelope accepted" if r.status_code == 200 else f"FAIL  sealed envelope ({r.status_code})"); fails += r.status_code != 200
+r = requests.post(f"{B}/api/v1/ingest", json=env, timeout=10)
+print("PASS  replay rejected" if r.status_code == 409 else f"FAIL  replay ({r.status_code})"); fails += r.status_code != 409
+env2 = bridge.encrypt_event({"type": "presence", "value": "idle", "ts": now}, HH, SRC, KEY)
+ct = bytearray(base64.b64decode(env2["ct"])); ct[0] ^= 1
+env2["ct"] = base64.b64encode(bytes(ct)).decode()
+r = requests.post(f"{B}/api/v1/ingest", json=env2, timeout=10)
+print("PASS  tamper rejected" if r.status_code == 400 else f"FAIL  tamper ({r.status_code})"); fails += r.status_code != 400
+r = requests.post(f"{B}/api/v1/ingest", json={"householdId": HH, "sourceId": SRC, "type": "motion", "value": 1}, timeout=10)
+print("PASS  keyless plaintext rejected" if r.status_code == 403 else f"FAIL  keyless plaintext ({r.status_code})"); fails += r.status_code != 403
+sys.exit(1 if fails else 0)
+PYEOF
+  if [[ $? -eq 0 ]]; then PASS=$((PASS+4)); else FAIL=$((FAIL+4)); fi
 }
 
 # -------------------------------------------------------------------- flash
@@ -163,9 +196,10 @@ case "$LEVELS" in
   sim)      level_sim ;;
   hardware) level_hardware ;;
   lan)      level_lan ;;
+  enc)      level_enc ;;
   flash)    do_flash ;;
-  all)      level_sim; level_lan; echo; level_hardware ;;
-  *) echo "usage: test-pipeline.sh [sim|hardware|lan|flash|all]"; exit 2 ;;
+  all)      level_sim; level_enc; level_lan; echo; level_hardware ;;
+  *) echo "usage: test-pipeline.sh [sim|hardware|lan|enc|flash|all]"; exit 2 ;;
 esac
 
 echo

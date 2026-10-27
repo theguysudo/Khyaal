@@ -20,6 +20,7 @@ struct KhConfig {
   char apiKey[96];
   float threshold;
   uint8_t transport;      // TRANSPORT_SERIAL | TRANSPORT_LAN
+  bool encrypt;           // AES-256-GCM seal the LAN ingest hop
 };
 
 class ConfigStore {
@@ -35,6 +36,7 @@ class ConfigStore {
   void saveApiKey(KhConfig *cfg, const char *key);
   void saveThreshold(KhConfig *cfg, float thr);
   void saveTransport(KhConfig *cfg, uint8_t transport);
+  void saveEncrypt(KhConfig *cfg, bool on);
   /** Remove every khayaal/ key, then reload defaults into `cfg`. */
   void factoryReset(KhConfig *cfg);
 };

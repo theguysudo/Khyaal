@@ -31,6 +31,15 @@ class KhayaalApp : Application() {
         // KeyStore-encrypted blob. Outside the flow — editing the DataStore
         // from inside its own collector would deadlock. A few ms at most.
         runBlocking { runCatching { container.pairingStore.migrateLegacyIfNeeded() } }
+        // Arm the source-key auth header for this process from the stored
+        // pairing (pairWithCode arms it live; this covers app restarts).
+        runBlocking {
+            runCatching {
+                container.pairingStore.current()?.let { pairing ->
+                    container.apiClient.deviceCredentials = pairing.sourceId to pairing.apiKey
+                }
+            }
+        }
         CheckInManager.ensureChannels(this)
         CommandCoordinator.ensureChannelStatic(this)
         WorkScheduler.ensurePeriodicWork(this)

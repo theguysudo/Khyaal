@@ -49,7 +49,12 @@ class KhayaalRepository(
         } else {
             "Her phone"
         }
-        val source = api.createSource(household.id, SourceCreateRequest(type = "phone", label = label))
+        // Source creation mints our API key — the pairing code we just used is
+        // the credential; the server rotates it after this call.
+        val source = api.createSource(
+            household.id,
+            SourceCreateRequest(type = "phone", label = label, pairingCode = code),
+        )
         val apiKey = requireNotNull(source.apiKey) { "Source response had no API key" }
 
         val info = PairingInfo(
@@ -61,6 +66,7 @@ class KhayaalRepository(
             homeSsid = store.currentHomeSsid(),
         )
         store.savePairing(info)
+        apiClient.deviceCredentials = info.sourceId to info.apiKey
         store.setLastIngestError(null)
         // If this phone already holds an FCM token, register it with the new
         // household right away (idempotent — the token lives in DataStore).
@@ -80,6 +86,7 @@ class KhayaalRepository(
             }
         }
         queue.clear()
+        apiClient.deviceCredentials = null
         store.clearPairing()
     }
 

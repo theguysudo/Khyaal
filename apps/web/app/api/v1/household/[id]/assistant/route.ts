@@ -1,19 +1,25 @@
 import { NextResponse } from 'next/server';
+import { requireHouseholdMember, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
+
+const MAX_MESSAGE_CHARS = 2000;
 
 /**
  * POST /api/v1/household/{id}/assistant — the parent's "Ask Khayaal" helper,
  * proxied server-side so the app never holds an API key. The persona is a
- * warm companion: reminders, small help, no medical advice.
+ * warm companion: reminders, small help, no medical advice. Household
+ * members only (her phone via source key, family via session); rate-limited
+ * and size-capped because it is an LLM spend.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!rateLimit(`assistant:${req.headers.get('x-forwarded-for') ?? 'local'}`, 10, 60_000)) {
     return NextResponse.json({ error: 'Slow down' }, { status: 429 });
   }
   const { id } = await params;
-  const hh = await getStore().getHousehold(id);
-  if (!hh) return NextResponse.json({ error: 'Household not found' }, { status: 404 });
+  const guard = await requireHouseholdMember(req, id);
+  if (guard instanceof Response) return guard;
+  const hh = guard;
 
   let body: { messages?: { role: string; content: string }[]; apiKey?: string; model?: string };
   try {
@@ -21,7 +27,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-  const messages = Array.isArray(body.messages) ? body.messages.slice(-8) : [];
+  const messages = (Array.isArray(body.messages) ? body.messages.slice(-8) : [])
+    .filter((m) => m && typeof m.content === 'string')
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MESSAGE_CHARS) }));
   if (messages.length === 0) return NextResponse.json({ error: 'messages required' }, { status: 400 });
 
   const apiKey = (typeof body.apiKey === 'string' && body.apiKey.trim()) || process.env.OPENROUTER_API_KEY || '';

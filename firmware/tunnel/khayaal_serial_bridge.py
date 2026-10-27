@@ -28,6 +28,7 @@ Requires: pyserial, requests  (both preinstalled on this Mac)
 from __future__ import annotations
 
 import argparse
+import base64
 import glob
 import json
 import sys
@@ -86,6 +87,62 @@ def detect_port() -> Optional[str]:
         if ports:
             return ports[0]
     return None
+
+
+# ----------------------------------------------------------------- crypto
+# AES-256-GCM on the network leg (bridge -> backend), matching
+# apps/web/lib/server/tunnel-crypto.ts. The key is derived from the source's
+# own apiKey with HKDF-SHA256 and never travels; the ciphertext is bound to
+# householdId|sourceId as AAD, so a recorded envelope cannot be replayed into
+# another household or under another source. `cryptography` is preinstalled
+# on macOS; without it we fall back to plaintext with a loud warning.
+HKDF_SALT = b"khayaal-tunnel-v1"
+HKDF_INFO = b"khayaal/ingest"
+
+try:
+    import os as _os
+
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    _CRYPTO_OK = True
+except ImportError:  # pragma: no cover
+    _CRYPTO_OK = False
+
+
+def tunnel_key(api_key: str) -> bytes:
+    """HKDF-SHA256 -> 32-byte AES-256 key (same derivation as the server)."""
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=HKDF_SALT,
+        info=HKDF_INFO,
+    )
+    return hkdf.derive(api_key.encode("utf-8"))
+
+
+def encrypt_event(
+    event: dict[str, Any],
+    household_id: str,
+    source_id: str,
+    api_key: str,
+) -> dict[str, Any]:
+    """Seal the event into the v1 envelope. Identity fields stay outside the
+    ciphertext (the server needs them to pick the key) but are covered as AAD."""
+    key = tunnel_key(api_key)
+    iv = _os.urandom(12)
+    aad = f"{household_id}|{source_id}".encode("utf-8")
+    ct = AESGCM(key).encrypt(iv, json.dumps(event, separators=(",", ":")).encode(), aad)
+    # cryptography appends the 16-byte tag to ct; split it for the envelope.
+    return {
+        "householdId": household_id,
+        "sourceId": source_id,
+        "enc": "v1",
+        "iv": base64.b64encode(iv).decode(),
+        "tag": base64.b64encode(ct[-16:]).decode(),
+        "ct": base64.b64encode(ct[:-16]).decode(),
+    }
 
 
 # ----------------------------------------------------------------- forwarding
@@ -187,12 +244,25 @@ def build_forwarder(
     source_id: str,
     api_key: str,
     dry_run: bool,
+    encrypt: bool = True,
 ):
-    """Wrap identity + POST policy into a single callable for read_loop."""
+    """Wrap identity + sealing + POST policy into a single callable."""
+
+    if encrypt and not _CRYPTO_OK:
+        log("WARNING: 'cryptography' not installed — falling back to PLAINTEXT "
+            "ingest. Install with: pip3 install cryptography")
 
     def forward(event: dict[str, Any]) -> bool:
-        payload = enrich(event, household_id, source_id, api_key)
-        log(f"presence: {payload.get('value')} (source {source_id})")
+        ts = event.get("ts")
+        if not isinstance(ts, int) or ts <= 0:
+            event = dict(event)
+            event["ts"] = int(time.time() * 1000)
+        if encrypt and _CRYPTO_OK:
+            payload = encrypt_event(event, household_id, source_id, api_key)
+        else:
+            payload = enrich(event, household_id, source_id, api_key)
+        log(f"presence: {payload.get('value', event.get('value'))} "
+            f"(source {source_id}{' sealed' if encrypt and _CRYPTO_OK else ''})")
         return post_event(endpoint, payload, dry_run)
 
     return forward
@@ -220,6 +290,13 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
                         help="apiKey (overrides config)")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true",
                         help="print enriched payloads instead of POSTing")
+    enc_group = parser.add_mutually_exclusive_group()
+    enc_group.add_argument("--encrypt", dest="encrypt", action="store_true",
+                           default=True,
+                           help="AES-256-GCM seal the network leg (default)")
+    enc_group.add_argument("--no-encrypt", dest="encrypt",
+                           action="store_false",
+                           help="send plaintext JSON (debugging only)")
     return parser.parse_args(argv)
 
 
@@ -246,9 +323,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     log(f"bridge starting: port={port_name} baud={args.baud} "
-        f"endpoint={endpoint} dry_run={args.dry_run}")
+        f"endpoint={endpoint} dry_run={args.dry_run} "
+        f"encrypt={args.encrypt and _CRYPTO_OK}")
     forwarder = build_forwarder(
-        endpoint, household_id, source_id, api_key, args.dry_run
+        endpoint, household_id, source_id, api_key, args.dry_run,
+        encrypt=args.encrypt,
     )
     try:
         read_loop(port_name, args.baud, forwarder)

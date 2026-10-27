@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomId } from '@khayaal/engine';
 import type { CareCircleMember } from '@khayaal/shared';
+import { requireFamily, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 
 /**
@@ -8,12 +9,14 @@ import { getStore } from '@/lib/server/store';
  * neighbours who can check in). { action: 'add' | 'remove', name?, email, role? }
  * Members sign in with Google and claim the household by its pairing code to
  * actually see the dashboard; until then they are on the notify list.
+ * Family-only — the notify list is personal data and a spam vector.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const guard = await requireFamily(req, id);
+  if (guard instanceof Response) return guard;
+  const hh = guard;
   const store = getStore();
-  const hh = await store.getHousehold(id);
-  if (!hh) return NextResponse.json({ error: 'Household not found' }, { status: 404 });
 
   let body: Record<string, unknown>;
   try {

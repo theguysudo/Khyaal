@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { snooze } from '@/lib/server/runtime';
+import { requireHouseholdMember, unauthorized } from '@/lib/server/authz';
 
 /** POST /api/v1/household/{id}/snooze { minutes } */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const guard = await requireHouseholdMember(req, id);
+  if (guard instanceof Response) return guard;
   let minutes = 60;
   try {
     const body = await req.json();
@@ -12,6 +15,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // default
   }
   const bundle = await snooze(id, minutes);
-  if (!bundle) return NextResponse.json({ error: 'Household not found' }, { status: 404 });
+  if (!bundle) return unauthorized();
   return NextResponse.json(bundle);
 }

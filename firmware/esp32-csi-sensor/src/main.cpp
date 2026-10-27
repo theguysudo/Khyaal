@@ -26,6 +26,7 @@
 #include "config_store.h"
 #include "csi_sensor.h"
 #include "presence.h"
+#include "tunnel_crypto.h"
 
 namespace {
 constexpr const char *kFwVersion = "1.0.0";
@@ -61,6 +62,9 @@ struct Calibration {
 char pendingJson[224] = "";
 uint32_t pendingAttempts = 0;
 uint32_t nextLanAttemptMs = 0;
+
+// encrypted envelope buffer (envelopes are larger than the plaintext event)
+char sealedJson[1024] = "";
 
 uint32_t lastSenseMs = 0;
 uint32_t lastStatusMs = 0;
@@ -105,6 +109,18 @@ void emitPresence(const char *value) {
   char json[sizeof(pendingJson)];
   buildEventJson(json, sizeof(json), value);
   if (cfg.transport == TRANSPORT_LAN) {
+    if (cfg.encrypt && cfg.apiKey[0] && cfg.householdId[0] && cfg.sourceId[0]) {
+      // AES-256-GCM: the network sees identity + opaque ciphertext only.
+      if (sealIngestEvent(cfg.apiKey, cfg.householdId, cfg.sourceId, json,
+                          sealedJson, sizeof(sealedJson))) {
+        snprintf(pendingJson, sizeof(pendingJson), "%s", sealedJson);
+        pendingAttempts = 0;
+        nextLanAttemptMs = 0;
+        klog("event sealed for LAN (%s)", value);
+        return;
+      }
+      klog("sealing failed — falling back to plaintext for this event");
+    }
     // Presence is level-based: coalescing to the newest event is correct.
     snprintf(pendingJson, sizeof(pendingJson), "%s", json);
     pendingAttempts = 0;
@@ -248,6 +264,7 @@ void printHelp() {
   Serial.println("  src <id>        sourceId (LAN mode), saved");
   Serial.println("  key <sk_...>    apiKey (LAN mode), saved");
   Serial.println("  mode <lan|serial>   transport, saved");
+  Serial.println("  enc <on|off>    AES-256-GCM seal LAN ingest (on = default), saved");
   Serial.println("  factory         clear NVS, back to compiled defaults");
   Serial.println("  falltest        emit one 'fall' event (demo/test hook)");
 }
@@ -268,6 +285,7 @@ void printShow() {
     Serial.println("  key: (none)");
   }
   Serial.printf("  threshold: %.2f\n", cfg.threshold);
+  Serial.printf("  encrypt: %s\n", cfg.encrypt ? "on (AES-256-GCM)" : "off (PLAINTEXT)");
   Serial.printf("state: %s  var=%.2f mean=%.1f pkt/s=%.1f wifi=%s time=%s\n",
                 presenceValue(sm.state()), lastVariance, lastMean,
                 lastPacketRate, wifiUp ? "up" : "down",
@@ -335,6 +353,16 @@ void dispatchCli(char *line) {
       klog("transport = serial");
     } else {
       klog("usage: mode <lan|serial>");
+    }
+  } else if (strcmp(line, "enc") == 0) {
+    if (strcmp(arg, "on") == 0) {
+      store.saveEncrypt(&cfg, true);
+      klog("LAN ingest sealed with AES-256-GCM (saved)");
+    } else if (strcmp(arg, "off") == 0) {
+      store.saveEncrypt(&cfg, false);
+      klog("LAN ingest PLAINTEXT (debugging only)");
+    } else {
+      klog("usage: enc <on|off>");
     }
   } else if (strcmp(line, "falltest") == 0) {
     klog("falltest: emitting one 'fall' presence event");

@@ -12,10 +12,16 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Builds and caches one Retrofit instance per base URL, so the base URL stays
- * configurable at runtime (Settings) without an app restart. The HTTP client
- * adds no auth header — API keys travel in the request body per the API spec.
+ * configurable at runtime (Settings) without an app restart. While a pairing
+ * record exists, every request carries `x-kh-source` / `x-kh-key` — the
+ * server accepts those on her-device routes (state, commands, check-in) the
+ * same way the ESP32 uses them in LAN mode.
  */
 class ApiClient {
+
+    /** sourceId to apiKey of the current pairing; null when unpaired. */
+    @Volatile
+    var deviceCredentials: Pair<String, String>? = null
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -41,10 +47,23 @@ class ApiClient {
                 HttpLoggingInterceptor.Level.NONE
             }
         }
+        val auth = okhttp3.Interceptor { chain ->
+            val creds = deviceCredentials
+            val request = if (creds != null) {
+                chain.request().newBuilder()
+                    .header("x-kh-source", creds.first)
+                    .header("x-kh-key", creds.second)
+                    .build()
+            } else {
+                chain.request()
+            }
+            chain.proceed(request)
+        }
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
+            .addInterceptor(auth)
             .addInterceptor(logging)
             .build()
 

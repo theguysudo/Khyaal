@@ -1,30 +1,37 @@
 import { NextResponse } from 'next/server';
 import { randomId } from '@khayaal/engine';
+import { requireFamily, requireSourceCreator, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 
 /**
  * Sources — the devices that speak /api/v1/ingest.
- * GET lists them (never exposes keys); POST registers one and returns its key
- * exactly once (that key goes into the ESP32 firmware or the parent app).
+ * GET lists them (never exposes keys) — family session only.
+ * POST registers one and returns its key exactly once. That key is the
+ * credential for everything her device can do, so POST requires either the
+ * family session or the household's *current pairing code* (which a pairing
+ * phone holds and which is rotated after every use — see authz.ts).
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const guard = await requireFamily(req, id);
+  if (guard instanceof Response) return guard;
   const sources = await getStore().getSources(id);
   return NextResponse.json(sources.map(({ apiKey: _k, ...s }) => s));
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const store = getStore();
-  const hh = await store.getHousehold(id);
-  if (!hh) return NextResponse.json({ error: 'Household not found' }, { status: 404 });
-
   let body: Record<string, unknown> = {};
   try {
     body = await req.json();
   } catch {
     // defaults below
   }
+  const pairingCode = typeof body.pairingCode === 'string' ? body.pairingCode.trim() : null;
+  const guard = await requireSourceCreator(req, id, pairingCode);
+  if (guard instanceof Response) return guard;
+
+  const store = getStore();
   const type = body.type === 'esp32' ? 'esp32' : body.type === 'phone' ? 'phone' : 'simulator';
   const source = {
     id: `src_${randomId()}`,
@@ -40,6 +47,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const guard = await requireFamily(req, id);
+  if (guard instanceof Response) return guard;
   const url = new URL(req.url);
   const sourceId = url.searchParams.get('sourceId');
   if (!sourceId) return NextResponse.json({ error: 'sourceId required' }, { status: 400 });

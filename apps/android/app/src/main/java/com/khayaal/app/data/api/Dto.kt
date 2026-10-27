@@ -218,6 +218,9 @@ data class SnoozeRequest(val minutes: Long)
 data class SourceCreateRequest(
     val type: String,
     val label: String,
+    /** Required when creating a source without a family session: the
+     *  household's current pairing code proves the phone was invited. */
+    val pairingCode: String? = null,
 )
 
 /** POST /household/{id}/sources — the only response that carries the API key. */

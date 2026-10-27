@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { tickHousehold } from '@/lib/server/runtime';
+import { requireFamily, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 
 /**
  * PATCH /api/v1/household/{id}/config
  * Settings (quiet hours, timers, names) and the demo time-warp control
  * { simAdvanceMinutes } — the warp is what turns hours into seconds on stage.
+ * Family-only.
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const guard = await requireFamily(req, id);
+  if (guard instanceof Response) return guard;
+  const hh = guard;
   const store = getStore();
-  const hh = await store.getHousehold(id);
-  if (!hh) return NextResponse.json({ error: 'Household not found' }, { status: 404 });
 
   let body: Record<string, unknown>;
   try {
