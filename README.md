@@ -8,7 +8,7 @@ Nothing to press. Nothing to wear. Nothing to remember.
 [![CI](https://github.com/theguysudo/Khyaal/actions/workflows/ci.yml/badge.svg)](https://github.com/theguysudo/Khyaal/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-Apache--2.0-221b15?style=flat-square)
 ![No camera](https://img.shields.io/badge/no%20camera-4c7a4f?style=flat-square)
-![No microphone](https://img.shields.io/badge/no%20microphone recording-4c7a4f?style=flat-square)
+![No microphone](https://img.shields.io/badge/no%20microphone%20recording-4c7a4f?style=flat-square)
 ![Nothing worn](https://img.shields.io/badge/nothing%20worn-4c7a4f?style=flat-square)
 ![Pentest 46/46](https://img.shields.io/badge/pentest%2046%2F46%20pass-c98a2b?style=flat-square)
 
