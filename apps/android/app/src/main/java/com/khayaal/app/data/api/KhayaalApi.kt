@@ -26,6 +26,31 @@ interface KhayaalApi {
     @POST("api/v1/household/{id}/checkin")
     suspend fun checkIn(@Path("id") householdId: String): StateBundleDto
 
+    // -- SOS -------------------------------------------------------------------
+    // The elder device calls these with its own source credentials (the
+    // interceptor attaches x-kh-household / x-kh-source / x-kh-key).
+
+    /** Raises the SOS. Origin is "button" (she pressed it) or "auto". */
+    @POST("api/v1/household/{id}/sos")
+    suspend fun triggerSos(
+        @Path("id") householdId: String,
+        @Body body: SosTriggerRequest,
+    ): SosActionResponse
+
+    /** Stands the SOS down. The elder device or a family session. */
+    @POST("api/v1/household/{id}/sos/resolve")
+    suspend fun resolveSos(
+        @Path("id") householdId: String,
+        @Body body: SosResolveRequest,
+    ): SosActionResponse
+
+    /** A neighbour says "I'm responding", with an optional ETA in minutes. */
+    @POST("api/v1/household/{id}/sos/respond")
+    suspend fun respondSos(
+        @Path("id") householdId: String,
+        @Body body: SosRespondRequest,
+    ): SosActionResponse
+
     @POST("api/v1/household/{id}/snooze")
     suspend fun snooze(
         @Path("id") householdId: String,

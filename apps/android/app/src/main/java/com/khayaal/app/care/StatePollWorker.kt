@@ -4,11 +4,14 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.khayaal.app.KhayaalApp
+import com.khayaal.app.sos.SosManager
 
 /**
- * The 10-minute state poll. Fetches the tick bundle from the backend and lets
- * [CheckInManager] decide whether the tier has risen enough to speak. This is
- * the app's heartbeat even when nothing pushes to it.
+ * The 10-minute state poll. Fetches the tick bundle from the backend, lets
+ * [CheckInManager] decide whether the tier has risen enough to speak, and —
+ * PATH B of SOS delivery — feeds the household's SOS flag to [SosManager].
+ * With no Firebase config, this poll (plus the foreground poll in
+ * HomeViewModel) is the delivery path that must always work.
  */
 class StatePollWorker(
     context: Context,
@@ -29,6 +32,8 @@ class StatePollWorker(
         CheckInManager.handleState(applicationContext, bundle, container.pairingStore)
         // Family→app commands (messages, reminders, tts, request-checkin).
         runCatching { container.commandCoordinator.onBundle(bundle) }
+        // PATH B: the state poll as an SOS alarm source (no Firebase needed).
+        runCatching { SosManager.onSosObservation(applicationContext, bundle.sos, "background-poll") }
         return Result.success()
     }
 }

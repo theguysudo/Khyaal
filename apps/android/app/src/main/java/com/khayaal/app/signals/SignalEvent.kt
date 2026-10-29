@@ -24,6 +24,13 @@ data class SignalEvent(
      * Coordinates never go in here: GPS is summarised on-device first.
      */
     val meta: Map<String, JsonPrimitive> = emptyMap(),
+    /**
+     * Which source this event belongs to. `null` means "this phone" — the
+     * default for every signal the phone collects itself. Events read from a
+     * wearable carry the band's own source id, because they are posted with
+     * the band's key, not the phone's.
+     */
+    val sourceId: String? = null,
 ) {
     object Types {
         const val SCREEN_EVENT = "screen_event"
@@ -39,6 +46,15 @@ data class SignalEvent(
 
         /** GPS-derived movement — distance / speed / accuracy, never coordinates. */
         const val GPS_MOTION = "gps_motion"
+
+        /** From a wearable: the pulse in bpm. */
+        const val HEART_RATE = "heart_rate"
+
+        /** From a wearable: minutes slept in one night. */
+        const val SLEEP_DURATION = "sleep_duration"
+
+        /** From a wearable: active minutes in the interval that ended at ts. */
+        const val ACTIVITY = "activity"
     }
 
     /** sleep_event values: on-device classification only, never audio. */
@@ -79,6 +95,42 @@ data class SignalEvent(
         /** Steps taken so far today (the daily delta); [absolute] reports the raw counter. */
         fun steps(today: Long, nowMs: Long = System.currentTimeMillis()) =
             SignalEvent(Types.STEPS, JsonPrimitive(today), nowMs)
+
+        /** The same daily total, but counted by a wearable on her wrist. */
+        fun steps(today: Long, sourceId: String, nowMs: Long = System.currentTimeMillis()) =
+            SignalEvent(Types.STEPS, JsonPrimitive(today), nowMs, sourceId = sourceId)
+
+        /** One pulse reading from the band, in bpm. */
+        fun heartRate(bpm: Long, sourceId: String, nowMs: Long = System.currentTimeMillis()) =
+            SignalEvent(Types.HEART_RATE, JsonPrimitive(bpm), nowMs, sourceId = sourceId)
+
+        /** One night of sleep, in minutes. */
+        fun sleepDuration(
+            minutes: Int,
+            sourceId: String,
+            nowMs: Long,
+            startTs: Long,
+        ) = SignalEvent(
+            type = Types.SLEEP_DURATION,
+            value = JsonPrimitive(minutes),
+            ts = nowMs,
+            meta = mapOf("startTs" to JsonPrimitive(startTs)),
+            sourceId = sourceId,
+        )
+
+        /** Active minutes in the interval that ended at [nowMs]. */
+        fun activity(
+            minutes: Int,
+            sourceId: String,
+            nowMs: Long,
+            meta: Map<String, JsonPrimitive> = emptyMap(),
+        ) = SignalEvent(
+            type = Types.ACTIVITY,
+            value = JsonPrimitive(minutes),
+            ts = nowMs,
+            meta = meta,
+            sourceId = sourceId,
+        )
 
         fun sleepEvent(value: String, nowMs: Long = System.currentTimeMillis()) =
             SignalEvent(Types.SLEEP_EVENT, JsonPrimitive(value), nowMs)

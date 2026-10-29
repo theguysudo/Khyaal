@@ -33,6 +33,19 @@ val Tier1 = Color(0xFFD9A23F)
 val Tier2 = Color(0xFFD97545)
 val Tier3 = Color(0xFFE25B4E)
 
+/*
+ * v2 tokens (docs/DESIGN_SYSTEM.md, "v2 — production direction"). The elder
+ * app keeps its committed dark-navy canvas for her daily screens, but the
+ * splash and any new v2 surface use the shared terracotta signature — the
+ * same values Khayaal Family and Khayaal Neighbour carry.
+ */
+val Brand600 = Color(0xFFDC6803) // terracotta filled controls
+val Brand700 = Color(0xFFB54708) // pressed
+val GlowHot = Color(0xFFFF6B21) // the Counter glow, hot core
+val GlowMid = Color(0xFFF27F24)
+val GlowSoft = Color(0xFFFFDCA6)
+val SplashCanvas = Color(0xFF1A120C) // the splash's near-black brown
+
 fun tierColor(tier: Int): Color = when (tier) {
     1 -> Tier1
     2 -> Tier2

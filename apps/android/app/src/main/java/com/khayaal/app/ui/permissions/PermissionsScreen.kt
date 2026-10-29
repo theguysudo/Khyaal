@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -75,6 +76,7 @@ import com.khayaal.app.ui.theme.Sage
  *    (fine location is deliberately never used)
  *  - ACTIVITY_RECOGNITION — the step counter and walking detection (10+)
  *  - CALL_PHONE — optional: dial directly instead of opening the dialer
+ *  - Health Connect — optional: the band's pulse / sleep / active minutes
  */
 private data class PermissionStep(
     val titleRes: Int,
@@ -84,50 +86,79 @@ private data class PermissionStep(
     val icon: ImageVector,
 )
 
+/** The Health Connect step is a sentinel in the linear list. */
+private const val PERMISSION_HEALTH_CONNECT = "androidx.health.CONNECT"
+
 @Composable
 fun PermissionsScreen(
     onFinish: () -> Unit,
 ) {
     val context = LocalContext.current
 
+    // The band's route into Android. A phone without Health Connect — or
+    // without the band's app — simply never shows this step.
+    val healthConnect = remember { com.khayaal.app.smartwatch.HealthConnectCollector(context) }
+    val healthConnectAvailable = remember { healthConnect.isAvailable() }
+
     val steps = remember {
-        listOf(
-            PermissionStep(
-                titleRes = R.string.perm_mic_title,
-                bodyRes = R.string.perm_mic_body,
-                permission = Manifest.permission.RECORD_AUDIO,
-                minSdk = Build.VERSION_CODES.BASE,
-                icon = Icons.Filled.Mic,
-            ),
-            PermissionStep(
-                titleRes = R.string.perm_notifications_title,
-                bodyRes = R.string.perm_notifications_body,
-                permission = Manifest.permission.POST_NOTIFICATIONS,
-                minSdk = Build.VERSION_CODES.TIRAMISU,
-                icon = Icons.Filled.NotificationsActive,
-            ),
-            PermissionStep(
-                titleRes = R.string.perm_location_title,
-                bodyRes = R.string.perm_location_body,
-                permission = Manifest.permission.ACCESS_COARSE_LOCATION,
-                minSdk = Build.VERSION_CODES.BASE,
-                icon = Icons.Filled.Explore,
-            ),
-            PermissionStep(
-                titleRes = R.string.perm_activity_title,
-                bodyRes = R.string.perm_activity_body,
-                permission = Manifest.permission.ACTIVITY_RECOGNITION,
-                minSdk = Build.VERSION_CODES.Q,
-                icon = Icons.Filled.DirectionsWalk,
-            ),
-            PermissionStep(
-                titleRes = R.string.perm_call_title,
-                bodyRes = R.string.perm_call_body,
-                permission = Manifest.permission.CALL_PHONE,
-                minSdk = Build.VERSION_CODES.BASE,
-                icon = Icons.Filled.Call,
-            ),
-        ).filter { Build.VERSION.SDK_INT >= it.minSdk }
+        buildList {
+            add(
+                PermissionStep(
+                    titleRes = R.string.perm_mic_title,
+                    bodyRes = R.string.perm_mic_body,
+                    permission = Manifest.permission.RECORD_AUDIO,
+                    minSdk = Build.VERSION_CODES.BASE,
+                    icon = Icons.Filled.Mic,
+                ),
+            )
+            add(
+                PermissionStep(
+                    titleRes = R.string.perm_notifications_title,
+                    bodyRes = R.string.perm_notifications_body,
+                    permission = Manifest.permission.POST_NOTIFICATIONS,
+                    minSdk = Build.VERSION_CODES.TIRAMISU,
+                    icon = Icons.Filled.NotificationsActive,
+                ),
+            )
+            add(
+                PermissionStep(
+                    titleRes = R.string.perm_location_title,
+                    bodyRes = R.string.perm_location_body,
+                    permission = Manifest.permission.ACCESS_COARSE_LOCATION,
+                    minSdk = Build.VERSION_CODES.BASE,
+                    icon = Icons.Filled.Explore,
+                ),
+            )
+            add(
+                PermissionStep(
+                    titleRes = R.string.perm_activity_title,
+                    bodyRes = R.string.perm_activity_body,
+                    permission = Manifest.permission.ACTIVITY_RECOGNITION,
+                    minSdk = Build.VERSION_CODES.Q,
+                    icon = Icons.Filled.DirectionsWalk,
+                ),
+            )
+            add(
+                PermissionStep(
+                    titleRes = R.string.perm_call_title,
+                    bodyRes = R.string.perm_call_body,
+                    permission = Manifest.permission.CALL_PHONE,
+                    minSdk = Build.VERSION_CODES.BASE,
+                    icon = Icons.Filled.Call,
+                ),
+            )
+            if (healthConnectAvailable) {
+                add(
+                    PermissionStep(
+                        titleRes = R.string.perm_band_title,
+                        bodyRes = R.string.perm_band_body,
+                        permission = PERMISSION_HEALTH_CONNECT,
+                        minSdk = Build.VERSION_CODES.BASE,
+                        icon = Icons.Filled.Watch,
+                    ),
+                )
+            }
+        }.filter { Build.VERSION.SDK_INT >= it.minSdk }
     }
 
     // -1 walks the list; steps.size is the "all set" finale.
@@ -137,7 +168,8 @@ fun PermissionsScreen(
     fun advance() {
         var next = index + 1
         // A step the user already granted elsewhere is silent history.
-        while (next < steps.size && ContextCompat.checkSelfPermission(context, steps[next].permission) ==
+        while (next < steps.size && steps[next].permission != PERMISSION_HEALTH_CONNECT &&
+            ContextCompat.checkSelfPermission(context, steps[next].permission) ==
             PackageManager.PERMISSION_GRANTED
         ) {
             next++
@@ -149,13 +181,21 @@ fun PermissionsScreen(
         ActivityResultContracts.RequestPermission(),
     ) { _ -> advance() }
 
+    // Health Connect permissions ride the SDK's own contract, not the
+    // runtime-permission one.
+    val healthConnectLauncher = rememberLauncherForActivityResult(
+        androidx.health.connect.client.PermissionController.createRequestPermissionResultContract(),
+    ) { _ -> advance() }
+
     fun request(step: PermissionStep) {
-        if (ContextCompat.checkSelfPermission(context, step.permission) ==
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            advance()
-        } else {
-            launcher.launch(step.permission)
+        when {
+            step.permission == PERMISSION_HEALTH_CONNECT ->
+                healthConnectLauncher.launch(healthConnect.permissions())
+
+            ContextCompat.checkSelfPermission(context, step.permission) ==
+                PackageManager.PERMISSION_GRANTED -> advance()
+
+            else -> launcher.launch(step.permission)
         }
     }
 

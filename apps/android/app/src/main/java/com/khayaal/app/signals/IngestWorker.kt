@@ -24,6 +24,9 @@ class IngestWorker(
         // the daily absolute step total rides the same heartbeat.
         AppUsageCollector.drainInto(applicationContext, container.pairingStore, container.signalQueue)
         StepsCollector.drainInto(container.pairingStore, container.signalQueue)
+        // The band, through Health Connect — pulse, sleep, active minutes
+        // (best-effort; a phone without Health Connect contributes nothing).
+        HealthConnectIngest.drainInto(applicationContext, container.pairingStore, container.signalQueue)
 
         return when (container.repository.flushQueue()) {
             FlushOutcome.Uploaded,

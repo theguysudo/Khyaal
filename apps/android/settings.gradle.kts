@@ -22,3 +22,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "Khayaal"
 include(":app")
+
+// The SOS alarm core shared by Khayaal (elder), Khayaal Family and Khayaal
+// Neighbour — one siren implementation, three apps.
+include(":shared")
+project(":shared").projectDir = file("../android-shared")

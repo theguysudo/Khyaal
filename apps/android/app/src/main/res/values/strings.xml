@@ -66,6 +66,33 @@
     <string name="notification_action_snooze">Snooze 1h</string>
     <string name="notification_action_call_family">Call family</string>
 
+    <!-- SOS -->
+    <string name="channel_sos_name">SOS alarm</string>
+    <string name="channel_sos_description">Rings at full volume when an SOS is active for this household</string>
+    <string name="sos_her_default">She</string>
+    <string name="sos_by_elder">Me</string>
+    <string name="sos_notification_title">SOS — %1$s needs help</string>
+    <string name="sos_notification_body">The alarm is ringing. Open to stand it down, or tap Stand down if you are safe.</string>
+    <string name="sos_stand_down">I\'m safe — stand down</string>
+    <string name="sos_button_title">SOS — call for help</string>
+    <string name="sos_button_subtitle">Hold, then confirm. Rings your phone at full volume.</string>
+    <string name="sos_button_hold_hint">Keep holding to arm the SOS…</string>
+    <string name="sos_confirm_title">Call for help?</string>
+    <string name="sos_confirm_body">Your family, your neighbours and everyone in your care circle will hear the alarm. Your phone will ring at full volume.</string>
+    <string name="sos_confirm_yes">Yes — call for help</string>
+    <string name="sos_confirm_no">No, cancel</string>
+    <string name="sos_banner_active">SOS is active — stand down</string>
+    <string name="sos_toast_offline">Couldn\'t reach home — the alarm is ringing on this phone anyway.</string>
+    <string name="sos_screen_title">SOS</string>
+    <string name="sos_screen_body_button">%1$s pressed the SOS button. Hold on — help is being called.</string>
+    <string name="sos_screen_body_auto">An automatic SOS went out for %1$s. Hold on — help is being called.</string>
+    <string name="sos_screen_standing_down">Standing down…</string>
+    <string name="sos_screen_resolve_retrying">Couldn\'t reach home just yet — Khayaal keeps trying. You are safe.</string>
+    <string name="sos_screen_call">Call %1$s</string>
+    <string name="sos_screen_call_anyone">Call family</string>
+    <string name="sos_screen_close">Close</string>
+    <string name="sos_screen_footer">The alarm rings until someone stands it down.</string>
+
     <!-- Family commands channel -->
     <string name="channel_commands_name">Messages from family</string>
     <string name="channel_commands_description">Notes, reminders and voice messages your family sends you</string>
@@ -186,6 +213,19 @@
     <string name="perm_activity_body">The phone counts your steps and walking on the device itself, so the family knows you are moving about.</string>
     <string name="perm_call_title">Call in one tap</string>
     <string name="perm_call_body">Lets Khayaal dial the family directly for you. Without it, the dialer simply opens and you press call yourself.</string>
+    <string name="perm_band_title">Read your smart watch</string>
+    <string name="perm_band_body">If you wear your watch, Khayaal can read its pulse, sleep and activity — through the phone\'s health app only. It helps the family understand your day.</string>
+
+    <!-- Reassurance: battery, the due reminder, the day read aloud -->
+    <string name="battery_charging">On charge — all good</string>
+    <string name="battery_full">Battery full</string>
+    <string name="battery_good">Battery at %1$d%%</string>
+    <string name="battery_low">Battery at %1$d%% — put it on charge when you can</string>
+    <string name="home_speak_day">Speak my day</string>
+    <string name="due_reminder_label">IT\'S TIME</string>
+    <string name="due_reminder_time">Was for %1$s</string>
+    <string name="due_reminder_done">Done</string>
+    <string name="due_reminder_later">Later — remind me in 10 minutes</string>
     <string name="perm_optional">Optional</string>
     <string name="perm_allow">Allow</string>
     <string name="perm_skip">Skip for now</string>

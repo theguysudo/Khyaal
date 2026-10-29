@@ -1,0 +1,29 @@
+pluginManagement {
+    repositories {
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "KhayaalFamily"
+include(":app")
+
+// The SOS alarm core shared by Khayaal (elder), Khayaal Family and Khayaal
+// Neighbour — one siren implementation, three apps.
+include(":shared")
+project(":shared").projectDir = file("../android-shared")

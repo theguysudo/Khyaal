@@ -87,5 +87,13 @@ dependencies {
     // fully functional on state polling alone. See README for the FCM setup.
     implementation(libs.firebase.messaging)
 
+    // Health Connect: reads the paired band's steps / pulse / sleep through
+    // the on-device health store (smartwatch/HealthConnectCollector).
+    implementation(libs.health.connect.client)
+
+    // Shared SOS alarm core (siren synth + player + latch) used by this app,
+    // Khayaal Family and Khayaal Neighbour.
+    implementation(project(":shared"))
+
     testImplementation(libs.junit)
 }

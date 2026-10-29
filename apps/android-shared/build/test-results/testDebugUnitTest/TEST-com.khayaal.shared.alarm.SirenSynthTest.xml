@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.khayaal.shared.alarm.SirenSynthTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-29T18:51:13.720Z" hostname="Adityas-MacBook-Air-2.local" time="0.043">
+  <properties/>
+  <testcase name="sweep is loud but never clipped" classname="com.khayaal.shared.alarm.SirenSynthTest" time="0.022"/>
+  <testcase name="sweep is deterministic" classname="com.khayaal.shared.alarm.SirenSynthTest" time="0.005"/>
+  <testcase name="sweep has no long silent gaps" classname="com.khayaal.shared.alarm.SirenSynthTest" time="0.003"/>
+  <testcase name="loop point is phase-continuous" classname="com.khayaal.shared.alarm.SirenSynthTest" time="0.006"/>
+  <testcase name="sweep is exactly one loop long" classname="com.khayaal.shared.alarm.SirenSynthTest" time="0.002"/>
+  <testcase name="sweep glides between the two frequencies and back" classname="com.khayaal.shared.alarm.SirenSynthTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

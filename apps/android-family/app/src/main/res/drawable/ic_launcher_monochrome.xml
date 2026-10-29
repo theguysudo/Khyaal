@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A quiet lotus bloom on a 108dp adaptive-icon canvas; the safe zone is
+     the inner 66dp, so the mark is drawn small and centred. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.61"
+        android:scaleY="0.61"
+        android:translateX="21.06"
+        android:translateY="21.06">
+        <path
+            android:fillColor="#B95C38"
+            android:pathData="M54,26 C44,34 38,44 38,54 C38,66 45,76 54,82 C63,76 70,66 70,54 C70,44 64,34 54,26 Z" />
+        <path
+            android:fillColor="#7D8C6F"
+            android:pathData="M30,50 C34,58 41,64 50,67 C48,58 42,50 34,45 C32,46 31,48 30,50 Z" />
+        <path
+            android:fillColor="#7D8C6F"
+            android:pathData="M78,50 C74,58 67,64 58,67 C60,58 66,50 74,45 C76,46 77,48 78,50 Z" />
+    </group>
+</vector>

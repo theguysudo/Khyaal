@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light, dashboard-like: the family app should feel like the web
+         dashboard it mirrors, not like the elder's dark phone app. -->
+    <style name="Theme.Khayaal" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/khayaal_night</item>
+        <item name="android:statusBarColor">@color/khayaal_night</item>
+        <item name="android:navigationBarColor">@color/khayaal_night</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

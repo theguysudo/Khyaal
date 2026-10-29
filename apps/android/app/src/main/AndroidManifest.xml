@@ -39,6 +39,20 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- The band, read through Health Connect (smartwatch/HealthConnectCollector):
+         pulse, sleep, active minutes. Declared here, granted through the
+         Health Connect permission flow (see PermissionsScreen). -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_SESSION" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+
+    <queries>
+        <!-- Health Connect: the on-device health store the band syncs into. -->
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
     <application
         android:name=".KhayaalApp"
         android:allowBackup="false"
@@ -58,6 +72,23 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The full-screen SOS alarm: shows over the lock screen (the
+             notification's full-screen intent fires it there) and keeps the
+             screen on while the siren rings. Not exported — only this app's
+             notification and activities may raise it. -->
+        <activity
+            android:name=".ui.sos.SosAlarmActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
+        <!-- The lock-screen "Stand down" button on the SOS notification. -->
+        <receiver
+            android:name=".sos.SosActionReceiver"
+            android:exported="false" />
 
         <!-- Re-arm periodic signal flush + state poll after a reboot. -->
         <receiver

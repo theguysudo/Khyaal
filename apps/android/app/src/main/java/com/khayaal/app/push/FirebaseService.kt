@@ -4,6 +4,8 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.khayaal.app.KhayaalApp
 import com.khayaal.app.care.CheckInManager
+import com.khayaal.app.sos.SosManager
+import com.khayaal.shared.alarm.SosPushPayload
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,14 +17,25 @@ import kotlinx.coroutines.launch
  * service simply stays dormant until a google-services.json is added
  * (see README, "Firebase setup").
  *
- * Expected data payload:
- *   { "tier": "2", "parentName": "Amma", "childName": "Aditya", "status": "Waiting for Amma's check-in" }
+ * Expected data payloads:
+ *   { "tier": "2", "parentName": "Amma", "childName": "Aditya", "status": "…" }
+ *   { "type": "sos_alarm", "householdId": "hh_…", "sosId": "sos_…",
+ *     "origin": "button"|"auto", "ts": "…" }
+ *
+ * The `sos_alarm` message is PATH A of SOS delivery — it rings the shared
+ * siren the moment it lands. PATH B (the /state poll noticing `sos.active`)
+ * runs regardless and needs no Firebase config at all.
  */
 class FirebaseService : FirebaseMessagingService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onMessageReceived(message: RemoteMessage) {
+        // PATH A: the SOS alarm push — the loudest thing this app ever does.
+        SosPushPayload.parse(message.data)?.let { push ->
+            SosManager.onSosPush(this, push.householdId)
+            return
+        }
         val tier = message.data[TIER_KEY]?.toIntOrNull() ?: return
         if (tier !in 1..3) return
         CheckInManager.notifyTier(

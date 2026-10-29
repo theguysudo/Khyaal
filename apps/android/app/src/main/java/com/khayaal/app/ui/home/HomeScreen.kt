@@ -28,10 +28,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -68,6 +71,8 @@ import com.khayaal.app.ui.theme.Ink
 import com.khayaal.app.ui.theme.Mist
 import com.khayaal.app.ui.theme.Paper
 import com.khayaal.app.ui.theme.Sage
+import com.khayaal.app.ui.theme.Tier1
+import com.khayaal.app.ui.theme.Tier2
 import com.khayaal.app.ui.theme.Tier3
 
 /**
@@ -198,6 +203,13 @@ fun HomeScreen(
             // The clock is always there, whatever section she is in.
             TimeDateWidget(nowMs = ui.simNowTs ?: System.currentTimeMillis())
 
+            // While a household SOS is active the banner rides above every
+            // segment — the way back to the alarm after it was dismissed.
+            if (ui.sos?.active == true) {
+                Spacer(Modifier.height(12.dp))
+                SosBanner(onStandDown = viewModel::standDownSos)
+            }
+
             Spacer(Modifier.height(14.dp))
 
             AnimatedContent(
@@ -215,6 +227,10 @@ fun HomeScreen(
                             onReminders = onReminders,
                             onCheckIn = viewModel::checkIn,
                             onSnooze = viewModel::snoozeOneHour,
+                            onSos = viewModel::triggerSos,
+                            onSpeakDay = viewModel::speakDay,
+                            onDismissDue = viewModel::dismissReminder,
+                            onSnoozeDue = viewModel::snoozeReminder,
                             onAddChecklist = viewModel::addChecklistItem,
                             onToggleChecklist = viewModel::toggleChecklistItem,
                             onDeleteChecklist = viewModel::deleteChecklistItem,
@@ -324,6 +340,10 @@ private fun TodaySection(
     onReminders: () -> Unit,
     onCheckIn: () -> Unit,
     onSnooze: () -> Unit,
+    onSos: () -> Unit,
+    onSpeakDay: () -> Unit,
+    onDismissDue: (ReminderDue.Due) -> Unit,
+    onSnoozeDue: (ReminderDue.Due) -> Unit,
     onAddChecklist: (String) -> Unit,
     onToggleChecklist: (com.khayaal.app.data.datastore.ChecklistItem) -> Unit,
     onDeleteChecklist: (com.khayaal.app.data.datastore.ChecklistItem) -> Unit,
@@ -342,6 +362,8 @@ private fun TodaySection(
                 style = MaterialTheme.typography.displaySmall,
                 color = Ink,
             )
+            Spacer(Modifier.height(6.dp))
+            BatteryReassurance(levelPct = ui.batteryLevelPct, charging = ui.batteryCharging)
         }
     }
 
@@ -393,6 +415,12 @@ private fun TodaySection(
         }
     }
 
+// The SOS button sits right below "I'm OK": large, red, and two-step
+    // (hold to arm, then confirm) so a pocket cannot fire it.
+    StaggeredIn(index = 3) {
+        SosButton(onTrigger = onSos)
+    }
+
     if (ui.justCheckedIn) {
         StaggeredIn(index = 4) {
             Text(
@@ -400,6 +428,19 @@ private fun TodaySection(
                 style = MaterialTheme.typography.bodyLarge,
                 color = Sage,
                 modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+
+    // A reminder that has come due waits here with one big, plain "Done" —
+    // it never pops and vanishes; that is the failure mode the research warns
+    // about. "Later" gives ten minutes of grace.
+    ui.dueReminder?.let { due ->
+        StaggeredIn(index = 4) {
+            DueReminderCard(
+                due = due,
+                onDone = { onDismissDue(due) },
+                onLater = { onSnoozeDue(due) },
             )
         }
     }
@@ -431,6 +472,25 @@ private fun TodaySection(
                 )
             }
             TextButton(
+                onClick = onSpeakDay,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.VolumeUp,
+                    contentDescription = null,
+                    tint = ClayDeep,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.home_speak_day),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = ClayDeep,
+                )
+            }
+            TextButton(
                 onClick = onSnooze,
                 modifier = Modifier
                     .weight(1f)
@@ -442,6 +502,95 @@ private fun TodaySection(
                     color = ClayDeep,
                 )
             }
+        }
+    }
+}
+
+/** The battery, as a quiet line of reassurance — never an alarm. */
+@Composable
+private fun BatteryReassurance(levelPct: Int?, charging: Boolean) {
+    val tone = BatteryLine.tone(levelPct, charging)
+    val (label, color) = when (tone) {
+        BatteryLine.Tone.CHARGING -> stringResource(R.string.battery_charging) to Sage
+        BatteryLine.Tone.FULL -> stringResource(R.string.battery_full) to Sage
+        BatteryLine.Tone.GOOD -> stringResource(R.string.battery_good, levelPct ?: 0) to Ink
+        BatteryLine.Tone.LOW -> stringResource(R.string.battery_low, levelPct ?: 0) to Tier2
+        BatteryLine.Tone.UNKNOWN -> return // nothing to reassure about
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = if (charging) Icons.Filled.BatteryChargingFull else Icons.Filled.BatteryFull,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+        )
+    }
+}
+
+/**
+ * The due reminder: one card, plain words, one huge "Done". Warm amber, not
+ * red — this is a nudge, not an emergency. "Later" snoozes ten minutes.
+ */
+@Composable
+private fun DueReminderCard(
+    due: ReminderDue.Due,
+    onDone: () -> Unit,
+    onLater: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Tier1.copy(alpha = 0.16f), RoundedCornerShape(24.dp))
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.due_reminder_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = Tier1,
+        )
+        Text(
+            text = due.text,
+            fontSize = 24.sp,
+            lineHeight = 30.sp,
+            style = MaterialTheme.typography.titleLarge,
+            color = Ink,
+        )
+        Text(
+            text = stringResource(
+                R.string.due_reminder_time,
+                HomeTime.formatClock(due.dueTs),
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink.copy(alpha = 0.6f),
+        )
+        KhayaalButton(
+            onClick = onDone,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "Mark ${due.text} as done" },
+            minHeight = 72.dp,
+            shape = RoundedCornerShape(24.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.due_reminder_done),
+                fontSize = 22.sp,
+                lineHeight = 28.sp,
+                style = MaterialTheme.typography.titleLarge,
+            )
+        }
+        TextButton(onClick = onLater, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text(
+                text = stringResource(R.string.due_reminder_later),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Ink.copy(alpha = 0.6f),
+            )
         }
     }
 }

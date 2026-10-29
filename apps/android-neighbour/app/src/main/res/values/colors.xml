@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Khayaal Family design tokens — the light dashboard the web ships. -->
+    <color name="khayaal_night">#FAF6EF</color>
+    <color name="khayaal_ink">#1C1B22</color>
+    <color name="khayaal_glow">#5B8DFF</color>
+    <color name="ic_launcher_background">#FAF6EF</color>
+</resources>

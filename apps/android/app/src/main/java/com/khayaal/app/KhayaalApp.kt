@@ -11,6 +11,7 @@ import com.khayaal.app.data.repo.KhayaalRepository
 import com.khayaal.app.signals.SignalCollector
 import com.khayaal.app.signals.SignalRecorder
 import com.khayaal.app.signals.WorkScheduler
+import com.khayaal.app.sos.SosManager
 import com.khayaal.app.talkback.TalkbackManager
 import kotlinx.coroutines.runBlocking
 
@@ -47,6 +48,7 @@ class KhayaalApp : Application() {
         }
         CheckInManager.ensureChannels(this)
         CommandCoordinator.ensureChannelStatic(this)
+        SosManager.ensureChannel(this)
         WorkScheduler.ensurePeriodicWork(this)
         container.signalCollector.start()
     }

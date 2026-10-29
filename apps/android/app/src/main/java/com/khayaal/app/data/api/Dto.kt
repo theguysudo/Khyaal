@@ -121,6 +121,58 @@ data class AckDto(
     val ts: Long = 0,
 )
 
+/**
+ * The household's SOS flag inside the state bundle. Absent on backends that
+ * predate SOS — hence a nullable field with a safe default.
+ */
+@Serializable
+data class SosStateDto(
+    val active: Boolean = false,
+    /** "button" | "auto", or null when the server did not say. */
+    val origin: String? = null,
+    val sinceTs: Long? = null,
+    /** Who stood the SOS down (or acknowledged it), with the timestamp. */
+    val ack: AckDto? = null,
+) {
+    val originButton: Boolean get() = origin == SosTriggerRequest.ORIGIN_BUTTON
+    val originAuto: Boolean get() = origin == SosTriggerRequest.ORIGIN_AUTO
+}
+
+// -- SOS -----------------------------------------------------------------------
+// POST /household/{id}/sos | /sos/resolve | /sos/respond. The elder device
+// uses its own source credentials (the interceptor attaches them).
+
+@Serializable
+data class SosTriggerRequest(
+    val origin: String,
+    val note: String? = null,
+) {
+    companion object {
+        const val ORIGIN_BUTTON = "button"
+        const val ORIGIN_AUTO = "auto"
+    }
+}
+
+@Serializable
+data class SosResolveRequest(val by: String)
+
+@Serializable
+data class SosRespondRequest(
+    val by: String,
+    val etaMin: Long? = null,
+)
+
+/**
+ * The SOS endpoints' reply, parsed tolerantly: the demo backend may answer
+ * `{ok:true}`, the full state bundle, or anything in between — the caller
+ * reads the fresh SOS state from the next /state poll either way.
+ */
+@Serializable
+data class SosActionResponse(
+    val ok: Boolean? = null,
+    val error: String? = null,
+)
+
 @Serializable
 data class StateDto(
     /** Null while the engine is still learning. */
@@ -229,6 +281,8 @@ data class StateBundleDto(
     val realNowTs: Long? = null,
     /** Family→app commands channel; absent on backends that predate it. */
     val commands: List<CommandDto> = emptyList(),
+    /** The household's SOS flag; absent on backends that predate it. */
+    val sos: SosStateDto? = null,
 )
 
 @Serializable

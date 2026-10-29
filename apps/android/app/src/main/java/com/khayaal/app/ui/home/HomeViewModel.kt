@@ -7,11 +7,14 @@ import com.khayaal.app.KhayaalApp
 import com.khayaal.app.data.api.CareCircleMemberDto
 import com.khayaal.app.data.api.CallPlanDto
 import com.khayaal.app.data.api.CommandDto
+import com.khayaal.app.data.api.SosStateDto
+import com.khayaal.app.data.api.SosTriggerRequest
 import com.khayaal.app.data.api.StateDto
 import com.khayaal.app.data.datastore.CallChainState
 import com.khayaal.app.data.datastore.ChecklistItem
 import com.khayaal.app.data.datastore.GpsState
 import com.khayaal.app.data.datastore.SleepMilestone
+import com.khayaal.app.sos.SosManager
 import com.khayaal.app.signals.WorkScheduler
 import com.khayaal.app.sleep.SleepWatchManager
 import com.khayaal.app.voice.VoiceCommandManager
@@ -65,7 +68,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val commands: List<CommandDto> = emptyList(),
         // The armed tier-3 call chain (cancellable from the alarm).
         val callChain: CallChainState? = null,
-    )
+        // The household's SOS flag (null on backends that predate SOS).
+        val sos: SosStateDto? = null,
+        // Reassurance: the battery line, and the reminder waiting for its Done.
+        val batteryLevelPct: Int? = null,
+        val batteryCharging: Boolean = false,
+        val dismissedReminderIds: Set<String> = emptySet(),
+        val localReminders: List<com.khayaal.app.commands.LocalReminder> = emptyList(),
+    ) {
+        /** The due reminder that needs her big "Done" (null = quiet). */
+        val dueReminder: ReminderDue.Due?
+            get() = ReminderDue.next(
+                commands = commands,
+                localReminders = localReminders,
+                nowMs = simNowTs ?: System.currentTimeMillis(),
+                dismissedIds = dismissedReminderIds,
+            )
+    }
 
     private val container = (application as KhayaalApp).container
     private val appContext = application
@@ -129,6 +148,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            container.pairingStore.dismissedReminderIdsFlow.collect { dismissed ->
+                _ui.update { it.copy(dismissedReminderIds = dismissed) }
+            }
+        }
+        viewModelScope.launch {
+            container.pairingStore.localRemindersFlow.collect { reminders ->
+                _ui.update { it.copy(localReminders = reminders) }
+            }
+        }
+        // The battery line — read from the sticky system intent on every poll
+        // tick; a number the home screen wears as reassurance, not an alarm.
+        viewModelScope.launch {
+            while (isActive) {
+                val (level, charging) = readBattery()
+                _ui.update { it.copy(batteryLevelPct = level, batteryCharging = charging) }
+                delay(BATTERY_POLL_MS)
+            }
+        }
+        viewModelScope.launch {
             container.pairingStore.callChainFlow.collect { chain ->
                 _ui.update { it.copy(callChain = chain) }
             }
@@ -175,6 +213,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     // Family→app commands (dedupe + ack live in the coordinator).
                     runCatching { container.commandCoordinator.onBundle(bundle) }
+                    // PATH B (state poll → siren): the SOS flag rides every
+                    // tick; SosManager latches the start/stop edges. This is
+                    // the delivery path that works with no Firebase config.
+                    SosManager.onSosObservation(appContext, bundle.sos, "foreground-poll")
+                    _ui.update { it.copy(sos = bundle.sos) }
                 }
                 .onFailure {
                     _ui.update { it.copy(offline = true, loading = false) }
@@ -215,6 +258,111 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
         }
     }
+
+    // -- SOS -----------------------------------------------------------------------
+
+    /**
+     * She pressed the SOS button (long-press + confirm). The network POST and
+     * the local siren start together on purpose: the family must hear about
+     * it as fast as the network allows, but her own phone ringing is a
+     * requirement and never waits on the network.
+     */
+    fun triggerSos() {
+        viewModelScope.launch {
+            SosManager.onLocalTrigger(appContext) // siren + full-screen alarm now
+            container.repository.triggerSos(SosTriggerRequest.ORIGIN_BUTTON)
+                .onFailure {
+                    // The alarm still rings locally; the banner reflects the
+                    // offline state and the next poll reconciles with the server.
+                    _ui.update { it.copy(offline = true) }
+                }
+        }
+    }
+
+    /** Stands the SOS down from the banner: local stop first, resolve best-effort. */
+    fun standDownSos() {
+        viewModelScope.launch {
+            SosManager.onUserStoodDown(appContext)
+            container.repository.resolveSos(resolveBy())
+                .onFailure { _ui.update { it.copy(offline = true) } }
+        }
+    }
+
+    private suspend fun resolveBy(): String =
+        container.pairingStore.current()?.parentName?.takeIf { it.isNotBlank() }
+            ?: getApplication<Application>().getString(com.khayaal.app.R.string.sos_by_elder)
+
+    // -- Reassurance: battery, due reminder, the day read aloud -----------------
+
+    /** The battery level and charging state, from the sticky system intent. */
+    private fun readBattery(): Pair<Int?, Boolean> {
+        val intent = appContext.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            ?: return null to false
+        val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+        val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+        val pct = if (level >= 0 && scale > 0) (level * 100) / scale else null
+        val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == android.os.BatteryManager.BATTERY_STATUS_FULL
+        return pct to charging
+    }
+
+    /** The big "Done": the reminder never surfaces again; the ack is best-effort. */
+    fun dismissReminder(due: ReminderDue.Due) {
+        viewModelScope.launch {
+            container.pairingStore.dismissReminder(due.id)
+            if (due.fromFamily) {
+                runCatching { container.repository.ackCommand(due.id) }
+            }
+        }
+    }
+
+    /** "Later" — the same reminder comes back in ten minutes, as a local alarm. */
+    fun snoozeReminder(due: ReminderDue.Due) {
+        viewModelScope.launch {
+            val reminder = com.khayaal.app.commands.LocalReminder(
+                id = "snooze_${due.id}",
+                text = due.text,
+                atMs = System.currentTimeMillis() + ReminderDue.SNOOZE_MS,
+            )
+            container.pairingStore.upsertLocalReminder(reminder)
+            container.pairingStore.dismissReminder(due.id)
+            com.khayaal.app.commands.LocalReminderScheduler.schedule(appContext, reminder)
+        }
+    }
+
+    /** "Speak my day" — one tap, the whole day in one calm paragraph. */
+    fun speakDay() {
+        val uiState = _ui.value
+        val nowMs = uiState.simNowTs ?: System.currentTimeMillis()
+        val next = ReminderDue.next(
+            commands = uiState.commands,
+            localReminders = uiState.localReminders,
+            nowMs = nowMs,
+            dismissedIds = uiState.dismissedReminderIds,
+        ) ?: nextFutureReminder(uiState)
+        val summary = DaySummary.compose(
+            herName = uiState.parentName,
+            greeting = getApplication<Application>().getString(
+                HomeTime.greetingResourceId(HomeTime.greetingHour(nowMs)),
+            ),
+            status = uiState.state?.status?.takeIf { it.isNotBlank() },
+            nextReminderText = next?.text,
+            nextReminderClock = next?.let { HomeTime.formatClock(it.dueTs) },
+            stepsToday = uiState.stepsToday.takeIf { it > 0 }?.toInt(),
+            charging = uiState.batteryLevelPct?.let { uiState.batteryCharging },
+        )
+        container.ttsSpeaker.speak(summary)
+    }
+
+    /** The next reminder still to come — the day preview, not the due one. */
+    private fun nextFutureReminder(uiState: HomeUiState): ReminderDue.Due? =
+        uiState.commands
+            .asSequence()
+            .filter { it.type == CommandDto.Types.REMINDER || it.type == CommandDto.Types.TTS }
+            .filter { it.ts > (uiState.simNowTs ?: System.currentTimeMillis()) }
+            .minByOrNull { it.ts }
+            ?.let { ReminderDue.Due(it.id, it.text, it.ts, it.lang, fromFamily = true) }
 
     // -- Night watch ------------------------------------------------------------
 
@@ -334,5 +482,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         private const val POLL_INTERVAL_MS = 60_000L
         private const val CHECKIN_CONFIRMATION_MS = 4_000L
         private const val DEFAULT_SNOOZE_MINUTES = 60L
+
+        /** The battery line refreshes at the same gentle cadence as the day. */
+        private const val BATTERY_POLL_MS = 60_000L
     }
 }

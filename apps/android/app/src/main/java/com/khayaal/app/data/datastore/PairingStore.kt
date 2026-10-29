@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.khayaal.app.BuildConfig
 import com.khayaal.app.commands.CommandBook
@@ -74,10 +75,16 @@ class PairingStore(private val context: Context) {
         val STEPS_LAST_CUMULATIVE = doublePreferencesKey("steps_last_cumulative")
         val STEPS_PERIODIC_TS = longPreferencesKey("steps_periodic_ts")
 
+        // The band (Health Connect): last successful read, so the next read
+        // only pulls what is new.
+        val HEALTH_CONNECT_POLL_TS = longPreferencesKey("health_connect_poll_ts")
+
         // Commands channel: dedupe by id, ack bookkeeping, a small history for UI.
         val COMMAND_SEEN = stringPreferencesKey("command_seen")
         val COMMAND_ACKED = stringPreferencesKey("command_acked")
         val COMMAND_HISTORY = stringPreferencesKey("command_history")
+        // Reminders she dismissed with the big "Done" — they never come back.
+        val COMMAND_DONE = stringSetPreferencesKey("command_done")
 
         // FCM device token (idempotent re-registration after pairing).
         val FCM_TOKEN = stringPreferencesKey("fcm_token")
@@ -404,6 +411,15 @@ class PairingStore(private val context: Context) {
         context.dataStore.edit { it[Keys.STEPS_PERIODIC_TS] = ts }
     }
 
+    // -- The band (Health Connect) -------------------------------------------------
+
+    suspend fun currentHealthConnectPollTs(): Long =
+        context.dataStore.data.first()[Keys.HEALTH_CONNECT_POLL_TS] ?: 0L
+
+    suspend fun setHealthConnectPollTs(ts: Long) {
+        context.dataStore.edit { it[Keys.HEALTH_CONNECT_POLL_TS] = ts }
+    }
+
     // -- Commands channel ---------------------------------------------------------
 
     suspend fun loadCommandBook(): CommandBook {
@@ -438,6 +454,21 @@ class PairingStore(private val context: Context) {
             } ?: emptyList()
             val merged = (commands + current).distinctBy { it.id }.take(CommandBook.HISTORY_CAP)
             prefs[Keys.COMMAND_HISTORY] = json.encodeToString(ListSerializer(CommandDto.serializer()), merged)
+        }
+    }
+
+    // -- Done reminders (the big "Done" on the due-reminder card) -----------------
+
+    /** Reminder/command ids she dismissed — they never surface again. */
+    val dismissedReminderIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.COMMAND_DONE] ?: emptySet()
+    }
+
+    suspend fun currentDismissedReminderIds(): Set<String> = dismissedReminderIdsFlow.first()
+
+    suspend fun dismissReminder(id: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.COMMAND_DONE] = (prefs[Keys.COMMAND_DONE] ?: emptySet()) + id
         }
     }
 

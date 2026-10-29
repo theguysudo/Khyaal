@@ -78,7 +78,11 @@ private sealed interface PairingUi {
 private val NavEase = CubicBezierEasing(0.1f, 0.8f, 0.2f, 1f)
 
 /** How long the brand moment lasts at minimum, even on a warm DataStore. */
-private const val MIN_SPLASH_MS = 1400L
+private const val MIN_SPLASH_MS = 2_800L
+
+/** Her name for the splash's handoff line — "Amma" until told otherwise. */
+private fun herName(info: PairingInfo?): String =
+    info?.parentName?.takeIf { it.isNotBlank() } ?: "Amma"
 
 @Composable
 private fun KhayaalRoot() {
@@ -100,6 +104,13 @@ private fun KhayaalRoot() {
         delay(MIN_SPLASH_MS)
         minSplashElapsed = true
     }
+    // The v2 splash holds the stage through its arc (~2.8 s) and DataStore's
+    // answer; a paired home then waits for the "enter" tap, an unpaired one
+    // walks into pairing on its own.
+    var splashDone by remember { mutableStateOf(false) }
+    val splashVisible = !splashDone &&
+        (!minSplashElapsed || pairingUi == PairingUi.Loading)
+    val pairedInfo = (pairingUi as? PairingUi.Paired)?.info
 
     LaunchedEffect(pairingUi) {
         when (val state = pairingUi) {
@@ -187,7 +198,20 @@ private fun KhayaalRoot() {
 
         // The splash sits above everything until the brand moment has played
         // and DataStore has decided the first destination, then fades away.
-        KhayaalSplash(visible = !minSplashElapsed || pairingUi == PairingUi.Loading)
+        KhayaalSplash(
+            visible = splashVisible,
+            enterLabel = if (pairedInfo != null) "Enter ${herName(pairedInfo)}'s home" else null,
+            handoffLine = "home found — ${herName(pairedInfo)} is well",
+            onEnter = { splashDone = true },
+        )
+    }
+
+    // Unpaired: when the splash has said its piece, walk into pairing quietly.
+    LaunchedEffect(pairingUi, minSplashElapsed) {
+        if (pairingUi == PairingUi.Unpaired && minSplashElapsed && !splashDone) {
+            delay(600) // let the handoff line land
+            splashDone = true
+        }
     }
 
     // The consent popup sits above everything: when the family asks to talk,

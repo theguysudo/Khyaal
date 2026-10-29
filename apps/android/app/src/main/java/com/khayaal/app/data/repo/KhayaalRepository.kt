@@ -10,6 +10,8 @@ import com.khayaal.app.data.api.IngestRequest
 import com.khayaal.app.data.api.PairRequest
 import com.khayaal.app.data.api.SnoozeRequest
 import com.khayaal.app.data.api.SourceCreateRequest
+import com.khayaal.app.data.api.SosResolveRequest
+import com.khayaal.app.data.api.SosTriggerRequest
 import com.khayaal.app.data.api.StateBundleDto
 import com.khayaal.app.data.api.TalkbackAnswerBody
 import com.khayaal.app.data.api.TalkbackAudio
@@ -205,6 +207,31 @@ class KhayaalRepository(
     suspend fun snooze(minutes: Long): Result<StateBundleDto> = runCatching {
         val pairing = requireNotNull(store.current()) { "Not paired yet" }
         apiClient.api(pairing.baseUrl).snooze(pairing.householdId, SnoozeRequest(minutes.coerceIn(1, 720)))
+    }
+
+    // -- SOS ----------------------------------------------------------------------
+
+    /**
+     * Raises the SOS: she pressed the button (or the app decided it must).
+     * The caller starts the local siren regardless of the network outcome —
+     * the elder's own phone ringing is a requirement, not a nice-to-have.
+     */
+    suspend fun triggerSos(origin: String, note: String? = null): Result<Unit> = runCatching {
+        val pairing = requireNotNull(store.current()) { "Not paired yet" }
+        apiClient.api(pairing.baseUrl)
+            .triggerSos(pairing.householdId, SosTriggerRequest(origin = origin, note = note))
+        Unit
+    }
+
+    /**
+     * Stands the SOS down under her (or a family member's) name. Best-effort:
+     * the siren stops locally no matter what this returns; the caller retries
+     * while the SOS alarm screen is open if the network refuses.
+     */
+    suspend fun resolveSos(by: String): Result<Unit> = runCatching {
+        val pairing = requireNotNull(store.current()) { "Not paired yet" }
+        apiClient.api(pairing.baseUrl).resolveSos(pairing.householdId, SosResolveRequest(by = by))
+        Unit
     }
 
     // -- Commands channel -------------------------------------------------------
