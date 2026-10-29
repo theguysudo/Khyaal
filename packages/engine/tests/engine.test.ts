@@ -427,6 +427,28 @@ describe('fall detection', () => {
     expect(ev?.meta).toContain('fall');
   });
 
+  it('a resolved fall stays down — the resolve must be newer than the fall', () => {
+    const now = dayAt(0, 11.5);
+    const fallTs = now - 2 * MIN;
+    const signals: Signal[] = [
+      ...dayOfSignals(-1),
+      { sourceId: 'esp32', type: 'presence', value: 'fall', ts: fallTs },
+      { sourceId: 'family', type: 'sos', value: 'resolved', ts: now - MIN, meta: { by: 'Aditya' } },
+    ];
+    const r = risk(signals, now);
+    const out = advanceState({
+      state: { ...emptyState(now), tier: 4, sos: { active: true, origin: 'auto', sinceTs: fallTs, ack: null } },
+      risk: r,
+      household: hh(),
+      signals,
+      nowTs: now,
+    });
+    // Somebody answered this fall; the alarm may not re-raise from the same
+    // event, or standing down would be impossible until the signal aged out.
+    expect(out.state.tier).toBe(0);
+    expect(out.state.sos.active).toBe(false);
+  });
+
   it('a manual SOS outranks everything and only a resolve ends it', () => {
     const now = dayAt(0, 11.5);
     const pressed: Signal[] = [

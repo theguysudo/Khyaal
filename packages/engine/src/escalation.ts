@@ -257,11 +257,14 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
     // A freshly sensed fall skips the ladder, the dwell timers, quiet hours
     // and the confidence gate, and goes straight to SOS: the sensor saw an
     // impact pattern, and that is precisely the moment the alarm must ring —
-    // even at 3am, even in quiet hours.
+    // even at 3am, even in quiet hours. A resolve newer than the fall means
+    // somebody already answered THIS fall — the alarm stays down until the
+    // sensor sees a fresh one, otherwise standing down is impossible.
     const lastFall = [...signals]
       .reverse()
       .find((s) => s.type === 'presence' && s.value === 'fall');
-    if (lastFall && nowTs - lastFall.ts < 15 * MIN && tier < 4 && !manualSosActive) {
+    const fallSupersededByResolve = sosResolvedTs !== null && (!lastFall || sosResolvedTs > lastFall.ts);
+    if (lastFall && nowTs - lastFall.ts < 15 * MIN && tier < 4 && !manualSosActive && !fallSupersededByResolve) {
       pushEvent({
         ts: nowTs,
         type: 'sos',
