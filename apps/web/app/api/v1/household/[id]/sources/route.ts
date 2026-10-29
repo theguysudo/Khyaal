@@ -44,7 +44,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         ? 'phone'
         : body.type === 'smartwatch'
           ? 'smartwatch'
-          : 'simulator';
+          : body.type === 'neighbour'
+            ? 'neighbour'
+            : 'simulator';
   const source = {
     id: `src_${randomId()}`,
     type,
@@ -55,7 +57,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           ? 'Room sensor (ESP32)'
           : type === 'smartwatch'
             ? 'Smartwatch (Fastrack band)'
-            : 'Simulated source',
+            : type === 'neighbour'
+              ? 'Neighbour'
+              : 'Simulated source',
     apiKey: `sk_${randomId()}${randomId()}`,
     createdAtTs: Date.now(),
     lastSeenTs: null,

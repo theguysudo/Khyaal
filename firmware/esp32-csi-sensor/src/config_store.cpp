@@ -24,6 +24,8 @@ void ConfigStore::load(KhConfig *out) {
   copyStr(out->householdId, sizeof(out->householdId), KH_HOUSEHOLD_ID_DEFAULT);
   copyStr(out->sourceId, sizeof(out->sourceId), KH_SOURCE_ID_DEFAULT);
   copyStr(out->apiKey, sizeof(out->apiKey), KH_API_KEY_DEFAULT);
+  copyStr(out->btName, sizeof(out->btName), KH_BT_NAME_DEFAULT);
+  copyStr(out->btPin, sizeof(out->btPin), KH_BT_PIN_DEFAULT);
   out->threshold = KH_MOTION_THRESHOLD_DEFAULT;
   out->transport = KH_TRANSPORT_DEFAULT;
   out->encrypt = true;  // seal by default; `enc off` only for debugging
@@ -36,6 +38,8 @@ void ConfigStore::load(KhConfig *out) {
   if (prefs.isKey("hh")) copyStr(out->householdId, sizeof(out->householdId), prefs.getString("hh").c_str());
   if (prefs.isKey("src")) copyStr(out->sourceId, sizeof(out->sourceId), prefs.getString("src").c_str());
   if (prefs.isKey("key")) copyStr(out->apiKey, sizeof(out->apiKey), prefs.getString("key").c_str());
+  if (prefs.isKey("btname")) copyStr(out->btName, sizeof(out->btName), prefs.getString("btname").c_str());
+  if (prefs.isKey("btpin")) copyStr(out->btPin, sizeof(out->btPin), prefs.getString("btpin").c_str());
   if (prefs.isKey("thr")) out->threshold = prefs.getFloat("thr", out->threshold);
   if (prefs.isKey("mode")) out->transport = prefs.getUChar("mode", out->transport);
   if (prefs.isKey("enc")) out->encrypt = prefs.getBool("enc", out->encrypt);
@@ -70,6 +74,16 @@ void ConfigStore::saveSourceId(KhConfig *cfg, const char *v) {
 void ConfigStore::saveApiKey(KhConfig *cfg, const char *v) {
   copyStr(cfg->apiKey, sizeof(cfg->apiKey), v);
   Preferences p; p.begin(kNamespace, false); p.putString("key", v); p.end();
+}
+
+void ConfigStore::saveBtName(KhConfig *cfg, const char *v) {
+  copyStr(cfg->btName, sizeof(cfg->btName), v);
+  Preferences p; p.begin(kNamespace, false); p.putString("btname", v); p.end();
+}
+
+void ConfigStore::saveBtPin(KhConfig *cfg, const char *v) {
+  copyStr(cfg->btPin, sizeof(cfg->btPin), v);
+  Preferences p; p.begin(kNamespace, false); p.putString("btpin", v); p.end();
 }
 
 void ConfigStore::saveThreshold(KhConfig *cfg, float v) {

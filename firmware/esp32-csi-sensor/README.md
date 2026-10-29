@@ -94,13 +94,18 @@ tells them apart.
 
 Three LEDs on the dev kit's GPIO headers, active-HIGH through series
 resistors to common GND (`led_controller.{h,cpp}`, all `millis()`-based and
-non-blocking):
-
-| LED | pin | driven by | meaning |
-| --- | --- | --- | --- |
-| Green | GPIO 27 | link + `readStats()` | **connectivity** — solid while the link is up and frames are flowing; slow blink while connecting (link up, room still quiet); dark with no link |
-| Red | GPIO 25 | variance vs threshold (LEDC PWM) | **movement** — brightness follows intensity, smoothed; solid full red for 30 s when the state machine flags a fall (SOS) |
-| Pink | GPIO 26 | fault logic in `tick()` | **link/sensor fault** — Wi-Fi dropped after having been up, or no frames for 5 s while the link is up past a 30 s startup grace; clears itself |
+non-blocking). The full scenario table — every state the board can be in,
+the override rules, night dimming, the activity classifier and the
+inactivity watchdog — lives in `../README.md` ("Status LEDs — the scenario
+language"). The short version: **green = connectivity** (solid = Wi-Fi
+linked + frames; slow breath = serial/USB mode — the demo default, never
+dark; double-flash = Wi-Fi connecting; fast blink = Bluetooth SPP; off = no
+link), **red = the room** (off = no CSI; faint breath = watching a quiet
+room; PWM glow = motion/activity class; solid = fall latched; fast strobe =
+SOS acute), **pink = events** (single pulse = presence change; double = new
+identity typed; triple = SOS; soft double = inactivity nudge; sweep =
+calibration; solid = link/sensor fault). `ledtest` plays every scenario on
+the bench (~45 s) and prints each name.
 
 ## How the CSI pipeline works
 

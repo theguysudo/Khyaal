@@ -18,8 +18,10 @@ struct KhConfig {
   char householdId[48];
   char sourceId[48];
   char apiKey[96];
+  char btName[32];        // Bluetooth Classic SPP device name
+  char btPin[8];          // Bluetooth pairing PIN (optional)
   float threshold;
-  uint8_t transport;      // TRANSPORT_SERIAL | TRANSPORT_LAN
+  uint8_t transport;      // TRANSPORT_SERIAL | TRANSPORT_LAN | TRANSPORT_BT
   bool encrypt;           // AES-256-GCM seal the LAN ingest hop
 };
 
@@ -34,6 +36,8 @@ class ConfigStore {
   void saveHouseholdId(KhConfig *cfg, const char *id);
   void saveSourceId(KhConfig *cfg, const char *id);
   void saveApiKey(KhConfig *cfg, const char *key);
+  void saveBtName(KhConfig *cfg, const char *name);
+  void saveBtPin(KhConfig *cfg, const char *pin);
   void saveThreshold(KhConfig *cfg, float thr);
   void saveTransport(KhConfig *cfg, uint8_t transport);
   void saveEncrypt(KhConfig *cfg, bool on);
