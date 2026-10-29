@@ -3,12 +3,12 @@
 /**
  * The signature — the wellbeing counter, on the web.
  *
- * A dark-glass plate (#262626, 28px radius) with Khayaal's orange glow
- * breathing behind it, and the digits rendered as an odometer: one clipped
- * column per digit holding a 0–9 stack, translated by whole ems on a gentle
- * spring when the live score changes. Geometry and easing follow the v3
- * mobile reference (.kx3-odo); the glass shadows are scaled from the Figma
- * Counter source (file tNwILFNaBEw7UP86o6slKB, node 1:2740).
+ * The Vision UI glass card (20px radius, the dark-glass fill + white gradient
+ * hairline from the shared recipe) with Khayaal's orange glow breathing
+ * behind it — the "vibrant variant" card of the Vision family — and the
+ * digits rendered as an odometer: one clipped column per digit holding a 0–9
+ * stack, translated by whole ems on a gentle spring when the live score
+ * changes. Geometry and easing follow the v3 mobile reference (.kx3-odo).
  *
  * The value arrives from the same /state poll that fed the old CountUp —
  * nothing about the data contract changes, only the way it moves.
@@ -16,13 +16,11 @@
 
 import * as React from 'react';
 
+/* The Vision card shadow, plus the counter's own Khayaal warm under-glow. */
 const GLASS_SHADOW =
-  '0 -19px 45px -15px rgba(255, 255, 255, 0.20), ' +
-  '0 44px 42px -36px rgba(255, 107, 33, 0.45), ' +
-  'inset 0 1px 3px rgba(255, 255, 255, 0.28), ' +
-  'inset 0 12px 21px rgba(255, 255, 255, 0.10), ' +
-  'inset 0 70px 78px -67px rgba(255, 255, 255, 0.10), ' +
-  'inset 0 0 5px rgba(0, 0, 0, 0.22)';
+  '0 3.5px 5.5px rgba(0, 0, 0, 0.02), ' +
+  '0 44px 42px -36px rgba(255, 107, 33, 0.40), ' +
+  'inset 0 1px 3px rgba(255, 255, 255, 0.16)';
 
 /** One rolling digit: a clipped window over a 0–9 stack. */
 function OdoDigit({ char }: { char: string }) {
@@ -87,13 +85,13 @@ export function CounterCard({
   return (
     <section
       aria-label="Current status"
-      className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-[28px] bg-n-800 text-white"
+      className="kh-glass kh-gradring relative flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] text-white"
       style={{ boxShadow: GLASS_SHADOW }}
     >
       <div className="kh-counter-glow" aria-hidden />
       <div className="relative flex h-full flex-col p-6 sm:p-7">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Wellbeing</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-vision-dim">Wellbeing</p>
           <span className={`kh-tier-ease inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-1 text-xs font-medium ${tierPill}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${tierDot}`} aria-hidden />
             {tierLabel}
@@ -102,7 +100,7 @@ export function CounterCard({
 
         <div className="mt-5 flex items-end gap-3">
           {score === null ? (
-            <span className="kh-odo-digits text-[76px] font-semibold leading-none tracking-[-0.02em] text-white/35 sm:text-[88px]">
+            <span className="kh-odo-digits text-[76px] font-bold leading-none tracking-[-0.02em] text-white/35 sm:text-[88px]">
               ···
             </span>
           ) : (
@@ -111,13 +109,13 @@ export function CounterCard({
           <span className="pb-1.5 text-sm font-medium text-white/70">of 100</span>
         </div>
 
-        <p className="mt-1 text-xs font-medium text-white/55">
+        <p className="mt-1 text-xs font-medium text-vision-dim">
           {learning ? 'quiet learning — nothing is scored yet' : confidence}
         </p>
 
-        <div className="mt-5 border-t border-white/10 pt-5">
-          <p className="text-[17px] font-semibold leading-snug text-white">{status}</p>
-          <p className="mt-2 text-sm leading-relaxed text-white/65">{lastLine}</p>
+        <div className="mt-5 border-t border-vision-sep pt-5">
+          <p className="text-lg font-bold leading-snug text-white">{status}</p>
+          <p className="mt-2 text-sm leading-relaxed text-vision-dim">{lastLine}</p>
         </div>
 
         {children}

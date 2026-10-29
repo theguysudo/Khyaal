@@ -119,13 +119,13 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
     <BentoCard label="Night watch" className="col-span-12 lg:col-span-5">
       <CardTitle note="on-device · nothing recorded">Night watch</CardTitle>
 
-      {/* the night sky — dark glass with the Khayaal glow rising from below */}
+      {/* the night sky — Vision dark glass with the Khayaal glow rising from below */}
       <div
-        className="relative mt-4 overflow-hidden rounded-xl border border-n-800 px-4 pb-4 pt-5 text-white"
+        className="relative mt-4 overflow-hidden rounded-2xl border border-white/10 px-4 pb-4 pt-5 text-white"
         style={{
-          background: 'linear-gradient(170deg, #1C1917 0%, #262626 55%, #2E2A26 100%)',
+          background: 'linear-gradient(170deg, #101432 0%, #0B1029 55%, #141B40 100%)',
           boxShadow:
-            'inset 0 1px 3px rgba(255,255,255,0.14), inset 0 40px 60px -50px rgba(255,220,166,0.28), 0 1px 2px rgba(0,0,0,0.18)',
+            '0 3.5px 5.5px rgba(0,0,0,0.02), inset 0 1px 3px rgba(255,255,255,0.10), inset 0 40px 60px -50px rgba(255,220,166,0.24)',
         }}
       >
         <div
@@ -169,7 +169,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
         </div>
 
         {/* the night's events */}
-        <ul className="relative mt-4 space-y-1.5 border-t border-white/12 pt-3 text-xs">
+        <ul className="relative mt-4 space-y-1.5 border-t border-vision-sep pt-3 text-xs">
           {events.length === 0 && <li className="text-white/55">Nothing unusual was heard overnight.</li>}
           {events.slice().reverse().slice(0, 4).map((s, i) => (
             <li key={`${s.ts}-${i}`} className="flex items-baseline gap-3">
@@ -183,12 +183,12 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
       {/* the mixer */}
       <div className="mt-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-n-400">Calming sounds</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-vision-dim">Calming sounds</p>
           <div className="flex items-center gap-2">
             {anyPlaying && (
               <button
                 onClick={stopAll}
-                className={`kh-press rounded-lg border border-n-300 bg-white px-3 py-1 text-[11px] font-medium text-n-600 shadow-xs transition-colors hover:bg-n-50 hover:text-n-900 ${FOCUS}`}
+                className={`kh-press rounded-[10px] border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white ${FOCUS}`}
               >
                 stop all
               </button>
@@ -196,10 +196,10 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
             <button
               onClick={toggleMasterMute}
               aria-pressed={masterMuted}
-              className={`kh-press rounded-lg border px-3 py-1 text-[11px] font-medium transition-colors ${
+              className={`kh-press rounded-[10px] border px-3 py-1 text-[11px] font-medium transition-colors ${
                 masterMuted
-                  ? 'border-err-200 bg-err-50 text-err-700'
-                  : 'border-n-300 bg-white text-n-600 shadow-xs hover:bg-n-50 hover:text-n-900'
+                  ? 'border-[#E31A1A]/30 bg-[#E31A1A]/10 text-err-300'
+                  : 'border-white/15 bg-white/5 text-white/85 hover:bg-white/10 hover:text-white'
               } ${FOCUS}`}
             >
               {masterMuted ? '🔇 muted' : '🔊 sound on'}
@@ -208,7 +208,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
         </div>
 
         {!supported && (
-          <p className="mt-2 text-[11px] text-n-500">This browser cannot play audio.</p>
+          <p className="mt-2 text-[11px] text-vision-dim">This browser cannot play audio.</p>
         )}
 
         <div className="mt-2.5 space-y-1.5">
@@ -218,26 +218,26 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
             return (
               <div
                 key={s.id}
-                className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
-                  on ? 'border-brand-200 bg-brand-25' : 'border-n-200 bg-n-50'
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2 transition-colors ${
+                  on ? 'border-brand-600/40 bg-brand-600/10' : 'border-white/[0.07] bg-white/[0.04]'
                 }`}
               >
                 <button
                   onClick={() => toggle(s.id)}
                   disabled={!supported}
                   aria-label={`${on ? 'Stop' : 'Play'} ${s.label}`}
-                  className={`kh-press flex h-9 w-9 flex-none items-center justify-center rounded-lg text-base transition-colors ${
-                    on ? 'bg-brand-600 text-white shadow-[0_4px_14px_rgba(220,104,3,.35)]' : 'border border-n-200 bg-white text-n-600 shadow-xs'
+                  className={`kh-press flex h-9 w-9 flex-none items-center justify-center rounded-[10px] text-base transition-colors ${
+                    on ? 'bg-brand-600 text-white shadow-[0_4px_14px_rgba(220,104,3,.35)]' : 'border border-white/10 bg-white/[0.06] text-white/80'
                   } disabled:opacity-40 ${FOCUS}`}
                 >
                   {on ? '❚❚' : s.glyph}
                 </button>
                 <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium ${off ? 'text-n-400' : 'text-n-800'}`}>
+                  <p className={`text-sm font-medium ${off ? 'text-white/35' : 'text-white'}`}>
                     {s.label}
-                    {on && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-brand-600">playing</span>}
+                    {on && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-brand-400">playing</span>}
                   </p>
-                  <p className="truncate text-[11px] text-n-400">{s.hint}</p>
+                  <p className="truncate text-[11px] text-white/35">{s.hint}</p>
                 </div>
                 <input
                   type="range"
@@ -247,14 +247,14 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
                   value={volumes[s.id]}
                   onChange={(e) => changeVolume(s.id, Number(e.target.value))}
                   aria-label={`${s.label} volume`}
-                  className="hidden h-1 w-20 appearance-none rounded-full bg-n-200 accent-brand-600 sm:block"
+                  className="hidden h-1 w-20 appearance-none rounded-full bg-white/15 accent-brand-600 sm:block"
                 />
                 <button
                   onClick={() => toggleMute(s.id)}
                   aria-label={`${muted[s.id] ? 'Unmute' : 'Mute'} ${s.label}`}
                   aria-pressed={muted[s.id]}
                   className={`kh-press flex-none rounded-lg px-2 py-1 text-[11px] transition-colors ${
-                    muted[s.id] ? 'bg-n-100 text-n-500' : 'text-n-400 hover:bg-n-100 hover:text-n-600'
+                    muted[s.id] ? 'bg-white/10 text-vision-dim' : 'text-white/40 hover:bg-white/10 hover:text-white/80'
                   } ${FOCUS}`}
                 >
                   {muted[s.id] ? '🔇' : '🔈'}
@@ -265,7 +265,7 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
         </div>
 
         <div className="mt-3 flex items-center gap-3">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-n-400">room volume</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-vision-dim">room volume</span>
           <input
             type="range"
             min={0}
@@ -274,14 +274,14 @@ export default function NightWatchCard({ events }: { events: SleepSoundEvent[] }
             value={masterVolume}
             onChange={(e) => changeMaster(Number(e.target.value))}
             aria-label="Room volume"
-            className="h-1 flex-1 appearance-none rounded-full bg-n-200 accent-brand-600"
+            className="h-1 flex-1 appearance-none rounded-full bg-white/15 accent-brand-600"
           />
-          <span className="w-8 text-right text-[11px] tabular-nums text-n-400">
+          <span className="w-8 text-right text-[11px] tabular-nums text-vision-dim">
             {Math.round(masterVolume * 100)}
           </span>
         </div>
 
-        <p className="mt-3 text-[11px] leading-relaxed text-n-400">
+        <p className="mt-3 text-[11px] leading-relaxed text-vision-dim">
           The sounds are made by this page as you listen — no recording, no download, nothing leaves the house.
         </p>
       </div>

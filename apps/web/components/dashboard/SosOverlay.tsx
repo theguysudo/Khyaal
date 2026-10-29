@@ -96,15 +96,23 @@ export default function SosOverlay({ householdId, parentName, sos, childName }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto bg-err-900/95 p-6 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-auto p-6 backdrop-blur-md"
+      style={{ background: 'linear-gradient(169deg, rgba(52, 7, 14, 0.94) 7%, rgba(24, 4, 10, 0.96) 62%, rgba(5, 1, 4, 0.97) 100%)' }}
+    >
       <div
-        className="w-full max-w-lg rounded-xl border border-white/15 bg-err-700 p-8 text-center text-white shadow-unt-2xl"
-        style={{ boxShadow: '0 24px 48px -12px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.14)' }}
+        className="kh-gradring w-full max-w-lg rounded-[20px] p-8 text-center text-white"
+        style={{
+          background: 'linear-gradient(175deg, rgba(96, 17, 22, 0.72) 0%, rgba(38, 8, 16, 0.78) 100%)',
+          backdropFilter: 'blur(60px)',
+          WebkitBackdropFilter: 'blur(60px)',
+          boxShadow: '0 3.5px 5.5px rgba(0,0,0,0.02), 0 24px 48px -12px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.14)',
+        }}
       >
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-err-200">
           {sos.origin === 'button' ? 'Button pressed' : 'Automatic — ladder timed out'}
         </p>
-        <h2 className="mt-3 text-5xl font-semibold tracking-[-0.02em]">SOS</h2>
+        <h2 className="mt-3 text-5xl font-bold tracking-[-0.02em]">SOS</h2>
         <p className="mt-3 text-lg leading-relaxed">
           {parentName} raised the emergency alarm — {since}.
         </p>
@@ -116,7 +124,7 @@ export default function SosOverlay({ householdId, parentName, sos, childName }: 
         {!armed ? (
           <button
             onClick={startSiren}
-            className={`kh-press mt-6 w-full rounded-lg bg-white px-5 py-3 text-sm font-semibold text-err-700 shadow-xs transition hover:bg-err-50`}
+            className={`kh-press mt-6 w-full rounded-[10px] bg-white px-5 py-3 text-sm font-semibold text-err-700 shadow-[0_6px_20px_-6px_rgba(255,255,255,0.35)] transition hover:bg-err-50`}
           >
             🔊 Tap to sound the siren on this device
           </button>
@@ -127,14 +135,14 @@ export default function SosOverlay({ householdId, parentName, sos, childName }: 
           <button
             onClick={respond}
             disabled={busy !== null}
-            className="kh-press rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-err-700"
+            className="kh-press rounded-[10px] border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#20060a]"
           >
             {busy === 'respond' ? 'Recording…' : "I'm responding"}
           </button>
           <button
             onClick={standDown}
             disabled={busy !== null}
-            className="kh-press rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-err-700"
+            className="kh-press rounded-[10px] border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#20060a]"
           >
             {busy === 'resolve' ? 'Standing down…' : 'Stand down — she is safe'}
           </button>

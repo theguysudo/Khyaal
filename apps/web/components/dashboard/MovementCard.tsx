@@ -37,7 +37,7 @@ export default function MovementCard({
       <CardTitle note="on-device · no trail">Movement</CardTitle>
 
       {!hasData ? (
-        <div className="mt-4 rounded-lg border border-dashed border-n-300 p-4 text-sm leading-relaxed text-n-500">
+        <div className="mt-4 rounded-xl border border-dashed border-white/15 p-4 text-sm leading-relaxed text-vision-dim">
           Her phone can report how much she has moved and whether she is home — without ever telling us where she is.
           Turn it on in the app&rsquo;s Movement tab.
         </div>
@@ -45,8 +45,8 @@ export default function MovementCard({
         <>
           <div className="mt-4 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-n-400">Right now</p>
-              <p className="mt-1 text-2xl font-semibold leading-tight tracking-[-0.01em] text-n-900">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-vision-dim">Right now</p>
+              <p className="mt-1 text-2xl font-bold leading-tight tracking-[-0.01em] text-white">
                 {movement.zone === null
                   ? 'Not reported yet'
                   : away
@@ -57,12 +57,12 @@ export default function MovementCard({
             <span
               className={`inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-1 text-xs font-medium ${
                 movement.moving
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'bg-n-100 text-n-500'
+                  ? 'bg-[#4FD1C5]/10 text-[#4FD1C5]'
+                  : 'bg-white/[0.06] text-vision-dim'
               }`}
             >
               <span
-                className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${movement.moving ? 'animate-pulse bg-brand-500' : 'bg-n-300'}`}
+                className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${movement.moving ? 'animate-pulse bg-[#4FD1C5]' : 'bg-white/30'}`}
               />
               {movement.moving ? 'moving' : 'still'}
             </span>
@@ -86,7 +86,7 @@ export default function MovementCard({
             />
           </div>
 
-          <p className="mt-4 text-xs leading-relaxed text-n-500">
+          <p className="mt-4 text-xs leading-relaxed text-vision-dim">
             {movement.lastTs
               ? `Last reported ${fmtAgo(movement.lastTs, nowTs)}.`
               : 'Waiting for the first GPS report.'}{' '}
@@ -100,10 +100,10 @@ export default function MovementCard({
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-lg border border-n-200 bg-n-50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-n-400">{label}</p>
-      <p className="mt-1 text-xl font-semibold leading-none tracking-[-0.01em] text-n-900">{value}</p>
-      {unit && <p className="mt-1 text-[10px] text-n-400">{unit}</p>}
+    <div className="rounded-xl border border-white/[0.06] bg-vision-tile/60 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-vision-dim">{label}</p>
+      <p className="mt-1 text-xl font-bold leading-none tracking-[-0.01em] text-white">{value}</p>
+      {unit && <p className="mt-1 text-[10px] text-white/40">{unit}</p>}
     </div>
   );
 }

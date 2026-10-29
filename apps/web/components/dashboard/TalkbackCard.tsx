@@ -277,7 +277,7 @@ export default function TalkbackCard({
     <BentoCard label="Talkback" className="col-span-12 lg:col-span-5">
       <CardTitle note="consent first · push to talk">Talk to her</CardTitle>
 
-      <p className="mt-2 text-xs leading-relaxed text-n-500">
+      <p className="mt-2 text-xs leading-relaxed text-vision-dim">
         A walkie-talkie for the house. Her phone asks first — if she allows it, you can talk live. If she declines,
         nothing was recorded and nothing was heard.
       </p>
@@ -295,8 +295,8 @@ export default function TalkbackCard({
         )}
 
         {isPending && (
-          <span className="inline-flex items-center gap-2 rounded-lg border border-n-200 bg-n-50 px-4 py-2.5 text-sm text-n-600">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-brand-500 motion-reduce:animate-none" />
+          <span className="inline-flex items-center gap-2 rounded-[10px] border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm text-vision-dim">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-brand-400 motion-reduce:animate-none" />
             Waiting for {session?.callee === 'parent' ? parentName : 'the family'} to allow it…
           </span>
         )}
@@ -310,10 +310,10 @@ export default function TalkbackCard({
               onTouchStart={startTalking}
               onTouchEnd={stopTalking}
               aria-label="Hold to talk"
-              className={`kh-press select-none rounded-lg px-6 py-2.5 text-sm font-semibold shadow-xs transition-colors ${FOCUS} ${
+              className={`kh-press select-none rounded-[10px] px-6 py-2.5 text-sm font-semibold transition-colors ${FOCUS} ${
                 talking
-                  ? 'bg-err-600 text-white shadow-[0_8px_24px_rgba(217,45,32,.35)]'
-                  : 'bg-n-900 text-white hover:bg-n-700'
+                  ? 'bg-err-600 text-white shadow-[0_8px_24px_rgba(227,26,26,.35)]'
+                  : 'bg-brand-600 text-white shadow-[0_6px_20px_-6px_rgba(220,104,3,0.55)] hover:bg-brand-500'
               }`}
             >
               {talking ? '🎙 talking… release to stop' : '🎙 hold to talk'}
@@ -323,7 +323,7 @@ export default function TalkbackCard({
             </button>
             <button
               onClick={endCall}
-              className={`kh-press rounded-lg border border-err-300 bg-white px-4 py-2.5 text-sm font-semibold text-err-700 shadow-xs transition-colors hover:bg-err-50 ${FOCUS}`}
+              className={`kh-press rounded-[10px] border border-[#E31A1A]/35 bg-[#E31A1A]/10 px-4 py-2.5 text-sm font-semibold text-err-300 transition-colors hover:bg-[#E31A1A]/20 ${FOCUS}`}
             >
               hang up
             </button>
@@ -332,11 +332,11 @@ export default function TalkbackCard({
       </div>
 
       {isActive && (
-        <div className="mt-3 flex items-center gap-4 text-[11px] text-n-400">
+        <div className="mt-3 flex items-center gap-4 text-[11px] text-white/40">
           <span>sent {sent} slices</span>
           <span>heard {heard} slices</span>
           <span className="inline-flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${talking ? 'animate-pulse bg-err-600' : 'bg-n-300'}`} />
+            <span className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${talking ? 'animate-pulse bg-err-500' : 'bg-white/25'}`} />
             {talking ? 'your microphone is open' : 'your microphone is closed'}
           </span>
         </div>
@@ -344,11 +344,11 @@ export default function TalkbackCard({
 
       {note && (
         <div className="mt-3">
-          <p className="text-xs leading-relaxed text-n-500">{note}</p>
+          <p className="text-xs leading-relaxed text-vision-dim">{note}</p>
           {micError && isActive && (
             <button
               onClick={startTalking}
-              className={`kh-press mt-2 rounded-lg border border-n-300 bg-white px-3 py-1.5 text-[11px] font-medium text-n-600 shadow-xs transition-colors hover:bg-n-50 ${FOCUS}`}
+              className={`kh-press mt-2 rounded-[10px] border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white ${FOCUS}`}
             >
               Try the microphone again
             </button>
@@ -358,15 +358,15 @@ export default function TalkbackCard({
 
       {/* the consent popup */}
       {showConsent && incoming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-n-900/45 px-5 backdrop-blur-[2px]">
-          <div className="w-full max-w-sm rounded-xl border border-n-200 bg-white p-6 text-center shadow-unt-2xl">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-brand-50 text-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020515]/70 px-5 backdrop-blur-sm">
+          <div className="kh-glass kh-gradring w-full max-w-sm rounded-[20px] border border-white/10 p-6 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-vision-tile text-2xl">
               📞
             </div>
-            <h3 className="mt-4 text-xl font-semibold tracking-[-0.01em] text-n-900">
+            <h3 className="mt-4 text-xl font-bold tracking-[-0.01em] text-white">
               {session?.requesterName ?? 'Someone'} wants to talk
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-n-600">
+            <p className="mt-2 text-sm leading-relaxed text-vision-dim">
               You will hear {session?.requesterName ?? 'them'} live, like a walkie-talkie. Nothing is recorded, and you
               can hang up at any time.
             </p>
@@ -378,7 +378,7 @@ export default function TalkbackCard({
                 Not now
               </button>
             </div>
-            <p className="mt-4 text-[11px] leading-relaxed text-n-400">
+            <p className="mt-4 text-[11px] leading-relaxed text-white/40">
               Khayaal never records a conversation. The audio passes through and is gone.
             </p>
           </div>

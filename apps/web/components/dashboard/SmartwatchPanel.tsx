@@ -89,7 +89,7 @@ export default function SmartwatchPanel({ householdId }: { householdId: string }
       <CardTitle note="aggregates · never a feed">Her band</CardTitle>
 
       {!paired ? (
-        <div className="mt-4 rounded-lg border border-dashed border-n-300 p-4 text-sm leading-relaxed text-n-500">
+        <div className="mt-4 rounded-xl border border-dashed border-white/15 p-4 text-sm leading-relaxed text-vision-dim">
           <p>
             Pair a Fastrack band (or any wearable that syncs to Health Connect) and her steps, pulse and sleep join
             the picture — as a second pair of eyes, never as a tracker.
@@ -98,20 +98,20 @@ export default function SmartwatchPanel({ householdId }: { householdId: string }
             {busy ? 'Pairing…' : 'Pair a band'}
           </button>
           {credential && (
-            <div className="mt-3 rounded-lg border border-n-200 bg-n-50 p-3 text-xs leading-relaxed text-n-600">
-              <p className="font-medium text-n-800">Give these to her phone — shown once:</p>
-              <pre className="mt-1.5 overflow-x-auto whitespace-pre text-[11.5px] text-n-700">{`src ${credential.id}\nkey ${credential.apiKey}`}</pre>
-              <p className="mt-1.5 text-n-500">
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-xs leading-relaxed text-vision-dim">
+              <p className="font-medium text-white">Give these to her phone — shown once:</p>
+              <pre className="mt-1.5 overflow-x-auto whitespace-pre rounded-lg border border-white/10 bg-vision-field px-2 py-1.5 text-[11.5px] text-[#C9D3EC]">{`src ${credential.id}\nkey ${credential.apiKey}`}</pre>
+              <p className="mt-1.5 text-vision-dim">
                 Enter the pairing code from the Watchers card in the Khayaal app, then allow Health Connect access.
               </p>
             </div>
           )}
         </div>
       ) : !hasData ? (
-        <div className="mt-4 rounded-lg border border-dashed border-n-300 p-4 text-sm leading-relaxed text-n-500">
+        <div className="mt-4 rounded-xl border border-dashed border-white/15 p-4 text-sm leading-relaxed text-vision-dim">
           {summary?.label ?? 'The band'} is paired but has not reported yet. Once her phone syncs Health Connect, the
           numbers will appear here.
-          <p className="mt-2 text-xs text-n-400">
+          <p className="mt-2 text-xs text-white/40">
             {summary?.lastSeenTs
               ? `Last seen ${fmtAgo(summary.lastSeenTs, nowTs)}.`
               : 'Nothing has arrived from it so far.'}
@@ -121,15 +121,15 @@ export default function SmartwatchPanel({ householdId }: { householdId: string }
         <>
           <div className="mt-4 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-n-400">Last reported</p>
-              <p className="mt-1 text-2xl font-semibold leading-tight tracking-[-0.01em] text-n-900">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-vision-dim">Last reported</p>
+              <p className="mt-1 text-2xl font-bold leading-tight tracking-[-0.01em] text-white">
                 {summary?.lastSeenTs ? fmtAgo(summary.lastSeenTs, nowTs) : 'Just now'}
               </p>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-2xl bg-n-100 px-2.5 py-1 text-xs font-medium text-n-500">
+            <span className="inline-flex items-center gap-1.5 rounded-2xl bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-vision-dim">
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  summary?.lastSeenTs && nowTs - summary.lastSeenTs < 6 * 3600_000 ? 'bg-brand-500' : 'bg-n-300'
+                  summary?.lastSeenTs && nowTs - summary.lastSeenTs < 6 * 3600_000 ? 'bg-[#4FD1C5]' : 'bg-white/25'
                 }`}
               />
               {summary?.label ?? 'band'}
@@ -159,24 +159,24 @@ export default function SmartwatchPanel({ householdId }: { householdId: string }
             />
           </div>
 
-          <p className="mt-4 text-xs leading-relaxed text-n-500">
+          <p className="mt-4 text-xs leading-relaxed text-vision-dim">
             The band reports a few numbers — steps, pulse, sleep. It is used to corroborate what the phone already
             suspects, never to track her, and never to raise an alarm on its own.
           </p>
         </>
       )}
 
-      {error && <p className="mt-3 text-xs leading-relaxed text-err-700">{error}</p>}
+      {error && <p className="mt-3 text-xs leading-relaxed text-err-400">{error}</p>}
     </BentoCard>
   );
 }
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-lg border border-n-200 bg-n-50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-n-400">{label}</p>
-      <p className="mt-1 text-xl font-semibold leading-none tracking-[-0.01em] text-n-900">{value}</p>
-      {unit && <p className="mt-1 text-[10px] text-n-400">{unit}</p>}
+    <div className="rounded-xl border border-white/[0.06] bg-vision-tile/60 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-vision-dim">{label}</p>
+      <p className="mt-1 text-xl font-bold leading-none tracking-[-0.01em] text-white">{value}</p>
+      {unit && <p className="mt-1 text-[10px] text-white/40">{unit}</p>}
     </div>
   );
 }

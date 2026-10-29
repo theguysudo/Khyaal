@@ -1,25 +1,93 @@
 /*
- * Motion layer for the household dashboard.
+ * Motion + surface layer for the household dashboard.
  *
- * Borrowed craft, Khayaal's voice: a staggered card entrance that plays once,
- * masked line reveals for the alert banner, small press/lift answers on every
- * control, and a breathing dot for live sensors. Everything here respects
- * prefers-reduced-motion by falling back to fully visible, static UI.
+ * Two jobs, both scoped under .kh- prefixes so nothing leaks into the landing
+ * pages:
  *
- * Deliberately plain CSS imported by the household pages — no motion library,
- * and nothing that touches the tier tint (which cross-fades on <main>'s
- * background-color).
+ *  1. Motion, borrowed craft in Khayaal's voice: a staggered card entrance
+ *     that plays once, masked line reveals for the alert banner, small
+ *     press/lift answers on every control, and a breathing dot for live
+ *     sensors. Everything respects prefers-reduced-motion by falling back to
+ *     fully visible, static UI.
+ *
+ *  2. The Vision UI dark-glass surface system (Figma file
+ *     zxxQKywVTTCgmXdHQHQxdh, Dashboard Screen 580:3777): the glass card
+ *     recipe (.kh-glass), the white gradient hairline (.kh-gradring), the
+ *     glass secondary button fill (.kh-gbtn), the page's blurred colour
+ *     blobs (.kh-blobs), and the rolling-digit counter. Values are the ones
+ *     pulled from the Figma: card fill linear-gradient(175deg, rgba(6,11,40,
+ *     .74), rgba(14,21,58,.71)), backdrop blur 60px, radius 20px, shadow
+ *     0 3.5px 5.5px rgba(0,0,0,.02).
+ *
+ * Deliberately plain CSS imported by the household pages — no motion library.
  */
 
 /* -------------------------------------------------------------------------
-   0. Type layer — the dashboard speaks Inter (Untitled UI scale). The
-   household layout loads Inter via next/font and sets --font-inter here;
-   re-pointing --font-heading at it means tailwind's `font-heading` utility
-   resolves to Inter inside .kh-root only, leaving the landing pages alone.
+   0. Type layer — the dashboard speaks Plus Jakarta Sans (the Vision UI
+   face; Google Fonts family "Plus Jakarta Sans"). The household layout loads
+   it via next/font and sets --font-jakarta here; re-pointing --font-heading
+   means tailwind's `font-heading` utility resolves to it inside .kh-root
+   only. Inter stays loaded as the fallback. `color-scheme: dark` makes the
+   browser render native selects/scrollbars for the dark surface.
    ------------------------------------------------------------------------- */
 .kh-root {
-  font-family: var(--font-inter), 'Inter', system-ui, sans-serif;
-  --font-heading: var(--font-inter), 'Inter', system-ui, sans-serif;
+  color-scheme: dark;
+  font-family: var(--font-jakarta), var(--font-inter), 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  --font-heading: var(--font-jakarta), var(--font-inter), 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+/* -------------------------------------------------------------------------
+   0b. Vision glass recipe — the card surface every dashboard card shares.
+   Fill + blur + shadow are the exact Figma values; the hairline is Figma's
+   white gradient border (linear-gradient(138deg, white .36 → transparent))
+   drawn as a 1px masked ring so it follows the radius, landing at ~12-15%
+   effective opacity like the reference.
+   ------------------------------------------------------------------------- */
+.kh-glass {
+  background: linear-gradient(175deg, rgba(6, 11, 40, 0.74) 0%, rgba(14, 21, 58, 0.71) 100%);
+  -webkit-backdrop-filter: blur(60px);
+  backdrop-filter: blur(60px);
+  box-shadow: 0 3.5px 5.5px rgba(0, 0, 0, 0.02);
+}
+
+.kh-gradring {
+  position: relative;
+}
+.kh-gradring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(138deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0) 64%);
+  opacity: 0.42;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Glass secondary button — white 10% fill, 15% on hover, gradient hairline
+   comes from .kh-gradring in the class list. */
+.kh-gbtn {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.kh-gbtn:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+/* The page's depth layer. Vision UI blurs a photo 136px behind its navy
+   gradient; Khayaal reproduces the depth with pure CSS — large soft radial
+   colour blobs (Vision purple/blue/teal, plus one faint Khayaal ember) on a
+   fixed layer behind everything. */
+.kh-blobs {
+  background:
+    radial-gradient(38% 30% at 16% 6%, rgba(67, 24, 255, 0.34) 0%, rgba(67, 24, 255, 0) 100%),
+    radial-gradient(44% 36% at 86% 90%, rgba(0, 117, 255, 0.26) 0%, rgba(0, 117, 255, 0) 100%),
+    radial-gradient(26% 20% at 74% 14%, rgba(79, 209, 197, 0.10) 0%, rgba(79, 209, 197, 0) 100%),
+    radial-gradient(30% 24% at 8% 78%, rgba(220, 104, 3, 0.10) 0%, rgba(220, 104, 3, 0) 100%);
+  filter: blur(46px);
 }
 
 /* -------------------------------------------------------------------------
@@ -91,9 +159,9 @@
    3. Press + lift micro-interactions.
    Scoped under .kh-dash so these rules outrank Tailwind's single-class
    transition utilities regardless of stylesheet order. The press is the
-   spring from the v3 reference / Untitled buttons: scale ~0.96 with a
-   slight overshoot back (cubic-bezier .34,1.56,.64,1); a 1px hover lift
-   for solid primary actions; everything well under 250 ms.
+   spring from the v3 reference: scale ~0.96 with a slight overshoot back
+   (cubic-bezier .34,1.56,.64,1); a 1px hover lift for solid primary actions;
+   everything well under 250 ms.
    ------------------------------------------------------------------------- */
 .kh-dash .kh-press {
   transition:
@@ -109,7 +177,7 @@
 }
 .kh-dash .kh-lift:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px -10px rgba(23, 23, 23, 0.35);
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.55);
 }
 .kh-dash .kh-lift:active {
   transform: translateY(0) scale(0.96);
@@ -128,20 +196,13 @@
 }
 
 /* -------------------------------------------------------------------------
-   5. Type wash — a whisper of dusk behind the night-watch headline so the
-   copy stays crisp over the starfield. Static paint, no motion.
-   ------------------------------------------------------------------------- */
-.kh-type-wash {
-  background: radial-gradient(95% 75% at 20% 0%, rgba(26, 21, 43, 0.5) 0%, rgba(26, 21, 43, 0) 62%);
-}
-
-/* -------------------------------------------------------------------------
-   6. The signature — the wellbeing counter.
-   A dark-glass plate (#262626, deep radius) with the Khayaal orange glow
-   breathing behind the digits, and an odometer: one clipped column per
-   digit holding a 0–9 stack, translated by whole ems on a gentle spring.
-   Geometry follows the v3 reference (.kx3-odo / .kx3-digit); the glass
-   shadows are scaled from the Figma Counter source (node 1:2740).
+   5. The signature — the wellbeing counter.
+   The Vision glass card (same recipe as .kh-glass, applied in the component)
+   with the Khayaal orange glow breathing behind the digits, and an odometer:
+   one clipped column per digit holding a 0–9 stack, translated by whole ems
+   on a gentle spring. Geometry follows the v3 reference (.kx3-odo /
+   .kx3-digit); the orange under-glow keeps the counter the "vibrant variant"
+   card in the Vision family.
    ------------------------------------------------------------------------- */
 .kh-counter-glow {
   position: absolute;
@@ -168,7 +229,7 @@
   align-items: baseline;
   height: 1em;
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
   color: #fff;
@@ -192,19 +253,19 @@
   line-height: 1;
 }
 
-/* The counter's digits carry the Inter SemiBold with tight tracking — the
-   exact setting from the Figma Counter source. */
+/* The counter's digits carry Plus Jakarta Sans Bold with tight tracking —
+   the Vision UI big-number setting. */
 .kh-odo-digits {
-  font-family: var(--font-inter), 'Inter', system-ui, sans-serif;
+  font-family: var(--font-jakarta), var(--font-inter), 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 /* -------------------------------------------------------------------------
-   7. Tier emphasis — the ladder chips and the alert banner's dot ease their
-   colours when a poll flips the tier, so the climb reads as a change, not a
-   jump. Colour-only; no movement.
+   6. Tier emphasis — the ladder chips, the header badge and the alert
+   banner's dot ease their colours when a poll flips the tier, so the climb
+   reads as a change, not a jump. Colour + veil-opacity only; no movement.
    ------------------------------------------------------------------------- */
 .kh-tier-ease {
-  transition: background-color 700ms ease, color 700ms ease, border-color 700ms ease, box-shadow 700ms ease;
+  transition: background-color 700ms ease, color 700ms ease, border-color 700ms ease, box-shadow 700ms ease, opacity 700ms ease;
 }
 
 /* -------------------------------------------------------------------------

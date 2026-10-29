@@ -3,7 +3,9 @@
 /**
  * Bento primitives for the family dashboard, adapted from the analytics-bento
  * reference: smooth Catmull-Rom paths, rAF CountUp, ResizeObserver sizing —
- * but the surfaces follow Khayaal's warm paper theme and every number shown
+ * with surfaces on the Vision UI dark-glass recipe (fill
+ * linear-gradient(175deg, rgba(6,11,40,.74), rgba(14,21,58,.71)), 60px
+ * backdrop blur, 20px radius, white gradient hairline) and every number shown
  * is one a family is allowed to see.
  */
 
@@ -99,7 +101,7 @@ export function BentoCard({
   return (
     <section
       aria-label={label}
-      className={`relative min-w-0 overflow-hidden rounded-xl border border-n-200 bg-white p-5 text-n-900 shadow-xs sm:p-6 ${className}`}
+      className={`kh-glass kh-gradring relative min-w-0 overflow-hidden rounded-[20px] p-5 text-white sm:p-6 ${className}`}
     >
       {children}
     </section>
@@ -109,8 +111,8 @@ export function BentoCard({
 export function CardTitle({ children, note }: { children: React.ReactNode; note?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <h2 className="text-[13.5px] font-semibold leading-5 tracking-[-0.01em] text-n-900">{children}</h2>
-      {note && <span className="text-[10.5px] font-medium text-n-400">{note}</span>}
+      <h2 className="text-lg font-bold leading-6 tracking-[-0.01em] text-white">{children}</h2>
+      {note && <span className="text-[11px] font-medium text-vision-dim">{note}</span>}
     </div>
   );
 }

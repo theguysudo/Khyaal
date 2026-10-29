@@ -91,6 +91,28 @@ const config: Config = {
           800: '#05603A',
           900: '#054F31',
         },
+
+        /* Vision UI dark-glass system (household dashboard surface).
+           Pulled from the Vision UI Dashboard Figma (file zxxQKywVTTCgmXdHQHQxdh,
+           Dashboard Screen 580:3777): navy page field, glass card fills,
+           #2D2E5F separators, #A0AEC0 secondary text, and the purple/blue/teal
+           data accents. Khayaal terracotta stays the brand action colour. */
+        vision: {
+          navy: '#060B26', // page fill
+          'navy-2': '#0F123B', // gradient stop 1
+          'navy-3': '#090D2E', // gradient stop 2
+          'navy-4': '#020515', // gradient stop 3
+          panel: '#0B1029', // inset panels (maps, mixers)
+          field: '#0F1535', // input fill (580:4242)
+          sep: '#2D2E5F', // separators + chart grid
+          dim: '#A0AEC0', // secondary text / labels
+          tile: '#1A1F37', // stat tiles, icon tiles
+          purple: '#4318FF', // data accent
+          blue: '#0075FF', // data accent
+          teal: '#4FD1C5', // data accent
+          green: '#01B574', // success accent
+          red: '#E31A1A', // Vision error (SOS/tier-3 family)
+        },
       },
       fontFamily: {
         heading: ['var(--font-heading)', 'Georgia', 'serif'],

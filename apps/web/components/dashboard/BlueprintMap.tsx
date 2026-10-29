@@ -22,14 +22,16 @@ type LiveAnchor = CsiAnchor & { irDetected?: boolean };
 
 const MAP_H = 300;
 
-/* Chart palette — the Khayaal terracotta ramp on Untitled neutrals. */
-const INK = '#171717';
-const CLAY = '#DC6803';
-const CLAYDEEP = '#B54708';
-const SAGE = '#039855';
-const RED = '#D92D20';
-const DUSK = '#404040';
-const GREY = '#D4D4D4';
+/* Chart palette — Vision data accents on the dark glass: live sensors teal,
+   a fall Vision red, quiet sensors the slate tile, grid/separators #2D2E5F.
+   The drag ring keeps Khayaal terracotta — it marks a family action. */
+const INK = '#FFFFFF';
+const CLAY = '#4FD1C5';
+const CLAYDEEP = '#DC6803';
+const SAGE = '#4FD1C5';
+const RED = '#E31A1A';
+const DUSK = '#0075FF';
+const GREY = '#4A5070';
 
 type Provider = 'auto' | 'nvidia' | 'xai' | 'minimax' | 'openrouter';
 
@@ -221,7 +223,7 @@ export default function BlueprintMap({ id }: { id: string }) {
 
       <div
         ref={mapRef}
-        className="relative mt-4 overflow-hidden rounded-xl border border-n-200 bg-n-25"
+        className="relative mt-4 overflow-hidden rounded-xl border border-white/10 bg-vision-panel"
         style={{ height: MAP_H }}
       >
         {bp && W > 0 && (
@@ -251,7 +253,7 @@ export default function BlueprintMap({ id }: { id: string }) {
                     width={w}
                     height={h}
                     rx="8"
-                    fill={i % 2 ? '#F5F5F5' : '#FAFAFA'}
+                    fill={i % 2 ? 'rgba(255, 255, 255, 0.045)' : 'rgba(255, 255, 255, 0.025)'}
                     stroke={INK}
                     strokeOpacity="0.12"
                   />
@@ -277,9 +279,9 @@ export default function BlueprintMap({ id }: { id: string }) {
                   cy={(bundle.estimated.y / 100) * H}
                   r={10 + bundle.estimated.confidence * 20}
                   fill={DUSK}
-                  fillOpacity="0.1"
+                  fillOpacity="0.12"
                   stroke={DUSK}
-                  strokeOpacity="0.3"
+                  strokeOpacity="0.35"
                   strokeDasharray="3 3"
                 />
                 <title>Movement is strongest near here</title>
@@ -327,7 +329,7 @@ export default function BlueprintMap({ id }: { id: string }) {
                       cy={cy}
                       r={13}
                       fill="none"
-                      stroke="#8a5a8f"
+                      stroke="#A78BFA"
                       strokeWidth="1.5"
                       strokeDasharray="3 3"
                       opacity="0.85"
@@ -343,11 +345,11 @@ export default function BlueprintMap({ id }: { id: string }) {
                     opacity={active ? 0.18 + level * 0.25 : 0.1}
                     className={hot && !reduce ? 'animate-pulse' : ''}
                   />
-                  <circle cx={cx} cy={cy} r={4.5 + level * 3} fill={color} stroke="#ffffff" strokeWidth="1.5" />
+                  <circle cx={cx} cy={cy} r={4.5 + level * 3} fill={color} stroke="#0B1029" strokeWidth="1.5" />
                   {dragging && (
                     <circle cx={cx} cy={cy} r={13} fill="none" stroke={CLAYDEEP} strokeWidth="1.5" strokeDasharray="3 3" />
                   )}
-                  <text x={cx} y={labelY} textAnchor="middle" fontSize="9.5" fill={INK} fillOpacity="0.5">
+                  <text x={cx} y={labelY} textAnchor="middle" fontSize="9.5" fill={INK} fillOpacity="0.55">
                     {a.label}
                   </text>
                   <title>
@@ -361,17 +363,17 @@ export default function BlueprintMap({ id }: { id: string }) {
           </svg>
         )}
         {(!bp || W === 0) && (
-          <div className="flex h-full items-center justify-center text-sm text-n-400">
+          <div className="flex h-full items-center justify-center text-sm text-vision-dim">
             The room plan appears when the sensor checks in.
           </div>
         )}
       </div>
 
       {edit && (
-        <p className="mt-2 text-xs text-n-500">Drag a sensor to where it sits, then drop it — the plan saves itself.</p>
+        <p className="mt-2 text-xs text-vision-dim">Drag a sensor to where it sits, then drop it — the plan saves itself.</p>
       )}
       {isStarterPlan && (
-        <p className="mt-2 text-xs leading-relaxed text-n-500">
+        <p className="mt-2 text-xs leading-relaxed text-vision-dim">
           This is the starter plan — describe your home under “Generate with AI” and the layout will follow, or
           simply drag your sensors where they sit.
         </p>
@@ -382,8 +384,10 @@ export default function BlueprintMap({ id }: { id: string }) {
           onClick={toggleEdit}
           disabled={saving}
           aria-pressed={edit}
-          className={`kh-press rounded-lg border px-3.5 py-1.5 text-[13px] font-medium shadow-xs transition-colors disabled:opacity-40 ${
-            edit ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-n-300 bg-white text-n-600 hover:bg-n-50 hover:text-n-900'
+          className={`kh-press rounded-[10px] border px-3.5 py-1.5 text-[13px] font-medium transition-colors disabled:opacity-40 ${
+            edit
+              ? 'border-transparent bg-brand-600 text-white shadow-[0_6px_20px_-6px_rgba(220,104,3,0.55)]'
+              : 'border-white/10 bg-white/5 text-vision-dim hover:bg-white/10 hover:text-white'
           } ${FOCUS}`}
         >
           {saving ? 'Saving…' : edit ? 'Done' : 'Move sensors'}
@@ -402,29 +406,29 @@ export default function BlueprintMap({ id }: { id: string }) {
         >
           {aiOpen ? 'Hide AI layout' : 'Generate with AI'}
         </button>
-        {note && <span className="text-xs font-medium text-ok-700">{note} ✓</span>}
+        {note && <span className="text-xs font-medium text-[#01B574]">{note} ✓</span>}
       </div>
 
       {saveError && (
-        <p className="mt-2 text-xs leading-relaxed text-err-700">
+        <p className="mt-2 text-xs leading-relaxed text-err-400">
           Could not save the layout — {saveError}. The moved positions are still on the map; try again.
         </p>
       )}
 
       {aiOpen && (
-        <div className="mt-3 rounded-xl border border-n-200 bg-n-50 p-4">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-n-400">Describe the home — a model drafts the plan</p>
+        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-vision-dim">Describe the home — a model drafts the plan</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <input
               value={roomsText}
               onChange={(e) => setRoomsText(e.target.value)}
               placeholder="2BHK — bedroom, kitchen, hall, balcony"
-              className={`${INPUT} min-w-[200px] flex-1 bg-white`}
+              className={`${INPUT} min-w-[200px] flex-1`}
             />
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value as Provider)}
-              className={`${INPUT} w-auto bg-white pr-8`}
+              className={`${INPUT} w-auto pr-8`}
             >
               <option value="auto">Auto</option>
               <option value="nvidia">NVIDIA NIM</option>
@@ -439,31 +443,31 @@ export default function BlueprintMap({ id }: { id: string }) {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="leave empty to use the server key"
-              className={`${INPUT} min-w-[200px] flex-1 bg-white`}
+              className={`${INPUT} min-w-[200px] flex-1`}
             />
             <button onClick={() => runAi('generate')} disabled={busy !== null} className={BTN_PRIMARY}>
               {busy === 'generate' ? 'Drafting…' : 'Generate layout'}
             </button>
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-n-400">
+          <p className="mt-2 text-[11px] leading-relaxed text-vision-dim">
             The model only proposes rooms — no coordinate of a person exists to send. “What happened?” uses the
             same provider and key.
           </p>
-          {aiError && <p className="mt-2 text-xs text-err-700">{aiError}</p>}
-          {aiNote && <p className="mt-2 text-xs text-ok-700">{aiNote}</p>}
+          {aiError && <p className="mt-2 text-xs text-err-400">{aiError}</p>}
+          {aiNote && <p className="mt-2 text-xs text-[#01B574]">{aiNote}</p>}
         </div>
       )}
 
       {narrative && (
         <div className="mt-3">
-          <div className="whitespace-pre-wrap rounded-lg border border-n-200 bg-n-50 p-4 text-[13.5px] leading-relaxed text-n-700">
+          <div className="whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.04] p-4 text-[13.5px] leading-relaxed text-white/85">
             {narrative}
           </div>
-          {narrMeta && <p className="mt-1.5 text-[11px] text-n-400">{narrMeta}</p>}
+          {narrMeta && <p className="mt-1.5 text-[11px] text-vision-dim">{narrMeta}</p>}
         </div>
       )}
 
-      <p className="mt-3 text-[11px] leading-relaxed text-n-400">
+      <p className="mt-3 text-[11px] leading-relaxed text-vision-dim">
         Room-level motion from the sensors — this blueprint never tracks a person.
       </p>
     </BentoCard>
