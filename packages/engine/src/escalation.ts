@@ -5,6 +5,8 @@ import type {
   HouseholdState,
   RiskResult,
   Signal,
+  SosResponder,
+  SosUnanswered,
   Tier,
 } from '@khayaal/shared';
 import { TIER_THRESHOLDS } from '@khayaal/shared';
@@ -31,6 +33,17 @@ const RESET_WINDOW = 5 * MIN;
 const TREND_STEP = 5 * MIN;
 const TREND_CAP = 400;
 
+/**
+ * Responder coordination — how long an SOS may sit with nobody responding
+ * before each escalation beat (alarm re-dispatch + explicit family-circle
+ * notice). Five minutes: the phones are already ringing, so this is not the
+ * alerting delay, it is the "is any human actually moving?" deadline.
+ */
+export const NEIGHBOUR_RESPOND_WINDOW_MIN_DEFAULT = 5;
+
+/** Re-alerting forever would train the family to ignore the alarm. */
+export const MAX_UNANSWERED_ESCALATIONS = 3;
+
 /** Minutes to dwell in the current tier before the next step may fire. */
 function dwellForNextTier(tier: Tier, hh: Household): number {
   if (tier === 0) return hh.escalationConfig.nudgeAfterMin;
@@ -50,7 +63,13 @@ export function statusFor(state: HouseholdState, hh: Household, nowTs: number): 
   if (state.learning) return `Learning ${name}'s rhythm…`;
   if (state.snoozeUntilTs && state.snoozeUntilTs > nowTs) return `Snoozed until ${fmtClock(state.snoozeUntilTs)}`;
   if (state.sos.active) {
-    const responder = state.sos.ack ? ` — ${state.sos.ack.by} is responding` : '';
+    const active = (state.sos.responders ?? []).filter((r) => r.withdrawnTs === null);
+    let responder = '';
+    if (active.length > 0) {
+      responder = ` — ${active[0].by} is responding${active.length > 1 ? ` (+${active.length - 1} helping)` : ''}`;
+    } else if ((state.sos.unanswered?.attempts ?? 0) > 0) {
+      responder = ' — nobody has responded yet';
+    }
     return state.sos.origin === 'button'
       ? `SOS — ${name} pressed the emergency button${responder}`
       : `SOS — no answer to the alert ladder${responder}`;
@@ -109,12 +128,12 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
   // --- SOS derivation ------------------------------------------------------
   // Recomputed from signals on every tick, like everything else here: the
   // last 'pressed' wins over the last 'resolved', so the state is identical
-  // no matter how many times it is recomputed. A responder ('responded') is
-  // whoever spoke after the button did.
+  // no matter how many times it is recomputed.
   let sosPressedTs: number | null = null;
   let sosPressedOrigin: 'button' | 'auto' | null = null;
   let sosResolvedTs: number | null = null;
-  let sosResponded: Ack | null = null;
+  const respondSigs: { sourceId: string; by: string; ts: number; etaMin: number | null }[] = [];
+  const withdrawSigs: { sourceId: string; ts: number }[] = [];
   for (const s of signals) {
     if (s.ts > nowTs || s.type !== 'sos') continue;
     if (s.value === 'pressed') {
@@ -125,16 +144,68 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
     } else if (s.value === 'resolved') {
       sosResolvedTs = Math.max(sosResolvedTs ?? 0, s.ts);
     } else if (s.value === 'responded') {
-      if (!sosResponded || s.ts >= sosResponded.ts) {
-        sosResponded = { by: String(s.meta?.by ?? 'Someone'), ts: s.ts };
-      }
+      respondSigs.push({
+        sourceId: s.sourceId,
+        by: String(s.meta?.by ?? 'Someone'),
+        ts: s.ts,
+        etaMin: typeof s.meta?.etaMin === 'number' && Number.isFinite(s.meta.etaMin) ? s.meta.etaMin : null,
+      });
+    } else if (s.value === 'withdrawn') {
+      withdrawSigs.push({ sourceId: s.sourceId, ts: s.ts });
     }
   }
   const manualSosActive = sosPressedTs !== null && (sosResolvedTs === null || sosResolvedTs < sosPressedTs);
   // A resolve that lands after the press (or with no press at all — the auto
   // SOS was raised by the ladder, so the family stands it down by hand).
   const sosResolveArrived = sosResolvedTs !== null && (sosPressedTs === null || sosResolvedTs >= sosPressedTs);
-  const respondedForThisSos = sosResponded && sosPressedTs !== null && sosResponded.ts >= sosPressedTs;
+
+  // --- Responder team ------------------------------------------------------
+  // Coordination, derived like everything else: every source that said
+  // "I'm responding" to THIS sos joins the team — the first one to arrive
+  // leads, later ones join rather than overwrite (a second neighbour erasing
+  // the first was the old last-write-wins behaviour, and it lied). A
+  // 'withdrawn' from the same source stands them back down, so the next
+  // neighbour is visibly still needed. Re-responding rejoins.
+  // The anchor is the start of the current emergency: the ongoing sos's
+  // sinceTs when one is live (so a responder to the auto alarm keeps their
+  // place even after the elder also presses the button), else the press
+  // itself. A responder of last week's emergency cannot ride in on this one.
+  const respondAnchorTs =
+    prev.sos.active && prev.sos.sinceTs !== null && (sosPressedTs === null || sosPressedTs >= prev.sos.sinceTs)
+      ? prev.sos.sinceTs
+      : sosPressedTs;
+  const team = new Map<string, SosResponder>();
+  if (respondAnchorTs !== null) {
+    const chron: ({ kind: 'join'; ts: number; sourceId: string; by: string; etaMin: number | null } | { kind: 'leave'; ts: number; sourceId: string })[] = [
+      ...respondSigs.filter((r) => r.ts >= respondAnchorTs).map((r) => ({ kind: 'join' as const, ...r })),
+      ...withdrawSigs.filter((w) => w.ts >= respondAnchorTs).map((w) => ({ kind: 'leave' as const, ...w })),
+    ].sort((a, b) => a.ts - b.ts);
+    for (const e of chron) {
+      if (e.kind === 'join') {
+        const existing = team.get(e.sourceId);
+        if (existing) {
+          existing.withdrawnTs = null;
+          existing.by = e.by;
+          if (e.etaMin !== null) existing.etaMin = e.etaMin;
+        } else {
+          team.set(e.sourceId, {
+            sourceId: e.sourceId,
+            by: e.by,
+            respondedTs: e.ts,
+            etaMin: e.etaMin,
+            withdrawnTs: null,
+          });
+        }
+      } else {
+        const existing = team.get(e.sourceId);
+        if (existing && existing.withdrawnTs === null) existing.withdrawnTs = e.ts;
+      }
+    }
+  }
+  const responders: SosResponder[] = [...team.values()].sort((a, b) => a.respondedTs - b.respondedTs);
+  const activeResponders = responders.filter((r) => r.withdrawnTs === null);
+  const primary = activeResponders[0] ?? null;
+  const sosResponded: Ack | null = primary ? { by: primary.by, ts: primary.respondedTs } : null;
 
   const clearSnoozeIfStale = () => {
     if (snoozeUntilTs !== null && snoozeUntilTs <= nowTs) snoozeUntilTs = null;
@@ -280,6 +351,43 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
     // family made to themselves; it expires on its own.)
   }
 
+  // --- Unanswered escalation ----------------------------------------------
+  // The alarm ringing is not the same as a human moving. While the sos is
+  // active with nobody responding, each response window that passes fires an
+  // escalation beat: an sos event the server's tick re-dispatches the alarm
+  // from (full volume again) with the reason naming the silence, plus the
+  // attempt count in state so every surface can show it. A responder joining
+  // stops the clock; the withdrawal that empties the team restarts it — the
+  // family must know the door is open again. Deliberately OUTSIDE the
+  // learning/score gate: a live sos escalates even if the risk engine has
+  // nothing to say.
+  const respondWindowMs = Math.max(1, hh.neighbourRespondWindowMin ?? NEIGHBOUR_RESPOND_WINDOW_MIN_DEFAULT) * MIN;
+  let unanswered: SosUnanswered | null = null;
+  if (tier === 4 && activeResponders.length === 0 && respondAnchorTs !== null) {
+    const emptySinceTs = responders.length === 0
+      ? respondAnchorTs
+      : Math.max(...responders.map((r) => r.withdrawnTs ?? 0));
+    const elapsed = nowTs - emptySinceTs;
+    const attempts = Math.min(MAX_UNANSWERED_ESCALATIONS, Math.max(0, Math.floor(elapsed / respondWindowMs)));
+    const prevUn = prev.sos.unanswered ?? null;
+    const sameEpisode = prevUn !== null && prevUn.emptySinceTs === emptySinceTs;
+    unanswered = {
+      attempts,
+      windowMin: Math.round(respondWindowMs / MIN),
+      emptySinceTs,
+      lastEscalationTs: attempts > 0 ? emptySinceTs + attempts * respondWindowMs : null,
+    };
+    if (attempts > (sameEpisode ? prevUn.attempts : 0)) {
+      pushEvent({
+        ts: nowTs,
+        type: 'sos',
+        from: 4,
+        to: 4,
+        meta: `No one has responded for ${Math.round(elapsed / MIN)} min — alarm re-rung and the family circle notified (attempt ${attempts} of ${MAX_UNANSWERED_ESCALATIONS}).`,
+      });
+    }
+  }
+
   // --- Trend sampling -----------------------------------------------------
   const trend = [...prev.scoreTrend];
   if (risk.score !== null && (trend.length === 0 || nowTs - trend[trend.length - 1].ts >= TREND_STEP)) {
@@ -287,14 +395,17 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
     while (trend.length > TREND_CAP) trend.shift();
   }
 
-  // The SOS record: active exactly when the tier is 4, with the origin and
-  // the first responder derived from the signals — so every tick agrees.
+  // The SOS record: active exactly when the tier is 4, with the origin, the
+  // responder team and the unanswered countdown derived from the signals —
+  // so every tick agrees without carrying anything over from prev.
   const sosActive = tier === 4;
   const sos: HouseholdState['sos'] = {
     active: sosActive,
     origin: sosActive ? (manualSosActive ? sosPressedOrigin : prev.sos.origin ?? 'auto') : null,
     sinceTs: sosActive ? (sosPressedTs ?? (sosActive && prev.sos.active ? prev.sos.sinceTs : nowTs)) : null,
-    ack: respondedForThisSos ? sosResponded : sosActive ? prev.sos.ack : null,
+    ack: sosActive ? sosResponded : null,
+    responders: sosActive ? responders : [],
+    unanswered: sosActive ? unanswered : null,
   };
 
   const state: HouseholdState = {

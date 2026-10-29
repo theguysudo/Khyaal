@@ -24,7 +24,10 @@ export type SignalType =
   | 'heart_rate' // smartwatch pulse in bpm — a number, never a waveform
   | 'sleep_duration' // smartwatch sleep minutes for one night
   | 'activity' // smartwatch active minutes in the interval that ended at ts
-  | 'sos'; // emergency: 'pressed' | 'responded' | 'resolved' — the alarm channel
+  // emergency — the alarm channel. Values: 'pressed' | 'responded' |
+  // 'resolved' | 'withdrawn' (a responder standing back down so the next
+  // neighbour is visibly still needed).
+  | 'sos';
 
 export type SignalValue = number | string | boolean;
 
@@ -100,6 +103,12 @@ export interface Household {
   lastAnalysis?: { ts: number; model: string; text: string };
   /** The room sensor's floor plan — rooms and where each sensor sits. */
   blueprint?: Blueprint;
+  /**
+   * Coordination: minutes an SOS may sit with nobody responding before the
+   * engine fires its next escalation beat (re-dispatch + explicit family
+   * notice). Absent = the engine default (5).
+   */
+  neighbourRespondWindowMin?: number;
 }
 
 export interface CareCircleMember {
@@ -338,14 +347,48 @@ export interface Ack {
  *
  * `active` is true from the moment the elder presses the button (or the
  * ladder's last step times out) until somebody stands it down. `ack` holds
- * whoever said "I'm responding" first. The phones ring from this flag; the
- * dashboard paints from it; everything else is detail.
+ * the primary responder — the first person who said "I'm responding" and has
+ * not stood back down. The phones ring from this flag; the dashboard paints
+ * from it; everything else is detail.
+ *
+ * Coordination (additive, so older stored states load unchanged): every
+ * responder of the CURRENT sos is tracked, first-is-primary, later ones
+ * join. While nobody active has responded past the response window, the
+ * `unanswered` block is set and the engine emits an escalation beat
+ * (re-dispatch + explicit family-circle notice) per elapsed window, capped.
  */
+export interface SosResponder {
+  /** The responder's source id — stable identity, display name is `by`. */
+  sourceId: string;
+  by: string;
+  /** When they first said "I'm responding" (sim time). */
+  respondedTs: number;
+  /** Their stated minutes-away, when they gave one. */
+  etaMin: number | null;
+  /** When they stood back down — null while they are still responding. */
+  withdrawnTs: number | null;
+}
+
+export interface SosUnanswered {
+  /** Escalation beats fired so far for this unanswered stretch (capped). */
+  attempts: number;
+  /** The response window in minutes that governs this countdown. */
+  windowMin: number;
+  /** When the responder team last became empty (= the clock restarted). */
+  emptySinceTs: number;
+  /** When the latest beat fired — null before the first one. */
+  lastEscalationTs: number | null;
+}
+
 export interface SosState {
   active: boolean;
   origin: 'button' | 'auto' | null;
   sinceTs: number | null;
   ack: Ack | null;
+  /** Everyone who responded to this sos, in join order. Absent on old states. */
+  responders?: SosResponder[];
+  /** Set while the sos is active with nobody responding. */
+  unanswered?: SosUnanswered | null;
 }
 
 export interface HouseholdState {
