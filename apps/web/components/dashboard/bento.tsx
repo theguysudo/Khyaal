@@ -99,7 +99,7 @@ export function BentoCard({
   return (
     <section
       aria-label={label}
-      className={`relative min-w-0 overflow-hidden rounded-[24px] border border-ink/10 bg-white p-5 text-ink shadow-[0_1px_2px_rgba(42,36,29,0.04),0_10px_30px_-12px_rgba(42,36,29,0.10)] sm:p-6 ${className}`}
+      className={`relative min-w-0 overflow-hidden rounded-xl border border-n-200 bg-white p-5 text-n-900 shadow-xs sm:p-6 ${className}`}
     >
       {children}
     </section>
@@ -109,8 +109,8 @@ export function BentoCard({
 export function CardTitle({ children, note }: { children: React.ReactNode; note?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink/45">{children}</h2>
-      {note && <span className="text-xs text-ink/35">{note}</span>}
+      <h2 className="text-[13.5px] font-semibold leading-5 tracking-[-0.01em] text-n-900">{children}</h2>
+      {note && <span className="text-[10.5px] font-medium text-n-400">{note}</span>}
     </div>
   );
 }

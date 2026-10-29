@@ -13,6 +13,7 @@
 
 import * as React from 'react';
 import { BentoCard, CardTitle, useReducedMotion, useSize } from './bento';
+import { BTN_PRIMARY, BTN_SECONDARY, FOCUS, INPUT } from './kh';
 import { fmtClock, postJSON, useCsiSeries } from '@/lib/api';
 import type { Blueprint, CsiAnchor } from '@khayaal/shared';
 
@@ -21,19 +22,16 @@ type LiveAnchor = CsiAnchor & { irDetected?: boolean };
 
 const MAP_H = 300;
 
-const INK = '#2a241d';
-const CLAY = '#b95c38';
-const CLAYDEEP = '#9c4a2b';
-const SAGE = '#7d8c6f';
-const RED = '#b23a2f';
-const DUSK = '#3d3352';
-const GREY = '#c9b8a0';
+/* Chart palette — the Khayaal terracotta ramp on Untitled neutrals. */
+const INK = '#171717';
+const CLAY = '#DC6803';
+const CLAYDEEP = '#B54708';
+const SAGE = '#039855';
+const RED = '#D92D20';
+const DUSK = '#404040';
+const GREY = '#D4D4D4';
 
 type Provider = 'auto' | 'nvidia' | 'xai' | 'minimax' | 'openrouter';
-
-/** Focus ring shared with the rest of the dashboard's controls. */
-const FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
 
 export default function BlueprintMap({ id }: { id: string }) {
   const { bundle } = useCsiSeries(id, 2000);
@@ -223,7 +221,7 @@ export default function BlueprintMap({ id }: { id: string }) {
 
       <div
         ref={mapRef}
-        className="relative mt-4 overflow-hidden rounded-2xl border border-ink/10 bg-cream/40"
+        className="relative mt-4 overflow-hidden rounded-xl border border-n-200 bg-n-25"
         style={{ height: MAP_H }}
       >
         {bp && W > 0 && (
@@ -253,7 +251,7 @@ export default function BlueprintMap({ id }: { id: string }) {
                     width={w}
                     height={h}
                     rx="8"
-                    fill={i % 2 ? '#f3ecdf' : '#efe3d3'}
+                    fill={i % 2 ? '#F5F5F5' : '#FAFAFA'}
                     stroke={INK}
                     strokeOpacity="0.12"
                   />
@@ -363,17 +361,17 @@ export default function BlueprintMap({ id }: { id: string }) {
           </svg>
         )}
         {(!bp || W === 0) && (
-          <div className="flex h-full items-center justify-center text-sm text-ink/40">
+          <div className="flex h-full items-center justify-center text-sm text-n-400">
             The room plan appears when the sensor checks in.
           </div>
         )}
       </div>
 
       {edit && (
-        <p className="mt-2 text-xs text-ink/50">Drag a sensor to where it sits, then drop it — the plan saves itself.</p>
+        <p className="mt-2 text-xs text-n-500">Drag a sensor to where it sits, then drop it — the plan saves itself.</p>
       )}
       {isStarterPlan && (
-        <p className="mt-2 text-xs leading-relaxed text-ink/45">
+        <p className="mt-2 text-xs leading-relaxed text-n-500">
           This is the starter plan — describe your home under “Generate with AI” and the layout will follow, or
           simply drag your sensors where they sit.
         </p>
@@ -384,8 +382,8 @@ export default function BlueprintMap({ id }: { id: string }) {
           onClick={toggleEdit}
           disabled={saving}
           aria-pressed={edit}
-          className={`kh-press rounded-full border px-4 py-1.5 text-[13px] transition-colors disabled:opacity-40 ${
-            edit ? 'border-clay bg-clay/10 text-claydeep' : 'border-ink/15 text-ink/60 hover:border-ink/25 hover:bg-paper'
+          className={`kh-press rounded-lg border px-3.5 py-1.5 text-[13px] font-medium shadow-xs transition-colors disabled:opacity-40 ${
+            edit ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-n-300 bg-white text-n-600 hover:bg-n-50 hover:text-n-900'
           } ${FOCUS}`}
         >
           {saving ? 'Saving…' : edit ? 'Done' : 'Move sensors'}
@@ -393,40 +391,40 @@ export default function BlueprintMap({ id }: { id: string }) {
         <button
           onClick={() => runAi('narrate')}
           disabled={busy !== null}
-          className={`kh-press rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/70 transition-colors hover:border-ink/25 hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS}`}
+          className={BTN_SECONDARY}
         >
           {busy === 'narrate' ? 'Reading the room…' : 'What happened?'}
         </button>
         <button
           onClick={() => setAiOpen(!aiOpen)}
           aria-expanded={aiOpen}
-          className={`kh-press rounded-full border border-ink/15 px-4 py-1.5 text-[13px] text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
+          className={BTN_SECONDARY}
         >
           {aiOpen ? 'Hide AI layout' : 'Generate with AI'}
         </button>
-        {note && <span className="text-xs text-[#4c7a4f]">{note} ✓</span>}
+        {note && <span className="text-xs font-medium text-ok-700">{note} ✓</span>}
       </div>
 
       {saveError && (
-        <p className="mt-2 text-xs leading-relaxed text-[#b23a2f]">
+        <p className="mt-2 text-xs leading-relaxed text-err-700">
           Could not save the layout — {saveError}. The moved positions are still on the map; try again.
         </p>
       )}
 
       {aiOpen && (
-        <div className="mt-3 rounded-2xl border border-ink/10 bg-paper/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink/40">Describe the home — a model drafts the plan</p>
+        <div className="mt-3 rounded-xl border border-n-200 bg-n-50 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-n-400">Describe the home — a model drafts the plan</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <input
               value={roomsText}
               onChange={(e) => setRoomsText(e.target.value)}
               placeholder="2BHK — bedroom, kitchen, hall, balcony"
-              className="min-w-[200px] flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
+              className={`${INPUT} min-w-[200px] flex-1 bg-white`}
             />
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value as Provider)}
-              className={`rounded-full border border-ink/15 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15 ${FOCUS}`}
+              className={`${INPUT} w-auto bg-white pr-8`}
             >
               <option value="auto">Auto</option>
               <option value="nvidia">NVIDIA NIM</option>
@@ -441,35 +439,31 @@ export default function BlueprintMap({ id }: { id: string }) {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="leave empty to use the server key"
-              className="min-w-[200px] flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
+              className={`${INPUT} min-w-[200px] flex-1 bg-white`}
             />
-            <button
-              onClick={() => runAi('generate')}
-              disabled={busy !== null}
-              className={`kh-press kh-lift rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
-            >
+            <button onClick={() => runAi('generate')} disabled={busy !== null} className={BTN_PRIMARY}>
               {busy === 'generate' ? 'Drafting…' : 'Generate layout'}
             </button>
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-ink/40">
+          <p className="mt-2 text-[11px] leading-relaxed text-n-400">
             The model only proposes rooms — no coordinate of a person exists to send. “What happened?” uses the
             same provider and key.
           </p>
-          {aiError && <p className="mt-2 text-xs text-[#b23a2f]">{aiError}</p>}
-          {aiNote && <p className="mt-2 text-xs text-[#4c7a4f]">{aiNote}</p>}
+          {aiError && <p className="mt-2 text-xs text-err-700">{aiError}</p>}
+          {aiNote && <p className="mt-2 text-xs text-ok-700">{aiNote}</p>}
         </div>
       )}
 
       {narrative && (
         <div className="mt-3">
-          <div className="whitespace-pre-wrap rounded-2xl bg-paper/80 p-4 text-[13.5px] leading-relaxed text-ink/80">
+          <div className="whitespace-pre-wrap rounded-lg border border-n-200 bg-n-50 p-4 text-[13.5px] leading-relaxed text-n-700">
             {narrative}
           </div>
-          {narrMeta && <p className="mt-1.5 text-[11px] text-ink/40">{narrMeta}</p>}
+          {narrMeta && <p className="mt-1.5 text-[11px] text-n-400">{narrMeta}</p>}
         </div>
       )}
 
-      <p className="mt-3 text-[11px] leading-relaxed text-ink/40">
+      <p className="mt-3 text-[11px] leading-relaxed text-n-400">
         Room-level motion from the sensors — this blueprint never tracks a person.
       </p>
     </BentoCard>

@@ -3,8 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --paper: #faf6ef;
-  --ink: #2a241d;
+  /* Brand tokens — Untitled UI Neutral base, Khayaal terracotta accents.
+     (The dashboard's full ramp lives in tailwind.config.ts; these carry the
+     page background, body text and selection colour for the whole app.) */
+  --paper: #fafafa;
+  --ink: #171717;
   /* Mainframe reference hero fonts (loaded via webfont links in the hero) */
   --mf-heading: 'HelveticaNowDisplay-Medium', 'Helvetica Neue', Arial, sans-serif;
   --mf-body: 'HelveticaNowDisplayW01-Rg', 'Helvetica Neue', Arial, sans-serif;
@@ -22,8 +25,8 @@ body {
 }
 
 ::selection {
-  background: #b95c38;
-  color: #faf6ef;
+  background: #dc6803;
+  color: #ffffff;
 }
 
 /* Landing hero ---------------------------------------------------------- */

@@ -15,10 +15,8 @@
 import * as React from 'react';
 import type { SmartwatchSummary } from '@khayaal/shared';
 import { BentoCard, CardTitle } from './bento';
+import { BTN_SECONDARY, FOCUS } from './kh';
 import { fmtAgo } from '@/lib/api';
-
-const FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
 
 /** The band syncs every half hour; polling faster than that is theatre. */
 const POLL_MS = 30_000;
@@ -91,33 +89,29 @@ export default function SmartwatchPanel({ householdId }: { householdId: string }
       <CardTitle note="aggregates · never a feed">Her band</CardTitle>
 
       {!paired ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-ink/20 p-4 text-sm leading-relaxed text-ink/45">
+        <div className="mt-4 rounded-lg border border-dashed border-n-300 p-4 text-sm leading-relaxed text-n-500">
           <p>
             Pair a Fastrack band (or any wearable that syncs to Health Connect) and her steps, pulse and sleep join
             the picture — as a second pair of eyes, never as a tracker.
           </p>
-          <button
-            onClick={pair}
-            disabled={busy}
-            className={`kh-press mt-3 rounded-full border border-ink/20 px-4 py-2 text-sm text-ink/60 transition-colors hover:border-ink/35 hover:bg-paper disabled:opacity-40 ${FOCUS}`}
-          >
+          <button onClick={pair} disabled={busy} className={`${BTN_SECONDARY} mt-3`}>
             {busy ? 'Pairing…' : 'Pair a band'}
           </button>
           {credential && (
-            <div className="mt-3 rounded-xl border border-ink/10 bg-paper/70 p-3 text-xs leading-relaxed text-ink/60">
-              <p className="font-medium text-ink/75">Give these to her phone — shown once:</p>
-              <pre className="mt-1.5 overflow-x-auto whitespace-pre text-[11.5px] text-ink/70">{`src ${credential.id}\nkey ${credential.apiKey}`}</pre>
-              <p className="mt-1.5 text-ink/45">
+            <div className="mt-3 rounded-lg border border-n-200 bg-n-50 p-3 text-xs leading-relaxed text-n-600">
+              <p className="font-medium text-n-800">Give these to her phone — shown once:</p>
+              <pre className="mt-1.5 overflow-x-auto whitespace-pre text-[11.5px] text-n-700">{`src ${credential.id}\nkey ${credential.apiKey}`}</pre>
+              <p className="mt-1.5 text-n-500">
                 Enter the pairing code from the Watchers card in the Khayaal app, then allow Health Connect access.
               </p>
             </div>
           )}
         </div>
       ) : !hasData ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-ink/20 p-4 text-sm leading-relaxed text-ink/45">
+        <div className="mt-4 rounded-lg border border-dashed border-n-300 p-4 text-sm leading-relaxed text-n-500">
           {summary?.label ?? 'The band'} is paired but has not reported yet. Once her phone syncs Health Connect, the
           numbers will appear here.
-          <p className="mt-2 text-xs text-ink/40">
+          <p className="mt-2 text-xs text-n-400">
             {summary?.lastSeenTs
               ? `Last seen ${fmtAgo(summary.lastSeenTs, nowTs)}.`
               : 'Nothing has arrived from it so far.'}
@@ -127,15 +121,15 @@ export default function SmartwatchPanel({ householdId }: { householdId: string }
         <>
           <div className="mt-4 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.14em] text-ink/40">Last reported</p>
-              <p className="mt-1 font-heading text-[24px] leading-tight text-ink">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-n-400">Last reported</p>
+              <p className="mt-1 text-2xl font-semibold leading-tight tracking-[-0.01em] text-n-900">
                 {summary?.lastSeenTs ? fmtAgo(summary.lastSeenTs, nowTs) : 'Just now'}
               </p>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-ink/5 px-3 py-1.5 text-xs text-ink/45">
+            <span className="inline-flex items-center gap-1.5 rounded-2xl bg-n-100 px-2.5 py-1 text-xs font-medium text-n-500">
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  summary?.lastSeenTs && nowTs - summary.lastSeenTs < 6 * 3600_000 ? 'bg-clay' : 'bg-ink/25'
+                  summary?.lastSeenTs && nowTs - summary.lastSeenTs < 6 * 3600_000 ? 'bg-brand-500' : 'bg-n-300'
                 }`}
               />
               {summary?.label ?? 'band'}
@@ -165,24 +159,24 @@ export default function SmartwatchPanel({ householdId }: { householdId: string }
             />
           </div>
 
-          <p className="mt-4 text-xs leading-relaxed text-ink/45">
+          <p className="mt-4 text-xs leading-relaxed text-n-500">
             The band reports a few numbers — steps, pulse, sleep. It is used to corroborate what the phone already
             suspects, never to track her, and never to raise an alarm on its own.
           </p>
         </>
       )}
 
-      {error && <p className="mt-3 text-xs leading-relaxed text-[#b23a2f]">{error}</p>}
+      {error && <p className="mt-3 text-xs leading-relaxed text-err-700">{error}</p>}
     </BentoCard>
   );
 }
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-2xl border border-ink/10 bg-paper/60 px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-wide text-ink/35">{label}</p>
-      <p className="mt-1 font-heading text-[20px] leading-none text-ink">{value}</p>
-      {unit && <p className="mt-1 text-[10px] text-ink/35">{unit}</p>}
+    <div className="rounded-lg border border-n-200 bg-n-50 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-n-400">{label}</p>
+      <p className="mt-1 text-xl font-semibold leading-none tracking-[-0.01em] text-n-900">{value}</p>
+      {unit && <p className="mt-1 text-[10px] text-n-400">{unit}</p>}
     </div>
   );
 }

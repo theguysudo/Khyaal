@@ -1,11 +1,16 @@
 'use client';
 
 /**
- * The child dashboard — calm bento, richer controls. Dignity-first by
- * construction: this screen never receives raw signals from the API, only
- * aggregates (per-hour counts), a status, plain-language explanations and the
- * family's own actions. Everything the family composes here (messages, voice
- * reminders, check-in requests) rides the commands channel to her phone.
+ * The child dashboard — calm bento, richer controls, now in the v3 language:
+ * Untitled UI anatomy (white cards on Neutral/50, 1px #E5E5E5 borders,
+ * shadow-xs, Inter) with Khayaal's terracotta ramp, and the wellbeing score
+ * as the signature dark-glass counter with rolling odometer digits.
+ *
+ * Dignity-first by construction: this screen never receives raw signals from
+ * the API, only aggregates (per-hour counts), a status, plain-language
+ * explanations and the family's own actions. Everything the family composes
+ * here (messages, voice reminders, check-in requests) rides the commands
+ * channel to her phone.
  */
 
 import Link from 'next/link';
@@ -13,9 +18,18 @@ import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import '../motion.css';
-import '../hero.css';
-import DashboardHero from './DashboardHero';
-import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/dashboard/bento';
+import { BentoCard, CardTitle, smooth, useSize } from '@/components/dashboard/bento';
+import { CounterCard } from '@/components/dashboard/Odometer';
+import {
+  BADGE,
+  BTN_DANGER,
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  FOCUS,
+  FOCUS_ON_RED,
+  INPUT,
+  TIER_UI,
+} from '@/components/dashboard/kh';
 import NightWatchCard from '@/components/dashboard/NightWatchCard';
 import TalkbackCard from '@/components/dashboard/TalkbackCard';
 import MovementCard from '@/components/dashboard/MovementCard';
@@ -25,19 +39,13 @@ import BlueprintMap from '@/components/dashboard/BlueprintMap';
 import CsiScope from '@/components/dashboard/CsiScope';
 import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
 
-/**
- * Focus rings shared by every actionable chip on the dashboard. Kept as full
- * literal strings (no runtime composition) so Tailwind's scanner sees each
- * class and generates it.
- */
-const FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
-const FOCUS_ON_PAPER =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-paper';
-const FOCUS_ON_RED =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b23a2f]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fdf3f1]';
-const FOCUS_ON_PAPER_RED =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b23a2f]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-paper';
+/** The header's anchor nav — the same sections the old hero jumped to. */
+const NAV_LINKS = [
+  { label: 'Status', href: '#kh-current-status' },
+  { label: 'Her day', href: '#kh-day-trend' },
+  { label: 'Rhythm', href: '#kh-rhythm' },
+  { label: 'Circle', href: '#kh-care-circle' },
+] as const;
 
 export default function DashboardPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,11 +54,11 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-paper px-6">
-        <div className="max-w-sm rounded-3xl border border-ink/10 bg-white p-8 text-center shadow-sm">
-          <p className="font-heading text-xl text-ink">We couldn't reach this household</p>
-          <p className="mt-2 text-sm text-ink/60">{error}</p>
-          <Link href="/login" className={`mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm text-paper transition-colors hover:bg-ink/85 ${FOCUS_ON_PAPER}`}>
+      <main className="flex min-h-screen items-center justify-center bg-n-50 px-6">
+        <div className="max-w-sm rounded-xl border border-n-200 bg-white p-8 text-center shadow-xs">
+          <p className="text-lg font-semibold text-n-900">We couldn't reach this household</p>
+          <p className="mt-2 text-sm text-n-600">{error}</p>
+          <Link href="/login" className={`${BTN_PRIMARY} mt-5`}>
             Your families
           </Link>
         </div>
@@ -59,14 +67,15 @@ export default function DashboardPage() {
   }
   if (!bundle) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-paper">
-        <p className="animate-pulse text-sm text-ink/50">Listening for signals…</p>
+      <main className="flex min-h-screen items-center justify-center bg-n-50">
+        <p className="animate-pulse text-sm text-n-500">Listening for signals…</p>
       </main>
     );
   }
 
   const { state, household: hh } = bundle;
   const meta = TIER_META[state.tier];
+  const ui = TIER_UI[state.tier];
   const isAlert = state.tier === 3;
   const circle = hh.careCircle ?? [];
 
@@ -83,42 +92,70 @@ export default function DashboardPage() {
     <main
       className="kh-dash min-h-screen transition-colors duration-700 motion-reduce:transition-none"
       style={{
-        // The tint rides on background-color (which transition-colors can
-        // actually animate); the paper wash above it is a static gradient.
-        // Together they render pixel-identically to a hard-coded gradient —
-        // but a tier change now cross-fades instead of snapping.
+        // The tier tint still rides on background-color (which
+        // transition-colors can animate) so a tier change cross-fades; a
+        // static Neutral/50 veil above it keeps the surface reading calm and
+        // Untitled-neutral, with the tint coming through as a whisper.
         backgroundColor: meta.soft,
       }}
     >
-      {/*
-        The hero band: a full-viewport plate with the headline and the nav.
-        It collapses to a slim strip whenever a tier-3 alert is up, so the
-        "Needs attention" banner below stays the first thing on screen.
-      */}
-      <DashboardHero isAlert={isAlert} />
-
+      {/* the neutral veil — static paint over the animated tier tint */}
       <div
-        className="pb-16"
-        style={{ backgroundImage: 'linear-gradient(180deg, rgba(250,246,239,0) 0%, #faf6ef 40%)' }}
-      >
-        <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-8">
-          {/* header — the wordmark now lives in the hero's nav */}
-          <header className="flex items-center justify-end">
-            <div className="flex items-center gap-3 text-sm">
-              {hh.simTimeOffsetMs !== 0 && (
-                <span className="rounded-full bg-dusk/10 px-3 py-1 text-xs text-dusk">demo clock · {fmtClock(bundle.simNowTs)}</span>
-              )}
-              <Link
-                href={`/household/${id}/settings`}
-                className={`kh-press rounded-full border border-ink/15 bg-white/70 px-4 py-1.5 text-ink/70 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{ background: 'linear-gradient(180deg, rgba(250,250,250,0.82) 0%, rgba(250,250,250,0.66) 45%, rgba(250,250,250,0.9) 100%)' }}
+      />
+
+      <div className="relative pb-16">
+        <div className="mx-auto max-w-6xl px-4 pt-5 sm:px-8">
+          {/*
+            The header — v3 anatomy: the ✳︎ logomark chip (terracotta square,
+            white mark, 8px radius), the Khayaal / Overview breadcrumb, the
+            live tier badge, and the section anchors the old hero carried.
+          */}
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-n-200 pb-4">
+            <div className="flex items-center gap-2.5">
+              <span
+                aria-hidden
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-brand-600 text-[15px] text-white shadow-xs"
               >
+                ✳︎
+              </span>
+              <span className="text-[13px] font-medium text-n-500">
+                Khayaal <span className="mx-0.5 text-n-300">/</span>{' '}
+                <strong className="font-semibold text-n-900">Overview</strong>
+              </span>
+              <span className={`kh-tier-ease ml-1 hidden sm:inline-flex ${BADGE} ${ui.pill}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${ui.dot} motion-reduce:animate-none ${state.tier >= 3 ? 'animate-pulse' : ''}`} aria-hidden />
+                {meta.label}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <nav aria-label="Sections" className="mr-2 hidden items-center gap-5 lg:flex">
+                {NAV_LINKS.map((l) => (
+                  <a
+                    key={l.href}
+                    href={l.href}
+                    className="text-sm font-medium text-n-500 transition-colors hover:text-n-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/60 focus-visible:ring-offset-2 focus-visible:ring-offset-n-50"
+                  >
+                    {l.label}
+                  </a>
+                ))}
+              </nav>
+              {hh.simTimeOffsetMs !== 0 && (
+                <span className={`${BADGE} bg-n-100 text-n-600`}>demo clock · {fmtClock(bundle.simNowTs)}</span>
+              )}
+              <a href="#kh-reach-her" className={`${BTN_PRIMARY} px-3.5 py-2`}>
+                Reach her
+              </a>
+              <Link href={`/household/${id}/settings`} className={`${BTN_SECONDARY} px-3.5 py-2`}>
                 Settings
               </Link>
             </div>
           </header>
 
           {/*
-            tier-3 alert — the only thing allowed to shout.
+            tier-3 alert — the only thing allowed to shout, in the error ramp.
             The section stays mounted and collapses through a grid row so the
             bento below glides aside instead of teleporting when a poll flips
             the tier; when collapsed it is inert, so the hidden buttons can
@@ -132,90 +169,90 @@ export default function DashboardPage() {
             <div className="min-h-0 overflow-hidden">
               <section
                 inert={!isAlert}
-                className={`mt-6 rounded-[24px] border border-[#b23a2f]/25 border-l-4 border-l-[#b23a2f] bg-white p-5 shadow-[0_12px_44px_rgba(178,58,47,0.14)] transition-opacity duration-500 motion-reduce:transition-none sm:p-6 ${
-                  isAlert ? 'opacity-100' : 'opacity-0'
-                }`}
+                className={`mt-6 rounded-xl border border-err-200 bg-err-25 shadow-unt-md ${isAlert ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500 motion-reduce:transition-none`}
               >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="max-w-xl">
-                    {/*
-                      Masked line reveal: each line slides out of its own
-                      overflow mask while the banner collapses open. The key on
-                      the alert state restarts the animation exactly once, when
-                      the tier flips — polls that keep the banner up never
-                      re-fire it.
-                    */}
-                    <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#b23a2f]">
-                      <span className="inline-block h-2 w-2 rounded-full bg-[#b23a2f]" aria-hidden />
-                      <span className="kh-line-mask">
-                        <span key={isAlert ? 'eyebrow-in' : 'eyebrow-out'} className={isAlert ? 'kh-line-rise' : undefined}>
-                          Needs attention
+                <div className="border-l-4 border-err-600 p-5 sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="max-w-xl">
+                      {/*
+                        Masked line reveal: each line slides out of its own
+                        overflow mask while the banner collapses open. The key on
+                        the alert state restarts the animation exactly once, when
+                        the tier flips — polls that keep the banner up never
+                        re-fire it.
+                      */}
+                      <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-err-700">
+                        <span className="inline-block h-2 w-2 rounded-full bg-err-600 motion-reduce:animate-none animate-pulse" aria-hidden />
+                        <span className="kh-line-mask">
+                          <span key={isAlert ? 'eyebrow-in' : 'eyebrow-out'} className={isAlert ? 'kh-line-rise' : undefined}>
+                            Needs attention
+                          </span>
                         </span>
-                      </span>
-                    </p>
-                    <p className="mt-2 font-heading text-xl text-ink">
-                      <span className="kh-line-mask">
-                        <span
-                          key={isAlert ? 'head-in' : 'head-out'}
-                          className={isAlert ? 'kh-line-rise' : undefined}
-                          style={{ '--kh-line-delay': '80ms' } as React.CSSProperties}
-                        >
-                          {hh.parentName} hasn't responded to the nudge or the check-in.
+                      </p>
+                      <p className="mt-2 text-lg font-semibold tracking-[-0.01em] text-n-900">
+                        <span className="kh-line-mask">
+                          <span
+                            key={isAlert ? 'head-in' : 'head-out'}
+                            className={isAlert ? 'kh-line-rise' : undefined}
+                            style={{ '--kh-line-delay': '80ms' } as React.CSSProperties}
+                          >
+                            {hh.parentName} hasn't responded to the nudge or the check-in.
+                          </span>
                         </span>
-                      </span>
-                    </p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-ink/60">
-                      <span className="kh-line-mask">
-                        <span
-                          key={isAlert ? 'sub-in' : 'sub-out'}
-                          className={isAlert ? 'kh-line-rise' : undefined}
-                          style={{ '--kh-line-delay': '160ms' } as React.CSSProperties}
-                        >
-                          {state.ack
-                            ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
-                            : hh.callPlan
-                              ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
-                              : 'A call is usually the right next step.'}
+                      </p>
+                      <p className="mt-1.5 text-sm leading-relaxed text-n-600">
+                        <span className="kh-line-mask">
+                          <span
+                            key={isAlert ? 'sub-in' : 'sub-out'}
+                            className={isAlert ? 'kh-line-rise' : undefined}
+                            style={{ '--kh-line-delay': '160ms' } as React.CSSProperties}
+                          >
+                            {state.ack
+                              ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
+                              : hh.callPlan
+                                ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
+                                : 'A call is usually the right next step.'}
+                          </span>
                         </span>
-                      </span>
-                    </p>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2.5">
+                      <a
+                        href="#"
+                        onClick={(e) => e.preventDefault()}
+                        title="Wire your number in settings — this demo cannot place calls"
+                        className={BTN_DANGER}
+                      >
+                        📞 Call {hh.parentName}
+                      </a>
+                      <button
+                        onClick={ack}
+                        disabled={acking}
+                        className={`kh-press rounded-lg border border-err-300 bg-white px-4 py-2.5 text-sm font-semibold text-err-700 shadow-xs transition-colors hover:bg-err-50 disabled:opacity-40 ${FOCUS_ON_RED}`}
+                      >
+                        {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
+                      </button>
+                      <button
+                        onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
+                        className={BTN_SECONDARY}
+                      >
+                        Snooze 1 h
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    <a
-                      href="#"
-                      onClick={(e) => e.preventDefault()}
-                      title="Wire your number in settings — this demo cannot place calls"
-                      className={`kh-press kh-lift rounded-full bg-[#b23a2f] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#9e352b] ${FOCUS_ON_RED}`}
-                    >
-                      📞 Call {hh.parentName}
-                    </a>
-                    <button
-                      onClick={ack}
-                      disabled={acking}
-                      className={`kh-press rounded-full border border-[#b23a2f]/35 bg-[#b23a2f]/[0.05] px-5 py-2.5 text-sm font-medium text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 disabled:opacity-50 ${FOCUS_ON_RED}`}
-                    >
-                      {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
-                    </button>
-                    <button
-                      onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
-                      className={`kh-press rounded-full border border-ink/15 px-5 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
-                    >
-                      Snooze 1 h
-                    </button>
-                  </div>
+                  {circle.length > 0 && (
+                    <p className="mt-3 border-t border-err-200 pt-3 text-xs text-err-700/80">
+                      Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
+                    </p>
+                  )}
                 </div>
-                {circle.length > 0 && (
-                  <p className="mt-3 border-t border-[#b23a2f]/15 pt-3 text-xs text-ink/50">
-                    Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
-                  </p>
-                )}
               </section>
             </div>
           </div>
 
           {/* the bento — kh-bento drives the once-only entrance stagger (see motion.css) */}
           <div className="kh-bento mt-6 grid grid-cols-12 gap-4 sm:gap-5">
-            {/* the sections the hero's nav jumps to, plus its primary action */}
+            {/* the sections the header's nav jumps to, plus its primary action */}
             <div id="kh-current-status" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
               <StatusCard bundle={bundle} />
             </div>
@@ -245,7 +282,7 @@ export default function DashboardPage() {
             <SourcesCard id={id} bundle={bundle} />
           </div>
 
-          <p className="mt-10 text-center text-xs leading-relaxed text-ink/40">
+          <p className="mt-10 text-center text-xs leading-relaxed text-n-400">
             Khayaal never shows a feed, a map or a recording — this page only ever sees what you see. Signals are
             AES-256-GCM encrypted at rest and discarded after 7 days.
           </p>
@@ -267,30 +304,24 @@ function StatusCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
   if (!bundle) return null;
   const { state, household: hh } = bundle;
   const meta = TIER_META[state.tier];
+  const ui = TIER_UI[state.tier];
   return (
-    <BentoCard label="Current status">
-      <div className="flex h-full flex-col">
-        <CardTitle note={state.learning ? undefined : `confidence ${Math.round(state.confidence * 100)}%`}>{meta.label}</CardTitle>
-        <div className="mt-4 flex items-end gap-2">
-          {state.score === null ? (
-            <span className="font-heading text-[56px] leading-none text-ink/30">···</span>
-          ) : (
-            <span className="font-heading text-[56px] leading-none" style={{ color: meta.color }}>
-              <CountUp value={state.score} />
-            </span>
-          )}
-          <span className="pb-1.5 text-sm text-ink/45">/ 100 wellbeing</span>
-        </div>
-        <p className="mt-4 font-heading text-[22px] leading-snug text-ink">
-          {state.learning ? `Learning ${hh.parentName}'s rhythm…` : state.status}
-        </p>
-        <p className="mt-auto pt-5 text-sm leading-relaxed text-ink/55">
+    <CounterCard
+      score={state.score}
+      learning={state.learning}
+      confidence={state.learning ? undefined : `confidence ${Math.round(state.confidence * 100)}%`}
+      tierLabel={meta.label}
+      tierPill={ui.pill}
+      tierDot={ui.dot}
+      status={state.learning ? `Learning ${hh.parentName}'s rhythm…` : state.status}
+      lastLine={
+        <>
           Last activity {fmtAgo(state.lastActiveTs, bundle.simNowTs)}
           {state.lastActiveTs ? ` — around ${fmtClock(state.lastActiveTs)}` : ''}.
           {state.snoozeUntilTs && state.snoozeUntilTs > bundle.simNowTs && <> Quiet until {fmtClock(state.snoozeUntilTs)}.</>}
-        </p>
-      </div>
-    </BentoCard>
+        </>
+      }
+    />
   );
 }
 
@@ -345,10 +376,10 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
             key={t}
             onClick={() => setType(t)}
             aria-pressed={type === t}
-            className={`kh-press rounded-full border px-4 py-1.5 text-[13px] transition-colors ${
+            className={`kh-press rounded-lg border px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
               type === t
-                ? 'border-clay bg-clay/10 text-claydeep'
-                : 'border-ink/15 text-ink/60 hover:border-ink/25 hover:bg-paper'
+                ? 'border-brand-600 bg-brand-50 text-brand-700 shadow-xs'
+                : 'border-n-300 bg-white text-n-600 shadow-xs hover:bg-n-50 hover:text-n-900'
             } ${FOCUS}`}
           >
             {label}
@@ -373,33 +404,29 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
                   ? 'एक छोटा, प्यारा संदेश…'
                   : 'A short, warm message…'
           }
-          className="min-w-0 flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
+          className={`${INPUT} flex-1`}
         />
-        <div className="flex flex-none overflow-hidden rounded-full border border-ink/15 text-xs">
+        <div className="flex flex-none overflow-hidden rounded-lg border border-n-300 bg-white shadow-xs text-xs font-medium">
           {(['en', 'hi'] as const).map((l) => (
             <button
               key={l}
               onClick={() => setLang(l)}
               aria-pressed={lang === l}
-              className={`kh-press px-3 py-2.5 transition-colors ${lang === l ? 'bg-ink text-paper' : 'text-ink/50 hover:bg-paper'} ${FOCUS_ON_PAPER}`}
+              className={`kh-press px-3 py-2.5 transition-colors ${lang === l ? 'bg-n-900 text-white' : 'text-n-500 hover:bg-n-50'} ${FOCUS}`}
             >
               {l === 'en' ? 'EN' : 'हिं'}
             </button>
           ))}
         </div>
-        <button
-          onClick={send}
-          disabled={busy || !text.trim()}
-          className={`kh-press kh-lift flex-none rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
-        >
+        <button onClick={send} disabled={busy || !text.trim()} className={BTN_PRIMARY}>
           {busy ? 'Sending…' : 'Send'}
         </button>
       </div>
-      {sent && <p className="mt-2 text-xs text-[#4c7a4f]">Sent ✓ — her phone picks it up in a moment.</p>}
+      {sent && <p className="mt-2 text-xs font-medium text-ok-700">Sent ✓ — her phone picks it up in a moment.</p>}
       {pending.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {pending.slice(-3).map((c) => (
-            <li key={c.id} className="truncate text-xs text-ink/45">
+            <li key={c.id} className="truncate text-xs text-n-500">
               pending · {c.type}: “{c.text}”
             </li>
           ))}
@@ -421,20 +448,20 @@ function RhythmCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
         {activity.map((v, h) => (
           <div key={h} className="group relative flex-1">
             <div
-              className="w-full rounded-t transition-all duration-500 motion-reduce:transition-none"
+              className="w-full rounded-t-[3px] transition-all duration-500 motion-reduce:transition-none"
               style={{
                 height: `${Math.max(4, (v / max) * 76)}px`,
-                background: h === nowHour ? '#b95c38' : v === 0 ? '#e7e0d3' : '#7d8c6f',
+                background: h === nowHour ? '#DC6803' : v === 0 ? '#E5E5E5' : '#FDB022',
                 opacity: h > nowHour ? 0.35 : 1,
               }}
             />
-            <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-ink px-1.5 py-0.5 text-[10px] text-paper group-hover:block">
+            <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-n-900 px-1.5 py-0.5 text-[10px] font-medium text-white group-hover:block">
               {h}:00 · {v}
             </span>
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-ink/45">
+      <p className="mt-3 text-xs leading-relaxed text-n-500">
         Signal counts per hour — her ordinary day, drawn from harmless aggregates. No content, no location.
       </p>
     </BentoCard>
@@ -442,9 +469,30 @@ function RhythmCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
 }
 
 function LadderCard({ tier }: { tier: number }) {
+  const pct = Math.min(100, (tier / 4) * 100);
   return (
     <BentoCard label="Escalation ladder" className="col-span-12 lg:col-span-5">
       <CardTitle note="most days, step 3 never comes">Where things stand</CardTitle>
+
+      {/* the v3 ladder bar — one gradient rail, filled to the current tier */}
+      <div className="mt-4">
+        <div className="h-2 overflow-hidden rounded-full bg-n-100">
+          <div
+            className="kh-tier-ease h-full rounded-full"
+            style={{
+              width: `${Math.max(4, pct)}%`,
+              background: 'linear-gradient(90deg, #039855, #F79009 62%, #D92D20)',
+            }}
+          />
+        </div>
+        <div className="mt-1.5 flex justify-between text-[9.5px] font-medium text-n-400">
+          <span>Quiet</span>
+          <span>Nudge</span>
+          <span>Check-in</span>
+          <span>Alert</span>
+        </div>
+      </div>
+
       <div className="mt-4 space-y-2.5">
         {[
           ['Quiet observation', 'signals only — nobody is contacted', 0],
@@ -456,14 +504,17 @@ function LadderCard({ tier }: { tier: number }) {
           return (
             <div key={label as string} className="flex items-center gap-3">
               <span
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold transition-colors duration-500 motion-reduce:transition-none"
-                style={{ background: active ? (i === 3 ? '#b23a2f' : i === 0 ? '#4c7a4f' : '#c98a2b') : '#efe9de', color: active ? 'white' : '#a2988a' }}
+                className="kh-tier-ease flex h-7 w-7 flex-none items-center justify-center rounded-lg text-[11px] font-semibold"
+                style={{
+                  background: active ? (i === 3 ? '#D92D20' : i === 0 ? '#039855' : '#DC6803') : '#F5F5F5',
+                  color: active ? 'white' : '#A3A3A3',
+                }}
               >
                 {i}
               </span>
               <div className="min-w-0">
-                <p className={`text-sm font-medium ${active ? 'text-ink' : 'text-ink/40'}`}>{label as string}</p>
-                <p className="truncate text-xs text-ink/40">{desc as string}</p>
+                <p className={`text-sm font-medium ${active ? 'text-n-900' : 'text-n-400'}`}>{label as string}</p>
+                <p className="truncate text-xs text-n-400">{desc as string}</p>
               </div>
             </div>
           );
@@ -476,28 +527,28 @@ function LadderCard({ tier }: { tier: number }) {
 function ExplainCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
   if (!bundle) return null;
   const { state } = bundle;
-  const meta = TIER_META[state.tier];
+  const ui = TIER_UI[state.tier];
   return (
     <BentoCard label="Why this score" className="col-span-12 lg:col-span-7">
       <CardTitle note="plain language, always">Why this score</CardTitle>
       <div className="mt-5 space-y-3.5">
-        {state.learning && <p className="text-sm text-ink/60">Khayaal is still learning — nothing is being scored yet.</p>}
+        {state.learning && <p className="text-sm text-n-600">Khayaal is still learning — nothing is being scored yet.</p>}
         {!state.learning && state.contributions.length === 0 && (
-          <p className="text-sm text-ink/60">Everything we look for is present and ordinary. Nothing to explain.</p>
+          <p className="text-sm text-n-600">Everything we look for is present and ordinary. Nothing to explain.</p>
         )}
         {state.contributions.map((c, i) => (
           <div key={i} className="flex items-start gap-3">
-            <div className="mt-1.5 h-2 w-24 flex-none overflow-hidden rounded-full bg-ink/10">
+            <div className="mt-1.5 h-2 w-24 flex-none overflow-hidden rounded-full bg-n-100">
               <div
                 className="h-full rounded-full transition-[width] duration-700 motion-reduce:transition-none"
-                style={{ width: `${Math.min(100, (c.effect / 30) * 100)}%`, background: meta.color }}
+                style={{ width: `${Math.min(100, (c.effect / 30) * 100)}%`, background: ui.color }}
               />
             </div>
-            <p className="text-sm leading-relaxed text-ink/75">{c.reason}</p>
+            <p className="text-sm leading-relaxed text-n-700">{c.reason}</p>
           </div>
         ))}
         {!state.learning && (
-          <p className="pt-1 text-xs leading-relaxed text-ink/40">
+          <p className="pt-1 text-xs leading-relaxed text-n-400">
             A missing source lowers confidence — it never raises the score on its own. Signals are AES-256-GCM encrypted
             at rest and discarded after 7 days.
           </p>
@@ -539,7 +590,7 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
       <CardTitle note={model ? `last: ${model}` : 'MiniMax · NVIDIA · OpenRouter'}>
         Behaviour analysis, read by a model
       </CardTitle>
-      <p className="mt-2 text-xs leading-relaxed text-ink/45">
+      <p className="mt-2 text-xs leading-relaxed text-n-500">
         Only privacy-safe aggregates leave the house: score trend, tier changes, hourly shape, recurring reasons.
         Never content — there is none.
       </p>
@@ -547,7 +598,7 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
         <select
           value={provider}
           onChange={(e) => setProvider(e.target.value as 'minimax' | 'nvidia' | 'openrouter')}
-          className={`rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15 ${FOCUS_ON_PAPER}`}
+          className={`${INPUT} w-auto pr-8`}
         >
           <option value="minimax">MiniMax</option>
           <option value="nvidia">NVIDIA NIM</option>
@@ -557,19 +608,17 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder="API key (or set env on the server)"
-          className="min-w-[180px] flex-1 rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
+          className={`${INPUT} min-w-[180px] flex-1`}
         />
-        <button
-          onClick={run}
-          disabled={busy}
-          className={`kh-press kh-lift rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
-        >
+        <button onClick={run} disabled={busy} className={BTN_PRIMARY}>
           {busy ? 'Reading the week…' : 'Run analysis'}
         </button>
       </div>
-      {error && <p className="mt-2 text-sm text-[#b23a2f]">{error}</p>}
+      {error && <p className="mt-2 text-sm text-err-700">{error}</p>}
       {text && (
-        <div className="mt-4 whitespace-pre-wrap rounded-2xl bg-paper/80 p-4 text-[13.5px] leading-relaxed text-ink/80">{text}</div>
+        <div className="mt-4 whitespace-pre-wrap rounded-lg border border-n-200 bg-n-50 p-4 text-[13.5px] leading-relaxed text-n-700">
+          {text}
+        </div>
       )}
     </BentoCard>
   );
@@ -611,15 +660,15 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
       <CardTitle note="neighbours who can check in">Care circle</CardTitle>
       <ul className="mt-4 space-y-2">
         {circle.length === 0 && (
-          <li className="rounded-xl border border-dashed border-ink/20 p-3 text-xs leading-relaxed text-ink/45">
+          <li className="rounded-lg border border-dashed border-n-300 p-3 text-xs leading-relaxed text-n-500">
             Add family and trusted neighbours — when a real alert fires, they're notified too and can visit.
           </li>
         )}
         {circle.map((m) => (
-          <li key={m.email} className="flex items-center justify-between rounded-xl border border-ink/10 bg-paper px-3.5 py-2.5 text-sm">
+          <li key={m.email} className="flex items-center justify-between rounded-lg border border-n-200 bg-n-50 px-3.5 py-2.5 text-sm">
             <span>
-              {m.name} <span className="text-xs text-ink/40">({m.role})</span>
-              <span className="block text-xs text-ink/40">
+              {m.name} <span className="text-xs text-n-400">({m.role})</span>
+              <span className="block text-xs text-n-500">
                 {m.email}
                 {m.phone ? ` · ${m.phone}` : ''}
               </span>
@@ -627,7 +676,7 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
             <button
               onClick={() => manage('remove', m.email)}
               disabled={busy}
-              className={`kh-press rounded-full px-2 py-1 text-xs text-ink/40 transition-colors hover:bg-[#f6dcd8]/60 hover:text-[#b23a2f] disabled:opacity-40 ${FOCUS_ON_PAPER_RED}`}
+              className={`kh-press rounded-lg px-2 py-1 text-xs font-medium text-n-400 transition-colors hover:bg-err-50 hover:text-err-700 disabled:opacity-40 ${FOCUS}`}
             >
               remove
             </button>
@@ -635,28 +684,20 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
         ))}
       </ul>
       <div className="mt-3 space-y-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15" />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (they sign in with Google)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15" />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (for the alert call chain)" className="w-full rounded-full border border-ink/15 bg-paper px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className={INPUT} />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (they sign in with Google)" className={INPUT} />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (for the alert call chain)" className={INPUT} />
         <div className="flex items-center justify-between gap-2">
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as 'family' | 'neighbor')}
-            className={`rounded-full border border-ink/15 bg-paper px-3 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15 ${FOCUS_ON_PAPER}`}
-          >
+          <select value={role} onChange={(e) => setRole(e.target.value as 'family' | 'neighbor')} className={`${INPUT} w-auto pr-8`}>
             <option value="neighbor">Neighbour</option>
             <option value="family">Family</option>
           </select>
-          <button
-            onClick={() => manage('add')}
-            disabled={busy || !email.includes('@')}
-            className={`kh-press kh-lift rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
-          >
+          <button onClick={() => manage('add')} disabled={busy || !email.includes('@')} className={BTN_PRIMARY}>
             Add to circle
           </button>
         </div>
-        {error && <p className="text-xs text-[#b23a2f]">{error}</p>}
-        <p className="text-[11px] leading-relaxed text-ink/40">
+        {error && <p className="text-xs text-err-700">{error}</p>}
+        <p className="text-[11px] leading-relaxed text-n-400">
           Circle members sign in at /login and claim this household with its pairing code. On a real alert they are
           notified alongside the family — a neighbour can be the fastest help there is. Phone numbers feed the call
           chain: your phone's own dialer places the calls, so there's no SMS gateway to set up.
@@ -713,24 +754,20 @@ function PushCard({ id }: { id: string }) {
   return (
     <BentoCard label="Alerts on this device" className="col-span-12 lg:col-span-5">
       <CardTitle note="free browser push, no SMS gateway">Alerts on this device</CardTitle>
-      <p className="mt-3 text-sm leading-relaxed text-ink/55">
+      <p className="mt-3 text-sm leading-relaxed text-n-600">
         When an urgent alert fires, this laptop or tablet gets the nudge too — the notification arrives even with
         Khayaal closed.
       </p>
       <div className="mt-4 flex items-center gap-3">
         {status === 'unsupported' ? (
-          <span className="text-sm text-ink/40">This browser can't receive push notifications.</span>
+          <span className="text-sm text-n-400">This browser can't receive push notifications.</span>
         ) : (
-          <button
-            onClick={subscribe}
-            disabled={busy || status === 'on'}
-            className={`kh-press kh-lift rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
-          >
+          <button onClick={subscribe} disabled={busy || status === 'on'} className={BTN_PRIMARY}>
             {status === 'on' ? 'Alerts are on ✓' : busy ? 'Enabling…' : 'Enable urgent alerts here'}
           </button>
         )}
       </div>
-      {note && <p className="mt-3 text-xs leading-relaxed text-ink/50">{note}</p>}
+      {note && <p className="mt-3 text-xs leading-relaxed text-n-500">{note}</p>}
     </BentoCard>
   );
 }
@@ -740,14 +777,14 @@ function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
   return (
     <BentoCard label="Recent events" className="col-span-12 lg:col-span-5">
       <CardTitle note="audit trail">Quiet log</CardTitle>
-      <ul className="mt-4 space-y-2 text-sm">
+      <ul className="mt-4 space-y-0.5">
         {bundle.events.slice(-6).reverse().map((e) => (
-          <li key={e.id} className="flex items-baseline gap-3 text-sm">
-            <span className="flex-none text-xs tabular-nums text-ink/40">{fmtClock(e.ts)}</span>
-            <span className="text-ink/75">{e.meta ?? (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}</span>
+          <li key={e.id} className="flex items-baseline gap-3 border-b border-n-100 py-2 text-sm last:border-b-0">
+            <span className="w-16 flex-none text-xs tabular-nums text-n-400">{fmtClock(e.ts)}</span>
+            <span className="text-n-700">{e.meta ?? (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}</span>
           </li>
         ))}
-        {bundle.events.length === 0 && <li className="text-sm text-ink/40">A quiet day. Nothing to report.</li>}
+        {bundle.events.length === 0 && <li className="py-2 text-sm text-n-400">A quiet day. Nothing to report.</li>}
       </ul>
     </BentoCard>
   );
@@ -917,10 +954,10 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   const bars = (rssi: number) => (rssi > -55 ? '▮▮▮▮' : rssi > -65 ? '▮▮▮' : rssi > -75 ? '▮▮' : '▮');
 
   return (
-    <div className="mt-3 rounded-2xl border border-ink/10 bg-paper/70 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink/40">Wi-Fi, laptop-style — runs over the sensor's USB link</p>
+    <div className="mt-3 rounded-xl border border-n-200 bg-n-50 p-4">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-n-400">Wi-Fi, laptop-style — runs over the sensor's USB link</p>
       <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-        <span className={status?.connected ? 'text-ink/80' : 'text-[#b23a2f]'}>
+        <span className={status?.connected ? 'text-n-700' : 'text-err-700'}>
           {status?.connected
             ? `Connected to ${status.ssid} · ${bars(status.rssi ?? -80)} ${status.rssi ?? ''} dBm${status.ip ? ` · ${status.ip}` : ''}`
             : 'Not connected to any network'}
@@ -928,7 +965,7 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         <button
           onClick={() => queue('wifi_scan')}
           disabled={busy !== null}
-          className={`kh-press rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-ink hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
+          className={`kh-press rounded-lg border border-n-300 bg-white px-3 py-1 text-xs font-medium text-n-700 shadow-xs transition-colors hover:bg-n-50 disabled:opacity-40 ${FOCUS}`}
         >
           {busy === 'wifi_scan' ? 'Scanning…' : 'Scan networks'}
         </button>
@@ -936,14 +973,14 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
           <button
             onClick={() => queue('wififorget')}
             disabled={busy !== null}
-            className={`kh-press rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/70 transition-colors hover:bg-[#b23a2f] hover:text-paper disabled:opacity-40 ${FOCUS_ON_PAPER}`}
+            className={`kh-press rounded-lg border border-n-300 bg-white px-3 py-1 text-xs font-medium text-n-700 shadow-xs transition-colors hover:bg-err-50 hover:text-err-700 disabled:opacity-40 ${FOCUS}`}
           >
             Forget Wi-Fi
           </button>
         )}
       </div>
-      {note && <p className="mt-2 text-xs text-ink/50">{note}</p>}
-      <p className="mt-1.5 text-[11px] text-ink/45">
+      {note && <p className="mt-2 text-xs text-n-500">{note}</p>}
+      <p className="mt-1.5 text-[11px] text-n-500">
         {relaySeenTs ? (
           relayAlive(relaySeenTs) ? (
             <>USB relay: checking in every 3 s — last {fmtAgo(relaySeenTs, Date.now())}.</>
@@ -955,20 +992,20 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         )}
       </p>
       {relayError && (
-        <p className="mt-2 rounded-xl border border-[#b23a2f]/25 bg-[#f6dcd8]/50 px-3 py-2 text-xs leading-relaxed text-[#77231c]">
+        <p className="mt-2 rounded-lg border border-err-200 bg-err-50 px-3 py-2 text-xs leading-relaxed text-err-700">
           {relayError}
         </p>
       )}
       {scanError && (
-        <p className="mt-2 rounded-xl border border-[#b23a2f]/25 bg-[#f6dcd8]/50 px-3 py-2 text-xs leading-relaxed text-[#77231c]">
+        <p className="mt-2 rounded-lg border border-err-200 bg-err-50 px-3 py-2 text-xs leading-relaxed text-err-700">
           The scan came back empty — {scanError}.
         </p>
       )}
       {networks && networks.length === 0 && !scanError && !relayError && (
-        <p className="mt-2 text-xs text-ink/45">No networks found nearby.</p>
+        <p className="mt-2 text-xs text-n-500">No networks found nearby.</p>
       )}
       {networks && networks.length > 0 && (
-        <ul className="mt-3 divide-y divide-ink/5">
+        <ul className="mt-3 divide-y divide-n-100">
           {networks
             .slice()
             .sort((a, b) => b.rssi - a.rssi)
@@ -979,13 +1016,13 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
                     setSelected(n.ssid);
                     setPassword('');
                   }}
-                  className={`kh-press flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-paper ${selected === n.ssid ? 'bg-paper' : ''} ${FOCUS_ON_PAPER}`}
+                  className={`kh-press flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-white ${selected === n.ssid ? 'bg-brand-25' : ''} ${FOCUS}`}
                 >
-                  <span className="text-ink/80">
-                    {n.secure && <span className="mr-1.5 text-ink/40">🔒</span>}
+                  <span className="text-n-700">
+                    {n.secure && <span className="mr-1.5 text-n-400">🔒</span>}
                     {n.ssid}
                   </span>
-                  <span className="text-xs text-ink/40">{bars(n.rssi)}</span>
+                  <span className="text-xs text-n-400">{bars(n.rssi)}</span>
                 </button>
               </li>
             ))}
@@ -999,18 +1036,18 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && queue('wifi_connect', { ssid: selected, password })}
             placeholder={`Password for ${selected}`}
-            className="min-w-0 flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm outline-none transition-colors focus:border-clay focus:ring-2 focus:ring-clay/15"
+            className={`${INPUT} flex-1 bg-white`}
           />
           <button
             onClick={() => queue('wifi_connect', { ssid: selected, password })}
             disabled={busy !== null || password.length < 8}
-            className={`kh-press flex-none rounded-full bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-40 ${FOCUS}`}
+            className={BTN_PRIMARY}
           >
             {busy === 'wifi_connect' ? 'Joining…' : 'Connect'}
           </button>
         </div>
       )}
-      <p className="mt-3 text-[11px] leading-relaxed text-ink/40">
+      <p className="mt-3 text-[11px] leading-relaxed text-n-400">
         Needs the sensor's USB cable plugged into this Mac with the relay running:
         <code className="mx-1">python3 firmware/tunnel/khayaal_serial_bridge.py</code>
         — the dashboard queues the action, the relay types it to the sensor over USB and posts the scan
@@ -1155,10 +1192,10 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
     <BentoCard label="Sources" className="col-span-12">
       <CardTitle note="never a feed, never a map">The watchers</CardTitle>
       {pairingCode && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-ink/10 bg-white px-4 py-3 text-sm">
-          <span className="text-ink/60">
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-n-200 bg-n-50 px-4 py-3 text-sm">
+          <span className="text-n-600">
             Pairing code for a new phone or sensor:
-            <span className="ml-2 font-mono text-lg tracking-[0.2em] text-clay">{pairingCode}</span>
+            <span className="ml-2 font-mono text-lg tracking-[0.2em] text-brand-700">{pairingCode}</span>
           </span>
           <button
             onClick={async () => {
@@ -1169,7 +1206,7 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
                 /* keep showing the old one */
               }
             }}
-            className={`ml-auto kh-press rounded-full border border-ink/15 px-3 py-1 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS}`}
+            className={`kh-press ml-auto rounded-lg border border-n-300 bg-white px-3 py-1 text-xs font-medium text-n-700 shadow-xs transition-colors hover:bg-n-100 ${FOCUS}`}
           >
             regenerate
           </button>
@@ -1180,26 +1217,26 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
           const fresh = s.lastSeenTs && bundle.simNowTs - s.lastSeenTs < 30 * 60_000;
           const isEsp = s.type === 'esp32';
           return (
-            <span key={s.id} className="inline-flex items-center gap-2 rounded-full border border-ink/10 bg-paper px-4 py-2 text-sm text-ink/80">
+            <span key={s.id} className="inline-flex items-center gap-2 rounded-lg border border-n-200 bg-white px-3.5 py-2 text-sm text-n-700 shadow-xs">
               <span
                 className={`h-2 w-2 rounded-full ${fresh ? 'kh-dot-live' : ''}`}
-                style={{ background: fresh ? '#4c7a4f' : '#c9b8a0' }}
+                style={{ background: fresh ? '#039855' : '#D4D4D4' }}
                 aria-hidden
               />
               {s.label}
-              <span className="text-xs text-ink/40">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
+              <span className="text-xs text-n-400">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
               {isEsp && (
                 <>
                   <button
                     onClick={() => fallTest(s.id)}
-                    className={`kh-press rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
+                    className={`kh-press rounded-lg border border-n-300 bg-white px-2.5 py-0.5 text-xs font-medium text-n-600 shadow-xs transition-colors hover:bg-n-50 hover:text-n-900 ${FOCUS}`}
                   >
                     {testedSrc === s.id ? 'firing…' : 'fall test'}
                   </button>
                   <button
                     onClick={() => setWifiOpenFor(wifiOpenFor === s.id ? null : s.id)}
                     aria-pressed={wifiOpenFor === s.id}
-                    className={`kh-press rounded-full border border-ink/15 px-2.5 py-0.5 text-xs text-ink/60 transition-colors hover:bg-ink hover:text-paper ${FOCUS_ON_PAPER}`}
+                    className={`kh-press rounded-lg border border-n-300 bg-white px-2.5 py-0.5 text-xs font-medium text-n-600 shadow-xs transition-colors hover:bg-n-50 hover:text-n-900 ${FOCUS}`}
                   >
                     Wi-Fi
                   </button>
@@ -1208,42 +1245,38 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
             </span>
           );
         })}
-        <button
-          onClick={connectSensor}
-          disabled={connectState === 'waiting'}
-          className={`kh-press kh-lift rounded-full border border-ink bg-ink px-4 py-2 text-sm text-paper transition-colors hover:bg-ink/85 disabled:opacity-50 ${FOCUS}`}
-        >
+        <button onClick={connectSensor} disabled={connectState === 'waiting'} className={BTN_PRIMARY}>
           {connectState === 'waiting' ? 'Connecting…' : 'Connect room sensor (plug in via USB)'}
         </button>
         <button
           onClick={addSensor}
           disabled={busy}
-          className={`kh-press rounded-full border border-dashed border-ink/25 px-4 py-2 text-sm text-ink/55 transition-colors hover:border-ink/40 hover:bg-paper disabled:opacity-40 ${FOCUS}`}
+          className={`kh-press rounded-lg border border-dashed border-n-300 bg-white px-4 py-2.5 text-sm font-medium text-n-500 shadow-xs transition-colors hover:border-n-400 hover:text-n-700 disabled:opacity-40 ${FOCUS}`}
         >
           {busy ? 'Pairing…' : '+ Add manually'}
         </button>
       </div>
       {connectState === 'waiting' && (
-        <p className="mt-3 text-sm text-ink/60">
+        <p className="mt-3 text-sm text-n-600">
           Paired — the USB relay is typing the identity into the board now. Keep the ESP32 plugged into this laptop;
           it finishes on its own.
         </p>
       )}
       {connectState === 'connected' && (
-        <p className="mt-3 text-sm text-[#4c7a4f]">
+        <p className="mt-3 text-sm text-ok-700">
           Room sensor connected — it is streaming live. Wave a hand in front of it and watch the blueprint.
         </p>
       )}
-      {error && <p className="mt-3 text-sm leading-relaxed text-[#b23a2f]">{error}</p>}
+      {error && <p className="mt-3 text-sm leading-relaxed text-err-700">{error}</p>}
       {error && pairingCode && error.startsWith('The USB relay is not checking in') && (
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-ink/90 px-4 py-3 font-mono text-[12.5px] text-paper/90">{`python3 firmware/tunnel/khayaal_serial_bridge.py`}</pre>
+        <pre className="mt-2 overflow-x-auto rounded-lg bg-n-900 px-4 py-3 font-mono text-[12.5px] text-n-100">{`python3 firmware/tunnel/khayaal_serial_bridge.py`}</pre>
       )}
       {wifiOpenFor && <WiFiPanel id={id} sourceId={wifiOpenFor} />}
       {serialBlock && (
-        <div className="mt-4 rounded-2xl border border-ink/10 bg-paper/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink/40">Paste into the sensor's serial monitor (115200) — the key is shown once</p>
-          <pre className="mt-2 overflow-x-auto whitespace-pre text-[12.5px] leading-relaxed text-ink/80">{serialBlock}</pre>
-          <p className="mt-2 text-[11px] leading-relaxed text-ink/40">
+        <div className="mt-4 rounded-xl border border-n-200 bg-n-50 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-n-400">Paste into the sensor's serial monitor (115200) — the key is shown once</p>
+          <pre className="mt-2 overflow-x-auto whitespace-pre rounded-lg border border-n-200 bg-white px-3 py-2.5 text-[12.5px] leading-relaxed text-n-800">{serialBlock}</pre>
+          <p className="mt-2 text-[11px] leading-relaxed text-n-400">
             Flash first with <code>bash firmware/test-pipeline.sh flash</code>. The sensor seals its traffic with
             AES-256-GCM under this key — <code>show</code> should say state=idle, wifi=up, encrypt=on.
           </p>
@@ -1277,7 +1310,7 @@ function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; 
   const points = trend.slice(-96);
   if (W > 0 && points.length < 2) {
     return (
-      <div ref={ref} className="flex min-h-[150px] items-center justify-center rounded-[18px] bg-paper/60 text-sm text-ink/40">
+      <div ref={ref} className="flex min-h-[150px] items-center justify-center rounded-lg border border-n-200 bg-n-50 text-sm text-n-400">
         The trend will appear as the day unfolds.
       </div>
     );
@@ -1295,25 +1328,26 @@ function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; 
     <div ref={ref} className="relative mt-3 min-h-[150px] flex-1">
       {W > 0 && (
         <svg width={W} height={CH} className="block" role="img" aria-label="Wellbeing score over the last 24 hours">
-          <rect x="0" y={Y(100)} width={W} height={Y(72) - Y(100)} fill="#f6dcd8" opacity="0.5" />
-          <rect x="0" y={Y(72)} width={W} height={Y(55) - Y(72)} fill="#f8e3d5" opacity="0.45" />
-          <rect x="0" y={Y(55)} width={W} height={Y(35) - Y(55)} fill="#f7ecd7" opacity="0.6" />
-          <rect x="0" y={Y(35)} width={W} height={Y(0) - Y(35)} fill="#e6efe2" opacity="0.5" />
+          {/* tier bands — the new ramp at a whisper */}
+          <rect x="0" y={Y(100)} width={W} height={Y(72) - Y(100)} fill="#D92D20" opacity="0.05" />
+          <rect x="0" y={Y(72)} width={W} height={Y(55) - Y(72)} fill="#DC6803" opacity="0.05" />
+          <rect x="0" y={Y(55)} width={W} height={Y(35) - Y(55)} fill="#F79009" opacity="0.06" />
+          <rect x="0" y={Y(35)} width={W} height={Y(0) - Y(35)} fill="#039855" opacity="0.06" />
           {[0, 35, 55, 72].map((b) => (
-            <line key={b} x1="0" x2={W} y1={Y(b)} y2={Y(b)} className="stroke-ink/10" strokeWidth="1" strokeDasharray="3 4" />
+            <line key={b} x1="0" x2={W} y1={Y(b)} y2={Y(b)} className="stroke-n-200" strokeWidth="1" strokeDasharray="3 4" />
           ))}
-          <path d={`${d}L${last[0]},${CH}L${P[0][0]},${CH}Z`} fill="#7d8c6f" opacity="0.12" />
+          <path d={`${d}L${last[0]},${CH}L${P[0][0]},${CH}Z`} fill="#DC6803" opacity="0.08" />
           <path
             d={d}
             pathLength={1}
             fill="none"
-            stroke="#5f7053"
+            stroke="#DC6803"
             strokeWidth="2.5"
             strokeLinecap="round"
             style={{ strokeDasharray: 1, strokeDashoffset: drawn || reduce ? 0 : 1, transition: reduce ? 'none' : 'stroke-dashoffset 1.4s cubic-bezier(.3,.8,.2,1) .2s' }}
           />
-          <circle cx={last[0]} cy={last[1]} r="4.5" fill="#5f7053" className="stroke-white" strokeWidth="2" />
-          <text x={W - 4} y={Y(72) - 5} textAnchor="end" fontSize="10" className="fill-ink/40">
+          <circle cx={last[0]} cy={last[1]} r="4.5" fill="#DC6803" className="stroke-white" strokeWidth="2" />
+          <text x={W - 4} y={Y(72) - 5} textAnchor="end" fontSize="10" className="fill-n-400">
             72 · escalate
           </text>
         </svg>

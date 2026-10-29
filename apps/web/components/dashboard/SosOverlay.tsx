@@ -96,47 +96,50 @@ export default function SosOverlay({ householdId, parentName, sos, childName }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto bg-[#4a0e08]/97 p-6 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-3xl border border-white/15 bg-[#5c130a] p-8 text-center text-[#fdf1ee] shadow-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#f4b8ac]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto bg-err-900/95 p-6 backdrop-blur-sm">
+      <div
+        className="w-full max-w-lg rounded-xl border border-white/15 bg-err-700 p-8 text-center text-white shadow-unt-2xl"
+        style={{ boxShadow: '0 24px 48px -12px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.14)' }}
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-err-200">
           {sos.origin === 'button' ? 'Button pressed' : 'Automatic — ladder timed out'}
         </p>
-        <h2 className="mt-3 text-5xl font-semibold tracking-tight">SOS</h2>
+        <h2 className="mt-3 text-5xl font-semibold tracking-[-0.02em]">SOS</h2>
         <p className="mt-3 text-lg leading-relaxed">
           {parentName} raised the emergency alarm — {since}.
         </p>
         {sos.ack && (
-          <p className="mt-2 rounded-2xl bg-white/10 px-4 py-2 text-sm">
+          <p className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium">
             {sos.ack.by} is responding.
           </p>
         )}
         {!armed ? (
           <button
             onClick={startSiren}
-            className={`mt-6 w-full rounded-full bg-[#fdf1ee] px-5 py-3 text-sm font-semibold text-[#5c130a] transition hover:bg-white kh-press`}
+            className={`kh-press mt-6 w-full rounded-lg bg-white px-5 py-3 text-sm font-semibold text-err-700 shadow-xs transition hover:bg-err-50`}
           >
             🔊 Tap to sound the siren on this device
           </button>
         ) : (
-          <p className="mt-6 animate-pulse text-sm font-semibold text-[#f4b8ac]">● Siren sounding on this device</p>
+          <p className="mt-6 animate-pulse text-sm font-semibold text-err-100 motion-reduce:animate-none">● Siren sounding on this device</p>
         )}
         <div className="mt-5 grid gap-2.5">
           <button
             onClick={respond}
             disabled={busy !== null}
-            className="rounded-full border border-white/30 px-5 py-3 text-sm font-semibold transition hover:bg-white/10 disabled:opacity-40 kh-press"
+            className="kh-press rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-err-700"
           >
             {busy === 'respond' ? 'Recording…' : "I'm responding"}
           </button>
           <button
             onClick={standDown}
             disabled={busy !== null}
-            className="rounded-full border border-white/30 px-5 py-3 text-sm font-semibold transition hover:bg-white/10 disabled:opacity-40 kh-press"
+            className="kh-press rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-err-700"
           >
             {busy === 'resolve' ? 'Standing down…' : 'Stand down — she is safe'}
           </button>
         </div>
-        <p className="mt-5 text-xs leading-relaxed text-[#f4b8ac]/80">
+        <p className="mt-5 text-xs leading-relaxed text-err-100/85">
           Every registered phone is ringing at full volume. Stand down only once someone has laid eyes on her.
         </p>
       </div>

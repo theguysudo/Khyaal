@@ -21,17 +21,18 @@ const WINDOW_MS = 3 * 60_000;
 const CH = 150; // svg height, matching the other dashboard charts
 const RAIL_H = 16; // strip reserved at the bottom for event markers
 
-const CLAY = '#b95c38';
-const SAGE = '#7d8c6f';
-const RED = '#b23a2f';
-const DUSK = '#3d3352';
-const GREY = '#a2988a';
+/* Chart palette — the Khayaal terracotta ramp on Untitled neutrals. */
+const CLAY = '#DC6803';
+const SAGE = '#039855';
+const RED = '#D92D20';
+const DUSK = '#404040';
+const GREY = '#D4D4D4';
 
 const STATE_STYLE: Record<string, { label: string; pill: string; dot: string; pulse: boolean }> = {
-  idle: { label: 'Idle', pill: 'bg-ink/5 text-ink/45', dot: 'bg-ink/25', pulse: false },
-  motion: { label: 'Motion', pill: 'bg-clay/10 text-claydeep', dot: 'bg-clay', pulse: true },
-  fall: { label: 'Fall', pill: 'bg-[#b23a2f]/10 text-[#77231c]', dot: 'bg-[#b23a2f]', pulse: true },
-  lost: { label: 'Lost', pill: 'bg-dusk/10 text-dusk', dot: 'bg-dusk/50', pulse: false },
+  idle: { label: 'Idle', pill: 'bg-n-100 text-n-500', dot: 'bg-n-300', pulse: false },
+  motion: { label: 'Motion', pill: 'bg-brand-50 text-brand-700', dot: 'bg-brand-500', pulse: true },
+  fall: { label: 'Fall', pill: 'bg-err-50 text-err-700', dot: 'bg-err-600', pulse: true },
+  lost: { label: 'Lost', pill: 'bg-n-100 text-n-600', dot: 'bg-n-400', pulse: false },
 };
 
 const EVENT_COLOR: Record<string, string> = { motion: SAGE, fall: RED, idle: GREY, lost: DUSK };
@@ -76,7 +77,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
 
   if (!bundle) {
     return (
-      <div className="mt-4 flex min-h-[150px] items-center justify-center rounded-[18px] bg-paper/60 text-sm text-ink/40">
+      <div className="mt-4 flex min-h-[150px] items-center justify-center rounded-lg border border-n-200 bg-n-50 text-sm text-n-400">
         Listening to the room sensor…
       </div>
     );
@@ -84,7 +85,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
 
   if (win.length === 0) {
     return (
-      <div className="mt-4 rounded-2xl border border-dashed border-ink/20 p-5 text-sm leading-relaxed text-ink/45">
+      <div className="mt-4 rounded-lg border border-dashed border-n-300 p-5 text-sm leading-relaxed text-n-500">
         Waiting for readings — wave a hand in front of the room sensor. The waveform appears as soon as
         it starts streaming.
       </div>
@@ -94,8 +95,8 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
   const latest = win[win.length - 1];
   const st = STATE_STYLE[latest.state] ?? {
     label: latest.state,
-    pill: 'bg-ink/5 text-ink/45',
-    dot: 'bg-ink/25',
+    pill: 'bg-n-100 text-n-500',
+    dot: 'bg-n-300',
     pulse: false,
   };
   const thr = bundle.threshold || latest.thr;
@@ -147,9 +148,9 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
     <>
       <div className="mt-4 flex items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.14em] text-ink/40">Signal strength now</p>
-          <p className="mt-1 font-heading text-[32px] leading-none text-ink">{fmtV(latest.v)}</p>
-          <p className="mt-1.5 text-xs text-ink/45">{sensorLabel}</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-n-400">Signal strength now</p>
+          <p className="mt-1 text-[32px] font-semibold leading-none tracking-[-0.02em] text-n-900">{fmtV(latest.v)}</p>
+          <p className="mt-1.5 text-xs text-n-500">{sensorLabel}</p>
         </div>
         <span className="inline-flex flex-col items-end gap-1.5">
           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ${st.pill}`}>
@@ -157,7 +158,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
             {st.label}
           </span>
           {irNearNow && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#8a5a8f]/10 px-3 py-1 text-[11px] text-[#8a5a8f]">
+            <span className="inline-flex items-center gap-1.5 rounded-2xl bg-[#8a5a8f]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#8a5a8f]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#8a5a8f]" />
               Object at the sensor
             </span>
@@ -211,7 +212,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
               />
             )}
             <circle cx={last[0]} cy={last[1]} r="4" fill={CLAY} className="stroke-white" strokeWidth="1.5" />
-            <line x1="0" x2={W} y1={CH - 7} y2={CH - 7} className="stroke-ink/10" strokeWidth="1" />
+            <line x1="0" x2={W} y1={CH - 7} y2={CH - 7} className="stroke-n-200" strokeWidth="1" />
             {railEvents.map((e, i) => (
               <line
                 key={`${e.ts}-${e.sourceId}-${i}`}
@@ -246,11 +247,11 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
       </div>
 
       <ul className="mt-3 space-y-1.5">
-        {recent.length === 0 && <li className="text-xs text-ink/40">A quiet window — the sensor has not flagged anything.</li>}
+        {recent.length === 0 && <li className="text-xs text-n-400">A quiet window — the sensor has not flagged anything.</li>}
         {recent.map((e, i) => (
           <li key={`${e.ts}-${e.sourceId}-${i}`} className="flex items-baseline gap-3 text-xs">
-            <span className="flex-none tabular-nums text-ink/40">{fmtClock(e.ts)}</span>
-            <span className="inline-flex items-center gap-1.5 text-ink/70">
+            <span className="flex-none tabular-nums text-n-400">{fmtClock(e.ts)}</span>
+            <span className="inline-flex items-center gap-1.5 text-n-700">
               <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: EVENT_COLOR[e.kind] ?? GREY }} />
               {e.label}
             </span>
@@ -258,8 +259,8 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
         ))}
         {recentIr.map((e, i) => (
           <li key={`ir-${e.ts}-${i}`} className="flex items-baseline gap-3 text-xs">
-            <span className="flex-none tabular-nums text-ink/40">{fmtClock(e.ts)}</span>
-            <span className="inline-flex items-center gap-1.5 text-ink/70">
+            <span className="flex-none tabular-nums text-n-400">{fmtClock(e.ts)}</span>
+            <span className="inline-flex items-center gap-1.5 text-n-700">
               <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: IR_COLOR }} />
               {e.state === 'detected' ? 'Something is right at the sensor (IR beam)' : 'The IR beam cleared'}
             </span>
@@ -267,7 +268,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
         ))}
       </ul>
 
-      <p className="mt-3 text-[11px] leading-relaxed text-ink/40">
+      <p className="mt-3 text-[11px] leading-relaxed text-n-400">
         The sensor reads how its own Wi-Fi echoes move around the room — a waveform, never a recording. No
         camera, no microphone.
       </p>
@@ -277,9 +278,9 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-ink/10 bg-paper/60 px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-wide text-ink/35">{label}</p>
-      <p className="mt-1 font-heading text-[18px] leading-none text-ink">{value}</p>
+    <div className="rounded-lg border border-n-200 bg-n-50 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-n-400">{label}</p>
+      <p className="mt-1 text-lg font-semibold leading-none tracking-[-0.01em] text-n-900">{value}</p>
     </div>
   );
 }

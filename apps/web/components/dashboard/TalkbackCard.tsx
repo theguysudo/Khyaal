@@ -11,6 +11,7 @@
 
 import * as React from 'react';
 import { BentoCard, CardTitle } from './bento';
+import { BTN_PRIMARY, BTN_SECONDARY, FOCUS } from './kh';
 import { MicCapture, PcmPlayer, TALKBACK_MIME, micFailureMessage } from './talkback-audio';
 
 interface TalkbackSession {
@@ -27,12 +28,6 @@ interface TalkbackSession {
 }
 
 const POLL_MS = 1200;
-
-/** Focus ring shared with the rest of the dashboard's controls. Full literals so Tailwind sees every class. */
-const FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
-const FOCUS_ON_RED =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b23a2f]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fdf3f1]';
 
 export default function TalkbackCard({
   id,
@@ -282,7 +277,7 @@ export default function TalkbackCard({
     <BentoCard label="Talkback" className="col-span-12 lg:col-span-5">
       <CardTitle note="consent first · push to talk">Talk to her</CardTitle>
 
-      <p className="mt-2 text-xs leading-relaxed text-ink/50">
+      <p className="mt-2 text-xs leading-relaxed text-n-500">
         A walkie-talkie for the house. Her phone asks first — if she allows it, you can talk live. If she declines,
         nothing was recorded and nothing was heard.
       </p>
@@ -290,24 +285,18 @@ export default function TalkbackCard({
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {!isActive && !isPending && (
           <>
-            <button
-              onClick={() => request('to_parent')}
-              className={`kh-press kh-lift rounded-full bg-clay px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-claydeep ${FOCUS}`}
-            >
+            <button onClick={() => request('to_parent')} className={BTN_PRIMARY}>
               📞 Ask {parentName} to talk
             </button>
-            <button
-              onClick={() => request('to_family')}
-              className={`kh-press rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
-            >
+            <button onClick={() => request('to_family')} className={BTN_SECONDARY}>
               Call the family
             </button>
           </>
         )}
 
         {isPending && (
-          <span className="inline-flex items-center gap-2 rounded-full bg-paper px-4 py-2.5 text-sm text-ink/65">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-clay motion-reduce:animate-none" />
+          <span className="inline-flex items-center gap-2 rounded-lg border border-n-200 bg-n-50 px-4 py-2.5 text-sm text-n-600">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-brand-500 motion-reduce:animate-none" />
             Waiting for {session?.callee === 'parent' ? parentName : 'the family'} to allow it…
           </span>
         )}
@@ -321,24 +310,20 @@ export default function TalkbackCard({
               onTouchStart={startTalking}
               onTouchEnd={stopTalking}
               aria-label="Hold to talk"
-              className={`kh-press select-none rounded-full px-7 py-3 text-sm font-medium ${FOCUS} ${
+              className={`kh-press select-none rounded-lg px-6 py-2.5 text-sm font-semibold shadow-xs transition-colors ${FOCUS} ${
                 talking
-                  ? 'bg-[#b23a2f] text-white shadow-[0_8px_28px_rgba(178,58,47,.4)]'
-                  : 'bg-ink text-paper hover:bg-ink/85'
+                  ? 'bg-err-600 text-white shadow-[0_8px_24px_rgba(217,45,32,.35)]'
+                  : 'bg-n-900 text-white hover:bg-n-700'
               }`}
             >
               {talking ? '🎙 talking… release to stop' : '🎙 hold to talk'}
             </button>
-            <button
-              onClick={() => setMuted((m) => !m)}
-              aria-pressed={muted}
-              className={`kh-press rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
-            >
+            <button onClick={() => setMuted((m) => !m)} aria-pressed={muted} className={BTN_SECONDARY}>
               {muted ? '🔇 muted' : '🔊 microphone on'}
             </button>
             <button
               onClick={endCall}
-              className={`kh-press rounded-full border border-[#b23a2f]/40 px-4 py-2.5 text-sm text-[#77231c] transition-colors hover:bg-[#f6dcd8]/70 ${FOCUS_ON_RED}`}
+              className={`kh-press rounded-lg border border-err-300 bg-white px-4 py-2.5 text-sm font-semibold text-err-700 shadow-xs transition-colors hover:bg-err-50 ${FOCUS}`}
             >
               hang up
             </button>
@@ -347,11 +332,11 @@ export default function TalkbackCard({
       </div>
 
       {isActive && (
-        <div className="mt-3 flex items-center gap-4 text-[11px] text-ink/40">
+        <div className="mt-3 flex items-center gap-4 text-[11px] text-n-400">
           <span>sent {sent} slices</span>
           <span>heard {heard} slices</span>
           <span className="inline-flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${talking ? 'animate-pulse bg-[#b23a2f]' : 'bg-ink/20'}`} />
+            <span className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${talking ? 'animate-pulse bg-err-600' : 'bg-n-300'}`} />
             {talking ? 'your microphone is open' : 'your microphone is closed'}
           </span>
         </div>
@@ -359,11 +344,11 @@ export default function TalkbackCard({
 
       {note && (
         <div className="mt-3">
-          <p className="text-xs leading-relaxed text-ink/50">{note}</p>
+          <p className="text-xs leading-relaxed text-n-500">{note}</p>
           {micError && isActive && (
             <button
               onClick={startTalking}
-              className={`kh-press mt-2 rounded-full border border-ink/15 px-3 py-1.5 text-[11px] text-ink/60 transition-colors hover:border-ink/25 hover:bg-paper ${FOCUS}`}
+              className={`kh-press mt-2 rounded-lg border border-n-300 bg-white px-3 py-1.5 text-[11px] font-medium text-n-600 shadow-xs transition-colors hover:bg-n-50 ${FOCUS}`}
             >
               Try the microphone again
             </button>
@@ -373,33 +358,27 @@ export default function TalkbackCard({
 
       {/* the consent popup */}
       {showConsent && incoming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/35 px-5 backdrop-blur-[2px]">
-          <div className="w-full max-w-sm rounded-[26px] border border-ink/10 bg-paper p-6 text-center shadow-[0_24px_70px_rgba(42,36,29,.28)]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-clay/12 text-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-n-900/45 px-5 backdrop-blur-[2px]">
+          <div className="w-full max-w-sm rounded-xl border border-n-200 bg-white p-6 text-center shadow-unt-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-brand-50 text-2xl">
               📞
             </div>
-            <h3 className="mt-4 font-heading text-xl text-ink">
+            <h3 className="mt-4 text-xl font-semibold tracking-[-0.01em] text-n-900">
               {session?.requesterName ?? 'Someone'} wants to talk
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-ink/60">
+            <p className="mt-2 text-sm leading-relaxed text-n-600">
               You will hear {session?.requesterName ?? 'them'} live, like a walkie-talkie. Nothing is recorded, and you
               can hang up at any time.
             </p>
             <div className="mt-5 flex flex-col gap-2.5">
-              <button
-                onClick={() => answer(true)}
-                className={`kh-press kh-lift rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition-colors hover:bg-ink/85 ${FOCUS}`}
-              >
+              <button onClick={() => answer(true)} className={BTN_PRIMARY}>
                 Allow the talkback
               </button>
-              <button
-                onClick={() => answer(false)}
-                className={`kh-press rounded-full border border-ink/15 px-5 py-3 text-sm text-ink/60 transition-colors hover:border-ink/25 hover:bg-white ${FOCUS}`}
-              >
+              <button onClick={() => answer(false)} className={BTN_SECONDARY}>
                 Not now
               </button>
             </div>
-            <p className="mt-4 text-[11px] leading-relaxed text-ink/40">
+            <p className="mt-4 text-[11px] leading-relaxed text-n-400">
               Khayaal never records a conversation. The audio passes through and is gone.
             </p>
           </div>

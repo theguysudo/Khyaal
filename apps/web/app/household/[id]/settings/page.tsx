@@ -4,6 +4,9 @@
  * Settings: escalation timers, quiet hours, names, source management.
  * The demo time-warp lives in the demo console, not here — families never
  * see a clock they can bend.
+ *
+ * Same language as the dashboard: white cards with 1px Neutral/200 borders
+ * and shadow-xs on Neutral/50, Inter throughout, terracotta primary.
  */
 
 import Link from 'next/link';
@@ -11,6 +14,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { patchJSON, postJSON, useHouseholdState } from '@/lib/api';
 import '../../motion.css';
+import { BTN_PRIMARY, BTN_SECONDARY, FOCUS, INPUT } from '@/components/dashboard/kh';
 
 interface NewSource {
   id: string;
@@ -72,20 +76,31 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="kh-dash min-h-screen bg-paper px-4 py-10 sm:px-8">
+    <main className="kh-dash min-h-screen bg-n-50 px-4 py-10 sm:px-8">
       <div className="mx-auto max-w-2xl">
-        <header className="flex items-center justify-between">
-          <Link href={`/household/${id}`} className="text-sm text-ink/60 transition-opacity hover:opacity-70">
+        <header className="flex items-center justify-between border-b border-n-200 pb-4">
+          <Link
+            href={`/household/${id}`}
+            className="text-sm font-medium text-n-500 transition-colors hover:text-n-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/60 focus-visible:ring-offset-2 focus-visible:ring-offset-n-50"
+          >
             ← back to the dashboard
           </Link>
-          <span className="flex items-center gap-2">
-            <span className="font-heading text-lg tracking-tight text-ink">Khayaal</span>
-            <span className="text-clay">✳︎</span>
+          <span className="flex items-center gap-2.5">
+            <span className="text-[13px] font-medium text-n-500">
+              Khayaal <span className="mx-0.5 text-n-300">/</span>{' '}
+              <strong className="font-semibold text-n-900">Settings</strong>
+            </span>
+            <span
+              aria-hidden
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-brand-600 text-[15px] text-white shadow-xs"
+            >
+              ✳︎
+            </span>
           </span>
         </header>
 
-        <h1 className="mt-8 font-heading text-[clamp(26px,4vw,36px)] tracking-tight text-ink">Settings</h1>
-        <p className="mt-2 text-[15px] text-ink/60">
+        <h1 className="mt-8 text-3xl font-semibold tracking-[-0.02em] text-n-900">Settings</h1>
+        <p className="mt-2 text-[15px] leading-relaxed text-n-600">
           How quickly the ladder climbs, and when the night stays silent. She is never asked to change anything.
         </p>
 
@@ -93,29 +108,31 @@ export default function SettingsPage() {
         <Section title="Household">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-[13px] font-medium text-ink/80">Her name</span>
-              <input value={parentName} onChange={(e) => setParentName(e.target.value)} className="kh-input mt-1.5" />
+              <span className="text-[13px] font-medium text-n-700">Her name</span>
+              <input value={parentName} onChange={(e) => setParentName(e.target.value)} className={`${INPUT} mt-1.5 w-full`} />
             </label>
             <label className="block">
-              <span className="text-[13px] font-medium text-ink/80">Your name</span>
-              <input value={childName} onChange={(e) => setChildName(e.target.value)} className="kh-input mt-1.5" />
+              <span className="text-[13px] font-medium text-n-700">Your name</span>
+              <input value={childName} onChange={(e) => setChildName(e.target.value)} className={`${INPUT} mt-1.5 w-full`} />
             </label>
           </div>
-          <p className="mt-3 text-xs text-ink/45">Pairing code for her phone: <span className="font-mono text-clay">{bundle?.household.pairingCode}</span></p>
+          <p className="mt-3 text-xs text-n-500">
+            Pairing code for her phone: <span className="font-mono tracking-[0.14em] text-brand-700">{bundle?.household.pairingCode}</span>
+          </p>
         </Section>
 
         {/* quiet hours */}
         <Section title="Quiet hours" hint="Escalation holds at a gentle nudge during these hours, unless the score is severe (85+)">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-[13px] font-medium text-ink/80">Start</span>
-              <select value={quietStart} onChange={(e) => setQuietStart(+e.target.value)} className="kh-input mt-1.5">
+              <span className="text-[13px] font-medium text-n-700">Start</span>
+              <select value={quietStart} onChange={(e) => setQuietStart(+e.target.value)} className={`${INPUT} mt-1.5 w-full`}>
                 {Array.from({ length: 24 }, (_, i) => i).map((h) => <option key={h} value={h}>{h}:00</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="text-[13px] font-medium text-ink/80">End</span>
-              <select value={quietEnd} onChange={(e) => setQuietEnd(+e.target.value)} className="kh-input mt-1.5">
+              <span className="text-[13px] font-medium text-n-700">End</span>
+              <select value={quietEnd} onChange={(e) => setQuietEnd(+e.target.value)} className={`${INPUT} mt-1.5 w-full`}>
                 {Array.from({ length: 24 }, (_, i) => i).map((h) => <option key={h} value={h}>{h}:00</option>)}
               </select>
             </label>
@@ -131,11 +148,7 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        <button
-          onClick={save}
-          disabled={busy}
-          className="kh-press kh-lift w-full rounded-full bg-ink py-3 text-[15px] font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
+        <button onClick={save} disabled={busy} className={`${BTN_PRIMARY} w-full py-3 text-[15px]`}>
           {saved ? 'Saved ✓' : busy ? 'Saving…' : 'Save settings'}
         </button>
 
@@ -143,21 +156,21 @@ export default function SettingsPage() {
         <Section title="Sources" hint="The devices that speak to Khayaal. Keys are shown once, at creation.">
           <ul className="space-y-2">
             {(bundle?.sources ?? []).map((s) => (
-              <li key={s.id} className="flex items-center justify-between rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm">
+              <li key={s.id} className="flex items-center justify-between rounded-lg border border-n-200 bg-white px-4 py-3 text-sm shadow-xs">
                 <span className="flex items-center gap-2">
                   <span
                     className={`h-2 w-2 rounded-full ${s.lastSeenTs ? 'kh-dot-live' : ''}`}
-                    style={{ background: s.lastSeenTs ? '#4c7a4f' : '#c9b8a0' }}
+                    style={{ background: s.lastSeenTs ? '#039855' : '#D4D4D4' }}
                     aria-hidden
                   />
-                  {s.label}
-                  <span className="text-xs text-ink/40">({s.type})</span>
+                  <span className="font-medium text-n-800">{s.label}</span>
+                  <span className="text-xs text-n-400">({s.type})</span>
                 </span>
                 <button
                   onClick={async () => {
                     await fetch(`/api/v1/household/${id}/sources?sourceId=${s.id}`, { method: 'DELETE' });
                   }}
-                  className="kh-press text-xs text-ink/40 transition-colors hover:text-[#b23a2f]"
+                  className={`kh-press rounded-lg px-2 py-1 text-xs font-medium text-n-400 transition-colors hover:bg-err-50 hover:text-err-700 ${FOCUS}`}
                 >
                   remove
                 </button>
@@ -165,50 +178,35 @@ export default function SettingsPage() {
             ))}
           </ul>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button onClick={() => addSource('esp32')} className="kh-press rounded-full border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-white">
+            <button onClick={() => addSource('esp32')} className={BTN_SECONDARY}>
               + Register an ESP32 room sensor
             </button>
-            <button onClick={() => addSource('phone')} className="kh-press rounded-full border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-white">
+            <button onClick={() => addSource('phone')} className={BTN_SECONDARY}>
               + Add a simulator source
             </button>
           </div>
           {newSource && (
-            <div className="mt-4 rounded-xl border border-clay/30 bg-[#f7ecd7] p-4">
-              <p className="text-sm font-medium text-[#7a5416]">“{newSource.label}” is paired.</p>
-              <p className="mt-1 text-xs text-[#7a5416]/80">Source key (shown once — put it in the firmware config):</p>
-              <code className="mt-2 block break-all rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-[#5a3a10]">{newSource.apiKey}</code>
+            <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50 p-4">
+              <p className="text-sm font-medium text-brand-800">“{newSource.label}” is paired.</p>
+              <p className="mt-1 text-xs text-brand-800/80">Source key (shown once — put it in the firmware config):</p>
+              <code className="mt-2 block break-all rounded-lg border border-brand-100 bg-white px-3 py-2 font-mono text-xs text-brand-900">{newSource.apiKey}</code>
             </div>
           )}
         </Section>
 
-        <p className="mt-8 text-center text-xs leading-relaxed text-ink/40">
+        <p className="mt-8 text-center text-xs leading-relaxed text-n-400">
           Khayaal stores signals for seven days, scores them, and discards them. There is no archive to subpoena, because there is no archive.
         </p>
       </div>
-
-      <style jsx global>{`
-        .kh-input {
-          width: 100%;
-          border-radius: 14px;
-          border: 1px solid rgba(42, 36, 29, 0.15);
-          background: #faf6ef;
-          padding: 10px 14px;
-          font-size: 14px;
-          color: #2a241d;
-          outline: none;
-          transition: border-color 0.15s;
-        }
-        .kh-input:focus { border-color: #b95c38; }
-      `}</style>
     </main>
   );
 }
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="mt-8 rounded-3xl border border-ink/10 bg-white p-6 shadow-[0_2px_20px_rgba(42,36,29,0.04)]">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-ink/50">{title}</h2>
-      {hint && <p className="mt-1 text-xs leading-relaxed text-ink/45">{hint}</p>}
+    <section className="mt-6 rounded-xl border border-n-200 bg-white p-6 shadow-xs">
+      <h2 className="text-[13.5px] font-semibold tracking-[-0.01em] text-n-900">{title}</h2>
+      {hint && <p className="mt-1 text-xs leading-relaxed text-n-500">{hint}</p>}
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -217,15 +215,15 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 function NumberField({ label, value, onChange, suffix }: { label: string; value: number; onChange: (n: number) => void; suffix: string }) {
   return (
     <label className="block">
-      <span className="text-[13px] font-medium text-ink/80">{label}</span>
-      <span className="float-right text-xs text-ink/40">{suffix}</span>
+      <span className="text-[13px] font-medium text-n-700">{label}</span>
+      <span className="float-right text-xs text-n-400">{suffix}</span>
       <input
         type="number"
         min={1}
         max={240}
         value={value}
         onChange={(e) => onChange(Math.max(1, Math.min(240, +e.target.value || 1)))}
-        className="kh-input mt-1.5"
+        className={`${INPUT} mt-1.5 w-full`}
       />
     </label>
   );
