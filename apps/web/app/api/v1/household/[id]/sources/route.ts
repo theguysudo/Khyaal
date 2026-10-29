@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomId } from '@khayaal/engine';
+import type { Source } from '@khayaal/shared';
 import { requireFamily, requireSourceCreator, unauthorized } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { makePairingCode } from '@/lib/server/runtime';
@@ -33,11 +34,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (guard instanceof Response) return guard;
 
   const store = getStore();
-  const type = body.type === 'esp32' ? 'esp32' : body.type === 'phone' ? 'phone' : 'simulator';
+  // The wearable is a source like any other: it posts to the same ingest
+  // endpoint with its own key. The type decides what it may do afterwards —
+  // a band reports and reads, it never checks in or talks to the family.
+  const type: Source['type'] =
+    body.type === 'esp32'
+      ? 'esp32'
+      : body.type === 'phone'
+        ? 'phone'
+        : body.type === 'smartwatch'
+          ? 'smartwatch'
+          : 'simulator';
   const source = {
     id: `src_${randomId()}`,
-    type: type as 'esp32' | 'phone' | 'simulator',
-    label: typeof body.label === 'string' && body.label ? body.label : type === 'esp32' ? 'Room sensor (ESP32)' : 'Simulated source',
+    type,
+    label:
+      typeof body.label === 'string' && body.label
+        ? body.label
+        : type === 'esp32'
+          ? 'Room sensor (ESP32)'
+          : type === 'smartwatch'
+            ? 'Smartwatch (Fastrack band)'
+            : 'Simulated source',
     apiKey: `sk_${randomId()}${randomId()}`,
     createdAtTs: Date.now(),
     lastSeenTs: null,

@@ -19,6 +19,8 @@ import { BentoCard, CardTitle, CountUp, smooth, useSize } from '@/components/das
 import NightWatchCard from '@/components/dashboard/NightWatchCard';
 import TalkbackCard from '@/components/dashboard/TalkbackCard';
 import MovementCard from '@/components/dashboard/MovementCard';
+import SmartwatchPanel from '@/components/dashboard/SmartwatchPanel';
+import SosOverlay from '@/components/dashboard/SosOverlay';
 import BlueprintMap from '@/components/dashboard/BlueprintMap';
 import CsiScope from '@/components/dashboard/CsiScope';
 import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
@@ -233,6 +235,7 @@ export default function DashboardPage() {
             <MovementCard movement={bundle.movement} nowTs={bundle.simNowTs} />
             <BlueprintMap id={id} />
             <CsiScope id={id} />
+            <SmartwatchPanel householdId={id} />
             <AnalysisCard id={id} bundle={bundle} />
             <div id="kh-care-circle" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
               <CircleCard id={id} bundle={bundle} />
@@ -248,6 +251,12 @@ export default function DashboardPage() {
           </p>
         </div>
       </div>
+      <SosOverlay
+        householdId={id}
+        parentName={hh.parentName}
+        childName={hh.childName}
+        sos={state.sos}
+      />
     </main>
   );
 }
@@ -1068,12 +1077,13 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
     if (!relayAlive) {
       setConnectState('idle');
       // The relay cannot poll a household it has no credentials for — that
-      // happens after every server restart (sources live in memory). Give
-      // the family the one command that fixes it, code included.
+      // happens after every server restart (sources live in memory). The
+      // server starts the relay and hands it the identity itself, so this
+      // is a retry, not a manual repair job.
       setError(
         pairingCode
-          ? `The USB relay is not checking in. Run this once on this laptop (it registers the relay into this family), then press Connect again:`
-          : 'The USB relay is not checking in and no pairing code is on screen yet — open the Watchers card to get one, then run: python3 firmware/tunnel/khayaal_serial_bridge.py --pair-code <code>',
+          ? `The USB relay is not checking in yet. Press Connect again — this laptop starts the relay and hands it the identity automatically. If it still does not come up, run:`
+          : 'The USB relay is not checking in yet. Press Connect again — this laptop starts the relay and hands it the identity automatically.',
       );
       return;
     }
@@ -1226,7 +1236,7 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
       )}
       {error && <p className="mt-3 text-sm leading-relaxed text-[#b23a2f]">{error}</p>}
       {error && pairingCode && error.startsWith('The USB relay is not checking in') && (
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-ink/90 px-4 py-3 font-mono text-[12.5px] text-paper/90">{`pkill -f khayaal_serial_bridge; python3 firmware/tunnel/khayaal_serial_bridge.py --pair-code ${pairingCode}`}</pre>
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-ink/90 px-4 py-3 font-mono text-[12.5px] text-paper/90">{`python3 firmware/tunnel/khayaal_serial_bridge.py`}</pre>
       )}
       {wifiOpenFor && <WiFiPanel id={id} sourceId={wifiOpenFor} />}
       {serialBlock && (

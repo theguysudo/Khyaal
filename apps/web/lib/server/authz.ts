@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import type { Household, Source } from '@khayaal/shared';
-import { demoAccessFromRequest, sessionFromRequest, type SessionUser } from './session';
+import { demoAccessFromRequest, neighbourAccessFromRequest, sessionFromRequest, type SessionUser } from './session';
 import { getStore } from './store';
 
 /**
@@ -46,7 +46,9 @@ export type Scope =
   | 'snooze'
   | 'assistant'
   | 'push'
-  | 'talkback';
+  | 'talkback'
+  | 'sos'
+  | 'respond';
 
 const ALL_SCOPES: readonly Scope[] = [
   'read',
@@ -57,6 +59,8 @@ const ALL_SCOPES: readonly Scope[] = [
   'assistant',
   'push',
   'talkback',
+  'sos',
+  'respond',
 ];
 
 /**
@@ -75,6 +79,14 @@ const SOURCE_SCOPES: Record<Source['type'], readonly Scope[]> = {
   phone: ALL_SCOPES,
   simulator: ALL_SCOPES,
   esp32: ['read', 'ingest', 'control'],
+  // The wearable family: it reports what the band measured and nothing
+  // else. It may not file a check-in, silence the ladder, spend the
+  // operator's LLM budget, register a push token or talk to the family.
+  smartwatch: ['read', 'ingest'],
+  // A neighbour: sees the one-bit status, answers an SOS. Never the feed,
+  // never the assistant, never the elder's own privileges — a neighbour is
+  // the last rung of the ladder, not a member of the family.
+  neighbour: ['read', 'respond', 'push'],
 };
 
 /** The scopes a device of this type holds. */
@@ -123,6 +135,18 @@ export async function householdAccess(req: Request, householdId: string): Promis
   // pair {action:'demo'} counts as family access for exactly that household.
   if (demoAccessFromRequest(req, householdId)) {
     return { level: 'family', household, session: null, source: null };
+  }
+
+  // The neighbour console: a signed household+source-bound cookie. It
+  // presents as the neighbour's own device credential, so the scopes that
+  // matter are the neighbour's — the one-bit status and the SOS response —
+  // and nothing else. A deleted neighbour source revokes it on the spot.
+  const neighbour = neighbourAccessFromRequest(req, householdId);
+  if (neighbour) {
+    const src = await store.findSource(householdId, neighbour.sourceId);
+    if (src && src.type === 'neighbour') {
+      return { level: 'device', household, session: null, source: src };
+    }
   }
 
   return { level: 'none', household, session: null, source: null };

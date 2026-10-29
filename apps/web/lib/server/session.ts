@@ -102,3 +102,45 @@ export function demoAccessFromRequest(req: Request, householdId: string): boolea
 export function demoCookieHeader(householdId: string): string {
   return `kh_demo=${signDemoAccess(householdId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`;
 }
+
+// --- Neighbour access -------------------------------------------------------
+// A neighbour pairs with the household's code and gets a signed,
+// household+source-bound cookie — the same shape as the demo cookie, but it
+// also names the neighbour source, so authz can check the source still
+// exists (deleting the neighbour from the Sources card revokes the console
+// immediately). The neighbour sees the one-bit status and answers an SOS;
+// the cookie confers nothing else.
+
+export function signNeighbourAccess(householdId: string, sourceId: string): string {
+  const exp = Date.now() + 30 * 86_400_000;
+  const payload = Buffer.from(JSON.stringify({ hh: householdId, src: sourceId, exp })).toString('base64url');
+  const sig = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+export function neighbourAccessFromRequest(
+  req: Request,
+  householdId: string,
+): { sourceId: string } | null {
+  const token = req.headers.get('cookie')?.match(/(?:^|;\s*)kh_neighbour=([^;]+)/)?.[1];
+  if (!token) return null;
+  const [payload, sig] = token.split('.');
+  if (!payload || !sig) return null;
+  const expect = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expect);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (data.hh !== householdId || typeof data.src !== 'string' || typeof data.exp !== 'number' || data.exp < Date.now()) {
+      return null;
+    }
+    return { sourceId: data.src };
+  } catch {
+    return null;
+  }
+}
+
+export function neighbourCookieHeader(householdId: string, sourceId: string): string {
+  return `kh_neighbour=${signNeighbourAccess(householdId, sourceId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`;
+}

@@ -97,12 +97,17 @@ function configureWebPush(): boolean {
   return pushConfigured;
 }
 
-async function sendWebPush(hh: Household, title: string, body: string): Promise<void> {
+async function sendWebPush(
+  hh: Household,
+  title: string,
+  body: string,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
   if (!configureWebPush()) return;
   const subs = await getStore().getWebPushSubscribers(hh.id);
   for (const s of subs) {
     await webpush
-      .sendNotification(s as Parameters<typeof webpush.sendNotification>[0], JSON.stringify({ title, body, householdId: hh.id }))
+      .sendNotification(s as Parameters<typeof webpush.sendNotification>[0], JSON.stringify({ title, body, householdId: hh.id, ...extra }))
       .catch(() => {});
   }
 }
@@ -142,4 +147,60 @@ export async function dispatchTierAlert(hh: Household, reason: string): Promise<
   // message. (The email to the care circle goes through the same body.)
   const body = `${reason} Last-known signals are on the dashboard.`;
   await Promise.allSettled([sendFcm(hh, title, body), sendWebPush(hh, title, body), sendEmail(hh, title, body)]);
+}
+
+export interface SosAlarm {
+  origin: 'button' | 'auto';
+  sinceTs: number;
+  reason: string;
+}
+
+/**
+ * The SOS alarm dispatch — the loud one.
+ *
+ * The FCM message is a DATA message (not a notification): the Android apps
+ * wake on `type: "sos_alarm"` and ring their siren at full alarm volume even
+ * when the phone is on silent, with a full-screen intent. The elder's phone
+ * and every neighbour phone registered to this household get it. The web
+ * push carries the same flag for the dashboards. Email goes out too — a
+ * written record of the emergency costs nothing.
+ */
+export async function dispatchSosAlarm(hh: Household, alarm: SosAlarm): Promise<void> {
+  const title = `SOS — ${hh.parentName}`;
+  const body = alarm.origin === 'button'
+    ? `${alarm.reason} Someone must respond now.`
+    : `${alarm.reason} Someone must respond now.`;
+  const sa = serviceAccount();
+  if (sa) {
+    const token = await googleAccessToken(sa);
+    if (token) {
+      const tokens = await getStore().getDeviceTokens(hh.id);
+      await Promise.allSettled(
+        tokens.map((t) =>
+          fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: {
+                token: t,
+                // Data-only on purpose: the client decides to ring, and a
+                // data message wakes the app even in background/quiet mode.
+                data: {
+                  type: 'sos_alarm',
+                  householdId: hh.id,
+                  origin: alarm.origin,
+                  sinceTs: String(alarm.sinceTs),
+                },
+                android: { priority: 'HIGH' },
+              },
+            }),
+          }).catch(() => {}),
+        ),
+      );
+    }
+  }
+  await Promise.allSettled([
+    sendWebPush(hh, title, body, { sos: true, origin: alarm.origin, sinceTs: alarm.sinceTs }),
+    sendEmail(hh, title, body),
+  ]);
 }

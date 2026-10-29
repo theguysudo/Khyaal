@@ -29,6 +29,7 @@ export interface Bundle {
     snoozeUntilTs: number | null;
     ack: { by: string; ts: number } | null;
     learning: boolean;
+    sos: { active: boolean; origin: 'button' | 'auto' | null; sinceTs: number | null; ack: { by: string; ts: number } | null };
   };
   events: HouseholdEvent[];
   sources: { id: string; type: string; label: string; lastSeenTs: number | null }[];
@@ -182,6 +183,7 @@ export const TIER_META: Record<Tier, { label: string; color: string; soft: strin
   1: { label: 'Nudge sent', color: '#c98a2b', soft: '#f7ecd7', text: '#7a5416' },
   2: { label: 'Check-in asked', color: '#c4622f', soft: '#f8e3d5', text: '#7c3c17' },
   3: { label: 'Needs attention', color: '#b23a2f', soft: '#f6dcd8', text: '#77231c' },
+  4: { label: 'SOS — alarm ringing', color: '#8c1d13', soft: '#5c130a', text: '#fdf1ee' },
 };
 
 export const SIGNAL_LABELS: Record<string, string> = {

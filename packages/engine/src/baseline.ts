@@ -56,13 +56,35 @@ export function learnBaseline(prev: Baseline, signals: Signal[], nowTs: number):
   }
   const motions = [...motionByDay.values()];
 
+  // Nightly sleep from a wearable -> her usual night. The band reports one
+  // sleep_duration per night; several records on the same night are summed
+  // (a band that wakes in two pieces reports two).
+  const sleepByDay = new Map<number, number>();
+  for (const s of recent) {
+    if (s.type !== 'sleep_duration') continue;
+    const minutes = Number(s.value);
+    if (!Number.isFinite(minutes) || minutes <= 0) continue;
+    const day = startOfDay(s.ts);
+    sleepByDay.set(day, (sleepByDay.get(day) ?? 0) + minutes);
+  }
+  const nights = [...sleepByDay.values()];
+
   const daysSeen = Math.max(firstUnlockByDay.size, motionByDay.size);
-  if (daysSeen === 0) return { ...prev, updatedAt: nowTs };
+  if (daysSeen === 0 && nights.length === 0) return { ...prev, updatedAt: nowTs };
 
   const next: Baseline = { ...prev, updatedAt: nowTs };
   if (wakes.length >= 2) next.wakeHour = clamp(median(wakes), 4, 12);
   if (charges.length >= 2) next.chargingStartHour = clamp(median(charges), 18, 26) % 24;
   if (motions.length >= 2) next.dailyMotionCount = Math.max(4, median(motions));
+  if (nights.length >= 2) {
+    next.sleepMinutes = clamp(median(nights), 60, 16 * 60);
+    next.sleepNights = Math.min(14, nights.length);
+  } else {
+    // No band (or no nights) in this window: drop the stale figure rather
+    // than carry an old one forward as if it were still true.
+    delete next.sleepMinutes;
+    delete next.sleepNights;
+  }
   next.sampleDays = Math.min(14, prev.sampleDays + daysSeen);
   return next;
 }

@@ -12,6 +12,10 @@ import {
   makeSources,
   presenceLost,
   seededBaseline,
+  watchActivity,
+  watchPulse,
+  watchSleep,
+  watchSteps,
   BASE,
   HOUR,
   MIN,
@@ -21,11 +25,22 @@ const hh = () => makeHousehold();
 const srcWithEsp = () => makeSources({ esp32: true });
 const srcNoEsp = () => makeSources({ esp32: false });
 
-function risk(signals: Signal[], nowTs: number, opts: { esp32?: boolean; baseline?: ReturnType<typeof seededBaseline> } = {}) {
+function risk(
+  signals: Signal[],
+  nowTs: number,
+  opts: {
+    esp32?: boolean;
+    smartwatch?: boolean;
+    baseline?: ReturnType<typeof seededBaseline>;
+  } = {},
+) {
   return computeRisk({
     signals,
     baseline: opts.baseline ?? seededBaseline(),
-    sources: opts.esp32 === false ? srcNoEsp() : srcWithEsp(),
+    sources: makeSources({
+      esp32: opts.esp32 !== false,
+      smartwatch: opts.smartwatch === true,
+    }),
     household: hh(),
     nowTs,
   });
@@ -353,11 +368,19 @@ describe('escalation', () => {
       signals: emergencySignals(),
       nowTs: now,
     });
-    expect(out.state.tier).toBe(3);
+    // A full hour unanswered in tier 3 is past the alert window: the system
+    // raises the SOS itself (origin 'auto') and the phones ring.
+    expect(out.state.tier).toBe(4);
+    expect(out.state.sos.active).toBe(true);
+    expect(out.state.sos.origin).toBe('auto');
+    expect(out.events.some((e) => e.type === 'sos' && e.to === 4)).toBe(true);
 
     const good = risk([...dayOfSignals(-3), ...dayOfSignals(-2), ...dayOfSignals(-1), ...dayOfSignals(0, { motionUntilHour: 11.3 })], now);
     out = advanceState({ state: out.state, risk: good, household: hh(), signals: [], nowTs: now + MIN });
+    // An automatic SOS stands down when the signals genuinely recover — she
+    // is moving again. A button press would never release itself this way.
     expect(out.state.tier).toBe(0);
+    expect(out.state.sos.active).toBe(false);
   });
 });
 
@@ -384,11 +407,12 @@ describe('fall detection', () => {
     expect(r.contributions.some((c) => c.signal === 'presence' && c.effect === 100)).toBe(true);
   });
 
-  it('a fall bypasses the escalation ladder, quiet hours and low confidence', () => {
+  it('a fall bypasses the escalation ladder, quiet hours and low confidence — straight to SOS', () => {
     const { signals, now } = withFall(2 * MIN);
     const r = risk(signals, now);
     // tier 0, escalated 1 minute ago, in quiet hours, thin confidence —
-    // the fall still goes straight to tier 3.
+    // the fall still goes straight to the SOS alarm, because the moment the
+    // sensor sees an impact is exactly the moment the phones must ring.
     const out = advanceState({
       state: { ...emptyState(now), tierSinceTs: now - MIN, snoozeUntilTs: now + 30 * MIN },
       risk: r,
@@ -396,9 +420,71 @@ describe('fall detection', () => {
       signals,
       nowTs: now,
     });
-    expect(out.state.tier).toBe(3);
-    const ev = out.events.find((e) => e.type === 'tier_change' && e.to === 3);
+    expect(out.state.tier).toBe(4);
+    expect(out.state.sos.active).toBe(true);
+    expect(out.state.sos.origin).toBe('auto');
+    const ev = out.events.find((e) => e.type === 'sos' && e.to === 4);
     expect(ev?.meta).toContain('fall');
+  });
+
+  it('a manual SOS outranks everything and only a resolve ends it', () => {
+    const now = dayAt(0, 11.5);
+    const pressed: Signal[] = [
+      ...dayOfSignals(-1),
+      { sourceId: 'phone', type: 'sos', value: 'pressed', ts: now - MIN, meta: { origin: 'button' } },
+    ];
+    // Quiet hours, snoozed, thin confidence — none of it may silence the button.
+    const out = advanceState({
+      state: emptyState(now),
+      risk: { score: 10, tier: 0, contributions: [], confidence: 0.4, learning: false, notes: [] },
+      household: hh(),
+      signals: pressed,
+      nowTs: now,
+    });
+    expect(out.state.tier).toBe(4);
+    expect(out.state.sos.active).toBe(true);
+    expect(out.state.sos.origin).toBe('button');
+
+    // An ordinary unlock does NOT stand it down (pocket presses must not
+    // silence an emergency)…
+    const unlocked = advanceState({
+      state: out.state,
+      risk: { score: 10, tier: 0, contributions: [], confidence: 0.4, learning: false, notes: [] },
+      household: hh(),
+      signals: [...pressed, { sourceId: 'phone', type: 'screen_event', value: 'unlock', ts: now + MIN }],
+      nowTs: now + 2 * MIN,
+    });
+    expect(unlocked.state.tier).toBe(4);
+
+    // …but an explicit resolve does.
+    const resolved = advanceState({
+      state: out.state,
+      risk: { score: 10, tier: 0, contributions: [], confidence: 0.4, learning: false, notes: [] },
+      household: hh(),
+      signals: [...pressed, { sourceId: 'family', type: 'sos', value: 'resolved', ts: now + MIN, meta: { by: 'Aditya' } }],
+      nowTs: now + 2 * MIN,
+    });
+    expect(resolved.state.tier).toBe(0);
+    expect(resolved.state.sos.active).toBe(false);
+  });
+
+  it('a neighbour responding is recorded without silencing the alarm', () => {
+    const now = dayAt(0, 11.5);
+    const signals: Signal[] = [
+      ...dayOfSignals(-1),
+      { sourceId: 'phone', type: 'sos', value: 'pressed', ts: now - 2 * MIN, meta: { origin: 'button' } },
+      { sourceId: 'neighbour', type: 'sos', value: 'responded', ts: now - MIN, meta: { by: 'Meera next door', etaMin: 4 } },
+    ];
+    const out = advanceState({
+      state: emptyState(now),
+      risk: { score: 20, tier: 0, contributions: [], confidence: 0.5, learning: false, notes: [] },
+      household: hh(),
+      signals,
+      nowTs: now,
+    });
+    expect(out.state.tier).toBe(4);
+    expect(out.state.sos.active).toBe(true);
+    expect(out.state.sos.ack?.by).toBe('Meera next door');
   });
 
   it('an hour-old fall with no movement after it stays elevated but not saturated', () => {
@@ -517,5 +603,169 @@ describe('falls are never softened', () => {
     const r = risk(signals, now);
     expect(r.contributions.some((c) => c.signal === 'presence' && c.effect === 100)).toBe(true);
     expect(r.score).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The smartwatch (a Fastrack band, synced through the phone)
+// ---------------------------------------------------------------------------
+
+describe('smartwatch', () => {
+  /** A phone that has gone quiet since the morning, with the band along. */
+  const quietPhone = (): Signal[] => [
+    ...dayOfSignals(-2),
+    ...dayOfSignals(-1),
+    ...dayOfSignals(0, { motionUntilHour: 8.5, signalsEndHour: 9 }),
+  ];
+
+  it('the band saying she moved softens the phone\'s movement absence', () => {
+    const now = dayAt(0, 15);
+    const phone = quietPhone();
+
+    const withoutBand = risk(phone, now);
+    const movementWithout = withoutBand.contributions.find((c) => c.signal === 'motion');
+    expect(movementWithout).toBeDefined();
+
+    const withBand = risk(
+      [...phone, watchActivity(now - 30 * MIN, 25)],
+      now,
+      { smartwatch: true },
+    );
+    const movementWith = withBand.contributions.find((c) => c.signal === 'motion');
+    expect(movementWith).toBeDefined();
+    // Softened, never hidden.
+    expect(movementWith!.effect).toBeLessThan(movementWithout!.effect);
+    expect(movementWith!.effect).toBeGreaterThan(0);
+    const explanation = withBand.contributions.find(
+      (c) => c.signal === 'activity' && c.weight === 0,
+    );
+    expect(explanation).toBeDefined();
+    expect(explanation!.reason).toContain('active minutes');
+  });
+
+  it('band steps far above the phone\'s explain the quiet phone', () => {
+    const now = dayAt(0, 15);
+    const signals: Signal[] = [
+      ...quietPhone(),
+      { sourceId: 'src_phone', type: 'steps', value: 0, ts: dayAt(0, 10) },
+      watchSteps(0, 6000, 14),
+    ];
+    const r = risk(signals, now, { smartwatch: true });
+    const explanation = r.contributions.find((c) => c.signal === 'steps' && c.weight === 0);
+    expect(explanation).toBeDefined();
+    expect(explanation!.reason).toContain('probably not on her');
+
+    // The explanation is an absence-softener, not a new risk.
+    const withoutBand = risk(signals, now, { smartwatch: false });
+    const movement = r.contributions.find((c) => c.signal === 'motion');
+    const movementWithout = withoutBand.contributions.find((c) => c.signal === 'motion');
+    expect(movement).toBeDefined();
+    expect(movementWithout).toBeDefined();
+    expect(movement!.effect).toBeLessThan(movementWithout!.effect);
+  });
+
+  it('band and phone agreeing on steps adds confidence, and a little score', () => {
+    const now = dayAt(0, 15);
+    const signals: Signal[] = [
+      ...quietPhone(),
+      { sourceId: 'src_phone', type: 'steps', value: 500, ts: dayAt(0, 10) },
+      watchSteps(0, 520, 14),
+    ];
+    const agreed = risk(signals, now, { smartwatch: true, esp32: false });
+    const alone = risk(signals, now, { smartwatch: false, esp32: false });
+    expect(agreed.confidence).toBeGreaterThan(alone.confidence);
+    // Two devices agreeing that she has hardly moved is worth a couple of
+    // points — never a score of its own.
+    expect(agreed.score! - alone.score!).toBeLessThanOrEqual(2);
+    const corroboration = agreed.contributions.find((c) => c.signal === 'steps' && c.effect > 0);
+    expect(corroboration).toBeDefined();
+    expect(corroboration!.reason).toContain('agree on how little');
+  });
+
+  it('a pulse never raises the score on its own', () => {
+    const now = dayAt(0, 15);
+    const phone = quietPhone();
+    const withPulse = risk([...phone, watchPulse(now - 5 * MIN, 72)], now, {
+      smartwatch: true,
+    });
+    const without = risk(phone, now);
+    expect(withPulse.score!).toBeLessThanOrEqual(without.score!);
+  });
+
+  it('two independent absences line up: the band agrees she has not moved', () => {
+    const now = dayAt(0, 15);
+    const signals: Signal[] = [...quietPhone(), watchActivity(now - 60 * MIN, 0)];
+    const r = risk(signals, now, { smartwatch: true });
+    const agreement = r.contributions.find((c) => c.signal === 'activity' && c.effect > 0);
+    expect(agreement).toBeDefined();
+    expect(agreement!.reason).toContain('band agrees');
+  });
+
+  it('a short night against the learned baseline contributes a little', () => {
+    const now = dayAt(0, 15);
+    const baseline = { ...seededBaseline(), sleepMinutes: 420, sleepNights: 5 };
+    const short = risk([...quietPhone(), watchSleep(0, 200)], now, {
+      smartwatch: true,
+      baseline,
+    });
+    const sleep = short.contributions.find((c) => c.signal === 'sleep_duration');
+    expect(sleep).toBeDefined();
+    expect(sleep!.effect).toBeGreaterThan(0);
+    expect(sleep!.effect).toBeLessThanOrEqual(8);
+    expect(sleep!.reason).toContain('well under her usual');
+
+    // An ordinary night is not a signal at all.
+    const ordinary = risk([...quietPhone(), watchSleep(0, 400)], now, {
+      smartwatch: true,
+      baseline,
+    });
+    expect(ordinary.contributions.find((c) => c.signal === 'sleep_duration')).toBeUndefined();
+  });
+
+  it('the baseline learns her usual night from the band', () => {
+    const nights = [watchSleep(-3, 300), watchSleep(-2, 420), watchSleep(-1, 400)];
+    const b = learnBaseline({ ...DEFAULT_BASELINE }, nights, dayAt(0, 12));
+    expect(b.sleepMinutes).toBeCloseTo(400, 0);
+    expect(b.sleepNights).toBe(3);
+  });
+
+  it('a band that never reports lowers confidence, never the score', () => {
+    const now = dayAt(0, 15);
+    const signals = quietPhone();
+    const withBand = risk(signals, now, { smartwatch: true });
+    const withoutBand = risk(signals, now, { smartwatch: false });
+    expect(withBand.confidence).toBeLessThan(withoutBand.confidence);
+    expect(withBand.score!).toBe(withoutBand.score!);
+    expect(withBand.notes.join(' ')).toContain('band has not reported');
+  });
+
+  it('the band never softens a fall', () => {
+    const now = dayAt(0, 11.5);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      ...dayOfSignals(0, { motionUntilHour: 11.3 }),
+      { sourceId: 'esp32', type: 'presence', value: 'fall', ts: now - 2 * MIN },
+      watchActivity(now - 3 * MIN, 40),
+      watchPulse(now - 2 * MIN, 120),
+    ];
+    const r = risk(signals, now, { smartwatch: true });
+    expect(r.contributions.some((c) => c.signal === 'presence' && c.effect === 100)).toBe(true);
+    expect(r.score).toBe(100);
+  });
+
+  it('the band never softens a loud sound', () => {
+    const now = dayAt(0, 11.5);
+    const signals: Signal[] = [
+      ...dayOfSignals(-2),
+      ...dayOfSignals(-1),
+      ...dayOfSignals(0, { motionUntilHour: 11.3 }),
+      { sourceId: 'src_phone', type: 'sound_event', value: 'loud', ts: now - 2 * MIN },
+      watchPulse(now - MIN, 90),
+    ];
+    const r = risk(signals, now, { smartwatch: true });
+    const loud = r.contributions.find((c) => c.signal === 'sound_event');
+    expect(loud).toBeDefined();
+    expect(loud!.effect).toBe(15);
   });
 });

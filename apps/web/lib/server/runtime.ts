@@ -8,6 +8,7 @@ import type {
   HouseholdEvent,
   HouseholdState,
   Signal,
+  SmartwatchSummary,
   Source,
 } from '@khayaal/shared';
 import {
@@ -19,7 +20,7 @@ import {
   MIN,
   randomId,
 } from '@khayaal/engine';
-import { dispatchTierAlert } from './notify';
+import { dispatchTierAlert, dispatchSosAlarm } from './notify';
 import { getStore } from './store';
 
 export const SIGNAL_WINDOW_MS = 7 * 24 * HOUR;
@@ -47,6 +48,8 @@ export interface TickBundle {
    * sends only the numbers — the family never sees a coordinate or a trail.
    */
   movement: MovementSummary;
+  /** The wearable's latest reading — aggregates, never a live feed. */
+  smartwatch: SmartwatchSummary;
 }
 
 export interface MovementSummary {
@@ -78,6 +81,7 @@ function emptyState(nowTs: number): HouseholdState {
     snoozeUntilTs: null,
     ack: null,
     learning: true,
+    sos: { active: false, origin: null, sinceTs: null, ack: null },
   };
 }
 
@@ -115,6 +119,17 @@ export async function tickHousehold(householdId: string): Promise<TickBundle | n
     );
   }
 
+  // SOS is louder than every tier: the alarm dispatch carries the sos flag so
+  // the phones ring at full volume and the dashboards paint the takeover.
+  const sosRaised = events.find((e) => e.type === 'sos' && e.to === 4);
+  if (sosRaised) {
+    void dispatchSosAlarm(household, {
+      origin: state.sos.origin ?? 'auto',
+      sinceTs: state.sos.sinceTs ?? nowTs,
+      reason: sosRaised.meta ?? 'SOS raised.',
+    }).catch(() => undefined);
+  }
+
   const recentEvents = await store.getEvents(householdId, nowTs - 24 * HOUR, 60);
 
   // Privacy-safe aggregates for the dashboard: per-hour signal counts today,
@@ -142,24 +157,89 @@ export async function tickHousehold(householdId: string): Promise<TickBundle | n
     commands,
     hourlyActivity,
     sleepSound,
-    movement: movementSummary(signals, nowTs),
+    movement: movementSummary(signals, nowTs, watchIds(sources)),
+    smartwatch: smartwatchSummary(sources, signals, nowTs),
+  };
+}
+
+/** The ids of every wearable in this household — the band is a source too. */
+export function watchIds(sources: Source[]): Set<string> {
+  return new Set(sources.filter((s) => s.type === 'smartwatch').map((s) => s.id));
+}
+
+/**
+ * The band's latest reading, as the family sees it: a few numbers and a
+ * last-active time. Never a feed, never a heart-rate trace, never anything
+ * the wearable did not measure itself.
+ */
+export function smartwatchSummary(
+  sources: Source[],
+  signals: Signal[],
+  nowTs: number,
+): SmartwatchSummary {
+  const watch = sources.find((s) => s.type === 'smartwatch');
+  if (!watch) {
+    return {
+      paired: false,
+      sourceId: null,
+      label: null,
+      stepsToday: null,
+      heartRateBpm: null,
+      heartRateTs: null,
+      sleepMinutesLastNight: null,
+      sleepTs: null,
+      activeMinutesToday: null,
+      activityTs: null,
+      lastSeenTs: null,
+    };
+  }
+
+  const mine = signals
+    .filter((s) => s.sourceId === watch.id)
+    .sort((a, b) => a.ts - b.ts);
+  const today = mine.filter((s) => s.ts >= dayStartOf(nowTs) && s.ts <= nowTs);
+  const steps = today.filter((s) => s.type === 'steps');
+  const pulse = [...mine].reverse().find((s) => s.type === 'heart_rate');
+  const sleep = [...mine].reverse().find((s) => s.type === 'sleep_duration');
+  const activity = today.filter((s) => s.type === 'activity');
+
+  return {
+    paired: true,
+    sourceId: watch.id,
+    label: watch.label,
+    stepsToday: steps.length ? Number(steps[steps.length - 1].value) : null,
+    heartRateBpm: pulse ? Number(pulse.value) : null,
+    heartRateTs: pulse?.ts ?? null,
+    sleepMinutesLastNight: sleep ? Number(sleep.value) : null,
+    sleepTs: sleep?.ts ?? null,
+    // Null means "the band has not said anything about activity today";
+    // zero means it said: no active minutes. Those are different facts.
+    activeMinutesToday: activity.length
+      ? activity.reduce((sum, a) => sum + Number(a.value), 0)
+      : null,
+    activityTs: activity.length ? activity[activity.length - 1].ts : null,
+    lastSeenTs: watch.lastSeenTs,
   };
 }
 
 /**
  * The movement card's whole world: a zone, some numbers and a time. No
  * coordinates ever reach the server, so there is nothing here to leak.
+ *
+ * The step count belongs to the phone when the phone has one — the band has
+ * its own panel, and two step counters must not fight over the same card.
  */
-function movementSummary(signals: Signal[], nowTs: number): MovementSummary {
+function movementSummary(signals: Signal[], nowTs: number, watch: Set<string>): MovementSummary {
   const gps = signals.filter((s) => s.type === 'gps_motion').sort((a, b) => a.ts - b.ts);
   const lastGps = gps[gps.length - 1] ?? null;
   const zones = signals.filter((s) => s.type === 'location_zone').sort((a, b) => a.ts - b.ts);
   const lastZone = zones[zones.length - 1] ?? null;
 
-  const steps = signals
+  const allSteps = signals
     .filter((s) => s.type === 'steps' && s.ts >= nowTs - 24 * HOUR)
     .sort((a, b) => a.ts - b.ts);
-  const lastSteps = steps[steps.length - 1] ?? null;
+  const phoneSteps = allSteps.filter((s) => !watch.has(s.sourceId));
+  const lastSteps = (phoneSteps.length ? phoneSteps : allSteps).slice(-1)[0] ?? null;
 
   return {
     zone: lastZone ? (lastZone.value === 'away' ? 'away' : 'home') : null,

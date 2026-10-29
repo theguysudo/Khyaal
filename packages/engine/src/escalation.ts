@@ -1,4 +1,5 @@
 import type {
+  Ack,
   Household,
   HouseholdEvent,
   HouseholdState,
@@ -35,13 +36,25 @@ function dwellForNextTier(tier: Tier, hh: Household): number {
   if (tier === 0) return hh.escalationConfig.nudgeAfterMin;
   if (tier === 1) return hh.escalationConfig.checkInAfterMin;
   if (tier === 2) return hh.escalationConfig.alertAfterMin;
+  if (tier === 3) return hh.escalationConfig.alertAfterMin; // dwelling here too long raises SOS
   return Infinity;
+}
+
+/** The idle SOS state — inactive, no origin, nobody responding. */
+export function emptySos() {
+  return { active: false, origin: null, sinceTs: null, ack: null };
 }
 
 export function statusFor(state: HouseholdState, hh: Household, nowTs: number): string {
   const name = hh.parentName;
   if (state.learning) return `Learning ${name}'s rhythm…`;
   if (state.snoozeUntilTs && state.snoozeUntilTs > nowTs) return `Snoozed until ${fmtClock(state.snoozeUntilTs)}`;
+  if (state.sos.active) {
+    const responder = state.sos.ack ? ` — ${state.sos.ack.by} is responding` : '';
+    return state.sos.origin === 'button'
+      ? `SOS — ${name} pressed the emergency button${responder}`
+      : `SOS — no answer to the alert ladder${responder}`;
+  }
   if (state.ack && state.tier === 3) return `${name} needs attention — ${state.ack.by} has checked in`;
   switch (state.tier) {
     case 0:
@@ -52,6 +65,8 @@ export function statusFor(state: HouseholdState, hh: Household, nowTs: number): 
       return `Waiting for ${name}'s check-in`;
     case 3:
       return `${name} needs attention`;
+    case 4:
+      return `SOS`;
   }
 }
 
@@ -91,15 +106,64 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
   let tierSinceTs = prev.tierSinceTs;
   let snoozeUntilTs = prev.snoozeUntilTs;
 
+  // --- SOS derivation ------------------------------------------------------
+  // Recomputed from signals on every tick, like everything else here: the
+  // last 'pressed' wins over the last 'resolved', so the state is identical
+  // no matter how many times it is recomputed. A responder ('responded') is
+  // whoever spoke after the button did.
+  let sosPressedTs: number | null = null;
+  let sosPressedOrigin: 'button' | 'auto' | null = null;
+  let sosResolvedTs: number | null = null;
+  let sosResponded: Ack | null = null;
+  for (const s of signals) {
+    if (s.ts > nowTs || s.type !== 'sos') continue;
+    if (s.value === 'pressed') {
+      if (sosPressedTs === null || s.ts >= sosPressedTs) {
+        sosPressedTs = s.ts;
+        sosPressedOrigin = s.meta?.origin === 'auto' ? 'auto' : 'button';
+      }
+    } else if (s.value === 'resolved') {
+      sosResolvedTs = Math.max(sosResolvedTs ?? 0, s.ts);
+    } else if (s.value === 'responded') {
+      if (!sosResponded || s.ts >= sosResponded.ts) {
+        sosResponded = { by: String(s.meta?.by ?? 'Someone'), ts: s.ts };
+      }
+    }
+  }
+  const manualSosActive = sosPressedTs !== null && (sosResolvedTs === null || sosResolvedTs < sosPressedTs);
+  // A resolve that lands after the press (or with no press at all — the auto
+  // SOS was raised by the ladder, so the family stands it down by hand).
+  const sosResolveArrived = sosResolvedTs !== null && (sosPressedTs === null || sosResolvedTs >= sosPressedTs);
+  const respondedForThisSos = sosResponded && sosPressedTs !== null && sosResponded.ts >= sosPressedTs;
+
   const clearSnoozeIfStale = () => {
     if (snoozeUntilTs !== null && snoozeUntilTs <= nowTs) snoozeUntilTs = null;
   };
   clearSnoozeIfStale();
 
   // --- Parent was seen interacting recently: everything stands down ------
+  // While a manual SOS is live, ordinary phone use does NOT stand it down —
+  // the button was pressed on purpose, and pocket unlocks must not silence
+  // an emergency. Only her explicit check-in (or a resolve, below) does.
+  const lastCheckinTs = (() => {
+    let t = 0;
+    for (const s of signals) if (s.type === 'manual_checkin' && s.ts <= nowTs) t = Math.max(t, s.ts);
+    return t;
+  })();
   const parentJustActive = nowTs - lastInteractionTs < RESET_WINDOW && lastInteractionTs > 0;
-  if (parentJustActive && tier !== 0) {
-    pushEvent({ ts: nowTs, type: 'note', from: tier, to: 0, meta: `${hh.parentName} used the phone — standing down.` });
+  const parentCheckedIn = nowTs - lastCheckinTs < RESET_WINDOW && lastCheckinTs > 0;
+  const standDownOnActivity =
+    (manualSosActive ? parentCheckedIn : parentJustActive);
+  if (standDownOnActivity && tier !== 0) {
+    pushEvent({
+      ts: nowTs,
+      type: 'note',
+      from: tier,
+      to: 0,
+      meta: manualSosActive
+        ? `${hh.parentName} checked in — SOS standing down.`
+        : `${hh.parentName} used the phone — standing down.`,
+    });
     tier = 0;
     tierSinceTs = nowTs;
   }
@@ -108,52 +172,104 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
     const quiet = isQuietHours(hh.quietHours, nowTs);
     const snoozed = snoozeUntilTs !== null && snoozeUntilTs > nowTs;
 
-    // Hard caps: quiet hours hold the family back unless it is clearly severe;
-    // low confidence (thin data) never reaches the child.
-    let cap: Tier = 3;
-    if (quiet && risk.score < 85) cap = 1;
-    if (snoozed) cap = 0;
-    if (risk.confidence < 0.55) cap = Math.min(cap, 1) as Tier;
-
-    const target = Math.min(risk.tier, cap) as Tier;
-
-    if (target < tier) {
-      pushEvent({ ts: nowTs, type: 'tier_change', from: tier, to: target, meta: 'Signals settled.' });
-      tier = target;
+    // A live manual SOS outranks everything below it: no score can pull it
+    // down, no quiet hour can cap it. Only a resolve (or her check-in, or a
+    // resolve signal) ends it.
+    if (manualSosActive && tier < 4) {
+      pushEvent({
+        ts: nowTs,
+        type: 'sos',
+        from: tier,
+        to: 4,
+        meta: `${hh.parentName} pressed the SOS button — alarm raised.`,
+      });
+      tier = 4;
       tierSinceTs = nowTs;
-    } else if (target > tier) {
-      // Escalate one step at a time, only after the dwell timer for the
-      // current tier has elapsed. Sequential by design — the ladder is the
-      // trust mechanism.
-      const dwell = dwellForNextTier(tier, hh) * MIN;
-      if (nowTs - tierSinceTs >= dwell) {
-        const nextTier = Math.min(tier + 1, target) as Tier;
-        const label =
-          nextTier === 1 ? 'Soft nudge sent to her phone.' :
-          nextTier === 2 ? 'Check-in prompt shown.' :
-          'Family alerted with last-known signals.';
-        pushEvent({ ts: nowTs, type: 'tier_change', from: tier, to: nextTier, meta: label });
-        tier = nextTier;
+    } else if (tier === 4) {
+      // Stood down — by an explicit resolve (button or auto path), by the
+      // button's own resolve, or — auto SOS only — by genuine recovery: the
+      // score falling back to all-well means she is moving again. A button
+      // press is a human's word; only a human (or her check-in) ends it.
+      const autoSos = prev.sos.origin !== 'button';
+      const riskSettled = risk.tier === 0;
+      if (prev.sos.origin === 'button' && !manualSosActive) {
+        pushEvent({ ts: nowTs, type: 'sos', from: 4, to: 0, meta: 'SOS stood down.' });
+        tier = 0;
+        tierSinceTs = nowTs;
+      } else if (sosResolveArrived) {
+        pushEvent({ ts: nowTs, type: 'sos', from: 4, to: 0, meta: 'SOS stood down.' });
+        tier = 0;
+        tierSinceTs = nowTs;
+      } else if (autoSos && riskSettled) {
+        pushEvent({ ts: nowTs, type: 'sos', from: 4, to: 0, meta: 'Signals settled — automatic SOS stood down.' });
+        tier = 0;
+        tierSinceTs = nowTs;
+      }
+    } else {
+      // Hard caps: quiet hours hold the family back unless it is clearly severe;
+      // low confidence (thin data) never reaches the child.
+      let cap: Tier = 3;
+      if (quiet && risk.score < 85) cap = 1;
+      if (snoozed) cap = 0;
+      if (risk.confidence < 0.55) cap = Math.min(cap, 1) as Tier;
+
+      const target = Math.min(risk.tier, cap) as Tier;
+
+      if (target < tier) {
+        pushEvent({ ts: nowTs, type: 'tier_change', from: tier, to: target, meta: 'Signals settled.' });
+        tier = target;
+        tierSinceTs = nowTs;
+      } else if (target > tier) {
+        // Escalate one step at a time, only after the dwell timer for the
+        // current tier has elapsed. Sequential by design — the ladder is the
+        // trust mechanism.
+        const dwell = dwellForNextTier(tier, hh) * MIN;
+        if (nowTs - tierSinceTs >= dwell) {
+          const nextTier = Math.min(tier + 1, target) as Tier;
+          const label =
+            nextTier === 1 ? 'Soft nudge sent to her phone.' :
+            nextTier === 2 ? 'Check-in prompt shown.' :
+            'Family alerted with last-known signals.';
+          pushEvent({ ts: nowTs, type: 'tier_change', from: tier, to: nextTier, meta: label });
+          tier = nextTier;
+          tierSinceTs = nowTs;
+        }
+      }
+
+      // --- Auto-SOS: the ladder ran out -----------------------------------
+      // Tier 3 held for the alert window with no answer and no check-in: the
+      // system raises the alarm itself. This is the "system reached the SOS
+      // stage" path — the phones ring exactly as if she had pressed.
+      if (tier === 3 && nowTs - tierSinceTs >= hh.escalationConfig.alertAfterMin * MIN) {
+        pushEvent({
+          ts: nowTs,
+          type: 'sos',
+          from: 3,
+          to: 4,
+          meta: 'No answer to the alert ladder — SOS raised automatically.',
+        });
+        tier = 4;
         tierSinceTs = nowTs;
       }
     }
 
     // --- Fall override -----------------------------------------------------
     // A freshly sensed fall skips the ladder, the dwell timers, quiet hours
-    // and the confidence gate: the sensor saw an impact pattern, and that is
-    // precisely the moment the family must be called — even at 3am.
+    // and the confidence gate, and goes straight to SOS: the sensor saw an
+    // impact pattern, and that is precisely the moment the alarm must ring —
+    // even at 3am, even in quiet hours.
     const lastFall = [...signals]
       .reverse()
       .find((s) => s.type === 'presence' && s.value === 'fall');
-    if (lastFall && nowTs - lastFall.ts < 15 * MIN && tier < 3) {
+    if (lastFall && nowTs - lastFall.ts < 15 * MIN && tier < 4 && !manualSosActive) {
       pushEvent({
         ts: nowTs,
-        type: 'tier_change',
+        type: 'sos',
         from: tier,
-        to: 3,
-        meta: 'Possible fall detected by the room sensor — family alerted immediately.',
+        to: 4,
+        meta: 'Possible fall detected by the room sensor — SOS raised immediately.',
       });
-      tier = 3;
+      tier = 4;
       tierSinceTs = nowTs;
     }
 
@@ -168,6 +284,16 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
     while (trend.length > TREND_CAP) trend.shift();
   }
 
+  // The SOS record: active exactly when the tier is 4, with the origin and
+  // the first responder derived from the signals — so every tick agrees.
+  const sosActive = tier === 4;
+  const sos: HouseholdState['sos'] = {
+    active: sosActive,
+    origin: sosActive ? (manualSosActive ? sosPressedOrigin : prev.sos.origin ?? 'auto') : null,
+    sinceTs: sosActive ? (sosPressedTs ?? (sosActive && prev.sos.active ? prev.sos.sinceTs : nowTs)) : null,
+    ack: respondedForThisSos ? sosResponded : sosActive ? prev.sos.ack : null,
+  };
+
   const state: HouseholdState = {
     score: risk.score,
     tier,
@@ -181,6 +307,7 @@ export function advanceState(input: AdvanceInput): AdvanceOutput {
     snoozeUntilTs,
     ack: tier === 3 ? prev.ack : null,
     learning: risk.learning,
+    sos,
   };
   state.status = statusFor(state, hh, nowTs);
 

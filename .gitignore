@@ -17,6 +17,10 @@ firmware/**/build/
 firmware/.venv/
 firmware/tunnel/__pycache__/
 firmware/tunnel/config.json
+# the local USB relay's bootstrap token and its runtime files
+firmware/tunnel/relay-token
+firmware/tunnel/relay.pid
+firmware/tunnel/relay.log
 
 # android build outputs + local config
 apps/android/.gradle/

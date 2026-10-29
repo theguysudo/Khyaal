@@ -20,7 +20,11 @@ export type SignalType =
   | 'ir_reflective' // ESP32 IR beam: 'detected' | 'clear' — near-field only
   | 'manual_checkin' // parent tapped "I'm OK"
   | 'sleep_event' // on-device classifier: 'asleep' | 'awake' | 'restless' | 'woke'
-  | 'sound_event'; // on-device loudness: 'quiet' | 'noise' | 'loud' — never audio
+  | 'sound_event' // on-device loudness: 'quiet' | 'noise' | 'loud' — never audio
+  | 'heart_rate' // smartwatch pulse in bpm — a number, never a waveform
+  | 'sleep_duration' // smartwatch sleep minutes for one night
+  | 'activity' // smartwatch active minutes in the interval that ended at ts
+  | 'sos'; // emergency: 'pressed' | 'responded' | 'resolved' — the alarm channel
 
 export type SignalValue = number | string | boolean;
 
@@ -283,6 +287,14 @@ export interface Baseline {
   dailyMotionCount: number; // typical motion events per day
   sampleDays: number; // how many days of data back this stands on
   updatedAt: number;
+  /**
+   * Median nightly sleep, learned from a smartwatch — absent until a band has
+   * reported at least two nights. Optional on purpose: a baseline written
+   * before the band existed must still load.
+   */
+  sleepMinutes?: number;
+  /** How many nights the sleep figure is based on. */
+  sleepNights?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,7 +308,7 @@ export interface Contribution {
   reason: string; // plain language, shown to the family
 }
 
-export type Tier = 0 | 1 | 2 | 3;
+export type Tier = 0 | 1 | 2 | 3 | 4;
 
 export interface RiskResult {
   score: number | null; // null during the learning window
@@ -321,6 +333,21 @@ export interface Ack {
   ts: number;
 }
 
+/**
+ * The SOS state — the one state that is allowed to be loud.
+ *
+ * `active` is true from the moment the elder presses the button (or the
+ * ladder's last step times out) until somebody stands it down. `ack` holds
+ * whoever said "I'm responding" first. The phones ring from this flag; the
+ * dashboard paints from it; everything else is detail.
+ */
+export interface SosState {
+  active: boolean;
+  origin: 'button' | 'auto' | null;
+  sinceTs: number | null;
+  ack: Ack | null;
+}
+
 export interface HouseholdState {
   score: number | null;
   tier: Tier;
@@ -334,9 +361,10 @@ export interface HouseholdState {
   snoozeUntilTs: number | null;
   ack: Ack | null;
   learning: boolean;
+  sos: SosState;
 }
 
-export type EventType = 'tier_change' | 'checkin' | 'ack' | 'snooze' | 'note';
+export type EventType = 'tier_change' | 'checkin' | 'ack' | 'snooze' | 'note' | 'sos';
 
 export interface HouseholdEvent {
   id: string;
@@ -349,10 +377,41 @@ export interface HouseholdEvent {
 
 export interface Source {
   id: string;
-  type: 'phone' | 'esp32' | 'simulator';
+  /**
+   * What kind of device this is. `smartwatch` is the wearable family: a
+   * Fastrack band or any other wrist device that syncs its steps, pulse,
+   * sleep and activity through the phone. It reports — it never decides.
+   */
+  type: 'phone' | 'esp32' | 'simulator' | 'smartwatch' | 'neighbour';
   label: string;
   apiKey: string;
   createdAtTs: number;
+  lastSeenTs: number | null;
+}
+
+/**
+ * The wearable's latest reading, as the family sees it.
+ *
+ * Aggregates and a last-active time — never a live feed, never a
+ * heart-rate trace. This is the whole surface of the band on the dashboard.
+ */
+export interface SmartwatchSummary {
+  /** True when a smartwatch source is paired. */
+  paired: boolean;
+  sourceId: string | null;
+  label: string | null;
+  /** Steps the band counted today. */
+  stepsToday: number | null;
+  /** The band's pulse at its last reading, in bpm. */
+  heartRateBpm: number | null;
+  heartRateTs: number | null;
+  /** Minutes of sleep in the last night the band recorded. */
+  sleepMinutesLastNight: number | null;
+  sleepTs: number | null;
+  /** Active minutes the band counted today. */
+  activeMinutesToday: number | null;
+  activityTs: number | null;
+  /** When the band last reported anything at all. */
   lastSeenTs: number | null;
 }
 
@@ -374,6 +433,10 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
   'manual_checkin',
   'sleep_event',
   'sound_event',
+  'heart_rate',
+  'sleep_duration',
+  'activity',
+  'sos',
 ];
 
 /** Longest numeric vector allowed in a signal's detail bag. */

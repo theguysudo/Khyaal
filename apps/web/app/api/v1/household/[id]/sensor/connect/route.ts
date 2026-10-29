@@ -4,6 +4,8 @@ import type { SensorPairRequest } from '@khayaal/shared';
 import { requireFamily } from '@/lib/server/authz';
 import { getStore } from '@/lib/server/store';
 import { rateLimit } from '@/lib/server/rate-limit';
+import { parkRelayRegistration, getRelayToken } from '@/lib/server/relay';
+import { launchRelay } from '@/lib/server/relay-launcher';
 
 /**
  * POST /api/v1/household/{id}/sensor/connect — one-click sensor pairing.
@@ -50,8 +52,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   };
   await store.putSensorPairRequest(id, request);
 
+  // Park the same identity for the local relay to claim. The relay holds a
+  // durable local token (a 0600 file next to its own script), so it can
+  // pick this up without the family pasting a pairing code into a terminal.
+  // The relay then types the identity into the board over USB serial.
+  parkRelayRegistration({
+    householdId: id,
+    sourceId: source.id,
+    apiKey: source.apiKey,
+    ts: request.ts,
+  });
+
+  // Plug-and-play: if no relay is running on this laptop, start it. It
+  // claims the parked identity on its next poll and types it into the board.
+  // Minting the local token first means the relay has something to
+  // authenticate with the moment it comes up.
+  getRelayToken();
+  const relay = launchRelay();
+
   return NextResponse.json({
     source: { ...source, apiKey: undefined }, // the relay gets the key, the page doesn't need it again
     requestId: source.id,
+    relay: {
+      started: relay.started,
+      reason: relay.reason,
+      // Where to look if the family wants to see what the relay is doing.
+      logPath: relay.logPath ?? null,
+    },
   });
 }

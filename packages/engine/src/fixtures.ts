@@ -40,12 +40,18 @@ export function makeHousehold(overrides: Partial<Household> = {}): Household {
   };
 }
 
-export function makeSources({ esp32 = true }: { esp32?: boolean } = {}): Source[] {
+export function makeSources({
+  esp32 = true,
+  smartwatch = false,
+}: { esp32?: boolean; smartwatch?: boolean } = {}): Source[] {
   const list: Source[] = [
     { id: 'src_phone', type: 'simulator', label: "Amma's phone", apiKey: 'k_phone', createdAtTs: BASE, lastSeenTs: BASE },
   ];
   if (esp32) {
     list.push({ id: 'src_esp32', type: 'esp32', label: 'Room sensor', apiKey: 'k_esp32', createdAtTs: BASE, lastSeenTs: BASE });
+  }
+  if (smartwatch) {
+    list.push({ id: 'src_watch', type: 'smartwatch', label: 'Fastrack band', apiKey: 'k_watch', createdAtTs: BASE, lastSeenTs: BASE });
   }
   return list;
 }
@@ -98,6 +104,42 @@ export function presenceLost(daysFromBase: number, afterHour: number): Signal[] 
   ];
 }
 
+// ---------------------------------------------------------------------------
+// The wearable (a Fastrack band and its phone-side sync)
+// ---------------------------------------------------------------------------
+
+/** The band's step total for one day — same meaning as the phone's. */
+export function watchSteps(daysFromBase: number, steps: number, hour = 20): Signal {
+  return { sourceId: 'src_watch', type: 'steps', value: steps, ts: dayAt(daysFromBase, hour) };
+}
+
+/** One pulse reading from the band. */
+export function watchPulse(ts: number, bpm: number, resting = false): Signal {
+  return {
+    sourceId: 'src_watch',
+    type: 'heart_rate',
+    value: bpm,
+    ts,
+    ...(resting ? { meta: { resting: true } } : {}),
+  };
+}
+
+/** Active minutes in the interval that ended at `ts`. */
+export function watchActivity(ts: number, minutes: number): Signal {
+  return { sourceId: 'src_watch', type: 'activity', value: minutes, ts };
+}
+
+/** One night's sleep, in minutes, ending at the given hour of that day. */
+export function watchSleep(daysFromBase: number, minutes: number, wakeHour = 6.5): Signal {
+  return {
+    sourceId: 'src_watch',
+    type: 'sleep_duration',
+    value: minutes,
+    ts: dayAt(daysFromBase, wakeHour),
+    meta: { startTs: dayAt(daysFromBase, wakeHour) - minutes * MIN },
+  };
+}
+
 export const emptyState = (nowTs: number): HouseholdState => ({
   score: null,
   tier: 0 as const,
@@ -111,4 +153,5 @@ export const emptyState = (nowTs: number): HouseholdState => ({
   snoozeUntilTs: null,
   ack: null,
   learning: false,
+  sos: { active: false, origin: null, sinceTs: null, ack: null },
 });
