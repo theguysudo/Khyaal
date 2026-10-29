@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.khayaal.neighbour.SosDtoTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-29T18:51:11.542Z" hostname="Adityas-MacBook-Air-2.local" time="0.023">
-  <properties/>
-  <testcase name="unknown sos fields are tolerated" classname="com.khayaal.neighbour.SosDtoTest" time="0.02"/>
-  <testcase name="parses a full sos block inside the bundle" classname="com.khayaal.neighbour.SosDtoTest" time="0.003"/>
-  <testcase name="a backend without sos parses cleanly" classname="com.khayaal.neighbour.SosDtoTest" time="0.0"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
