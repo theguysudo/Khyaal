@@ -1,33 +1,61 @@
 'use client';
 
 /**
- * DEMO CONSOLE — the presenter's seat. Deliberately labeled as such: nothing
+ * DEMO CONSOLE — the evaluator's seat, in the Quiet Ledger grammar. Nothing
  * on this page would ever be shown to a family. It drives the real engine
  * over the real API: scenarios seed a believable week of signals, the
  * time-warp advances the simulated clock, and every tier change you see is
  * the actual state machine escalating.
+ *
+ * Mechanics preserved verbatim from the previous console: the kh_demo cookie
+ * mint (POST /api/v1/pair {action:'demo'}), 1.5s state polling, the three
+ * scenarios, time-warp + auto-escalate, manual signal injection, the ESP32
+ * presence simulator, the tier track, the her-phone simulation, and the
+ * event ledger.
  */
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { fmtClock, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
+import { fmtClock, postJSON, useHouseholdState } from '@/lib/api';
+import '../onboarding/onboarding.css';
 
 type Scenario = 'normal' | 'slow' | 'emergency';
 
+/* Spec tokens — the shared lib's TIER_META still carries the old palette,
+   so the ledger colors are mapped here, dot+word always. */
+const TIER_INK: Record<number, string> = {
+  0: '#2F6B4F',
+  1: '#9A6A1B',
+  2: '#B4451C',
+  3: '#B3261E',
+  4: '#B3261E',
+};
+const TIER_WORD: Record<number, string> = {
+  0: 'Quiet',
+  1: 'Nudge sent',
+  2: 'Check-in asked',
+  3: 'Needs attention',
+  4: 'SOS ringing',
+};
+
 export default function DemoPage() {
   const [hhId, setHhId] = useState<string | null>(null);
+  const [mintError, setMintError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [autoEscalate, setAutoEscalate] = useState(false);
   const [espSim, setEspSim] = useState(false);
   const espTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Quick-start: first (or freshly created) household.
-  useEffect(() => {
+  // Quick-start: first (or freshly created) household. The response sets the
+  // household-bound kh_demo cookie — the whole authorization for this page.
+  const mintDemo = () => {
+    setMintError(null);
     postJSON<{ household: { id: string } }>('/api/v1/pair', { action: 'demo' })
       .then((r) => setHhId(r.household.id))
-      .catch(() => {});
-  }, []);
+      .catch(() => setMintError('The demo household couldn’t be prepared.'));
+  };
+  useEffect(mintDemo, []);
 
   const { bundle } = useHouseholdState(hhId ?? 'none', 1500);
 
@@ -94,173 +122,421 @@ export default function DemoPage() {
     }).catch(() => {});
   };
 
+  const warp = (body: Record<string, unknown>) => {
+    if (!hhId) return;
+    postJSON(`/api/v1/household/${hhId}/config`, body).catch(() => {});
+  };
+
+  if (mintError) {
+    return (
+      <main className="onb">
+        <div className="onb-wrap" style={{ paddingTop: 80 }}>
+          <div className="onb-note" data-tone="alarm" role="alert">
+            <span className="onb-status" data-tone="alarm">
+              <span className="onb-dot" />
+              Held
+            </span>
+            <div className="onb-notebody">
+              <p className="onb-notetitle">The demo household couldn’t be prepared</p>
+              <p style={{ margin: 0 }}>
+                The server didn’t answer. Nothing is broken — try once more.
+              </p>
+              <div className="onb-actions" style={{ marginTop: 12 }}>
+                <button type="button" className="btn-secondary" onClick={mintDemo}>
+                  Try again
+                </button>
+                <Link href="/" className="btn-ghost onb-copybtn">
+                  Back to the site
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (!hhId) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#221b15]">
-        <p className="animate-pulse text-sm text-paper/60">Preparing the demo household…</p>
+      <main className="onb">
+        <div className="onb-wrap" style={{ paddingTop: 80 }}>
+          <p className="onb-meta onb-mono">Preparing the demo household ···</p>
+        </div>
       </main>
     );
   }
 
   const state = bundle?.state;
   const tier = state?.tier ?? 0;
-  const meta = TIER_META[tier];
   const simClock = bundle ? fmtClock(bundle.simNowTs) : '—';
   const offsetH = bundle ? bundle.household.simTimeOffsetMs / 3600000 : 0;
+  const events = bundle?.events ?? [];
 
   return (
-    <main className="min-h-screen bg-[#221b15] px-4 py-6 text-paper sm:px-8">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f6d9a0]">Demo console — not shown to families</p>
-            <h1 className="mt-1 font-heading text-2xl tracking-tight">Run the story, watch the engine respond</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Link href={`/household/${hhId}`} target="_blank" className="rounded-full bg-paper px-4 py-2 text-[#221b15] transition-opacity hover:opacity-85">
-              Open child dashboard ↗
+    <main className="onb">
+      <div className="onb-wrap onb-wrap-wide">
+        <header className="onb-topbar">
+          <Link href="/" className="onb-wordmark">
+            Khayaal
+          </Link>
+          <div className="onb-actions" style={{ gap: 8 }}>
+            <Link
+              href={`/household/${hhId}`}
+              target="_blank"
+              className="btn-secondary"
+              style={{ minHeight: 40 }}
+            >
+              Open household dashboard ↗
             </Link>
-            <Link href="/" className="rounded-full border border-paper/25 px-4 py-2 text-paper/80 transition-colors hover:bg-paper/10">
+            <Link href="/" className="btn-ghost" style={{ minHeight: 40 }}>
               Back to site
             </Link>
           </div>
         </header>
 
-        <div className="mt-8 grid gap-5 lg:grid-cols-[1.15fr_1fr]">
-          {/* LEFT: controls */}
-          <div className="space-y-5">
-            {/* scenarios */}
-            <section className="rounded-3xl border border-paper/12 bg-white/[0.04] p-6">
-              <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-paper/50">One-click scenarios</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <ScenarioBtn title="Normal day" desc="An ordinary morning, nothing more" onClick={() => runScenario('normal')} busy={busy === 'normal'} tone="ok" />
-                <ScenarioBtn title="Slow morning" desc="Up and about — but no unlock" onClick={() => runScenario('slow')} busy={busy === 'slow'} tone="warn" />
-                <ScenarioBtn title="Possible emergency" desc="Silent since yesterday evening" onClick={() => runScenario('emergency')} busy={busy === 'emergency'} tone="bad" />
-              </div>
-              <p className="mt-3 text-xs leading-relaxed text-paper/40">
-                Each scenario seeds six days of believable signals and sets the simulated clock.
-                Everything after that is the real engine scoring real absences.
-              </p>
-            </section>
-
-            {/* time-warp */}
-            <section className="rounded-3xl border border-paper/12 bg-white/[0.04] p-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-paper/50">Time-warp</h2>
-                <span className="rounded-full bg-paper/10 px-3 py-1 text-xs text-paper/70">sim clock {simClock}{offsetH !== 0 && ` · +${offsetH.toFixed(1)} h`}</span>
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button onClick={() => postJSON(`/api/v1/household/${hhId}/config`, { simAdvanceMinutes: 10 })} className="rounded-full border border-paper/20 px-4 py-2 text-sm transition-colors hover:bg-paper/10">
-                  +10 min
-                </button>
-                <button onClick={() => postJSON(`/api/v1/household/${hhId}/config`, { simAdvanceMinutes: 60 })} className="rounded-full border border-paper/20 px-4 py-2 text-sm transition-colors hover:bg-paper/10">
-                  +1 h
-                </button>
-                <label className="flex cursor-pointer items-center gap-2 rounded-full border border-paper/20 px-4 py-2 text-sm">
-                  <input type="checkbox" checked={autoEscalate} onChange={(e) => setAutoEscalate(e.target.checked)} className="accent-[#f6d9a0]" />
-                  Auto-escalate (watch 1 → 2 → 3)
-                </label>
-                <button onClick={() => postJSON(`/api/v1/household/${hhId}/config`, { simResetTime: true })} className="rounded-full border border-paper/20 px-4 py-2 text-sm text-paper/60 transition-colors hover:bg-paper/10">
-                  Reset clock
-                </button>
-              </div>
-            </section>
-
-            {/* manual signals */}
-            <section className="rounded-3xl border border-paper/12 bg-white/[0.04] p-6">
-              <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-paper/50">Inject a signal now</h2>
-              <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                <button onClick={() => manualSignal('screen_event', 'unlock')} className="rounded-full border border-paper/20 px-4 py-2 transition-colors hover:bg-paper/10">🔓 She unlocked her phone</button>
-                <button onClick={() => manualSignal('motion', 1)} className="rounded-full border border-paper/20 px-4 py-2 transition-colors hover:bg-paper/10">🚶 Movement in the house</button>
-                <button onClick={() => manualSignal('charging', true)} className="rounded-full border border-paper/20 px-4 py-2 transition-colors hover:bg-paper/10">🔌 Plugged in to charge</button>
-                <button onClick={() => manualSignal('location_zone', 'away')} className="rounded-full border border-paper/20 px-4 py-2 transition-colors hover:bg-paper/10">👜 Left home</button>
-                <button onClick={() => manualSignal('location_zone', 'home')} className="rounded-full border border-paper/20 px-4 py-2 transition-colors hover:bg-paper/10">🏠 Back home</button>
-              </div>
-              <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-paper/80">
-                <input type="checkbox" checked={espSim} onChange={(e) => setEspSim(e.target.checked)} className="accent-[#f6d9a0]" />
-                Simulated CSI sensor — an ESP32 posting presence every 12 s
-              </label>
-            </section>
-          </div>
-
-          {/* RIGHT: live state + parent sim */}
-          <div className="space-y-5">
-            {/* gauge + tier */}
-            <section className="rounded-3xl border border-paper/12 bg-white/[0.04] p-6">
-              <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-paper/50">Live engine output</h2>
-              <div className="mt-4 flex items-center gap-6">
-                <Gauge score={state?.score ?? null} color={meta.color} />
-                <div className="flex-1">
-                  <p className="font-heading text-xl" style={{ color: meta.color }}>{meta.label}</p>
-                  <p className="mt-1 text-sm text-paper/60">{state?.status ?? '—'}</p>
-                  <p className="mt-2 text-xs text-paper/40">confidence {Math.round((state?.confidence ?? 1) * 100)}%</p>
-                </div>
-              </div>
-              <TierTrack tier={tier} />
-            </section>
-
-            {/* parent phone sim */}
-            <section className="rounded-3xl border border-paper/12 bg-white/[0.04] p-6">
-              <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-paper/50">Her phone (simulated)</h2>
-              <div className="mx-auto mt-4 w-full max-w-[280px] rounded-[28px] border border-paper/25 bg-[#2c241d] p-4 shadow-xl">
-                <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-paper/20" />
-                <p className="text-center text-xs text-paper/50">{bundle?.household.parentName}'s phone · {simClock}</p>
-                {tier === 0 && (
-                  <p className="mt-6 mb-6 text-center text-sm text-paper/60">Quiet. Nothing to open, nothing to do.</p>
-                )}
-                {tier === 1 && (
-                  <div className="mt-4 rounded-2xl bg-white/95 p-4 text-center text-[#2a241d]">
-                    <p className="text-xs text-ink/50">a gentle nudge</p>
-                    <p className="mt-1 text-sm font-medium">Everything okay? 🌼</p>
-                  </div>
-                )}
-                {(tier === 2 || tier === 3) && (
-                  <div className="mt-4 rounded-2xl bg-white p-4 text-center text-[#2a241d]">
-                    <p className="text-sm font-medium">Are you alright?</p>
-                    <p className="mt-1 text-xs text-ink/50">One tap ends the matter.</p>
-                    <button
-                      onClick={() => postJSON(`/api/v1/household/${hhId}/checkin`)}
-                      className="mt-3 w-full rounded-full bg-[#4c7a4f] py-2.5 text-sm font-semibold text-white"
-                    >
-                      I'm OK
-                    </button>
-                    <button
-                      onClick={() => postJSON(`/api/v1/household/${hhId}/snooze`, { minutes: 60 })}
-                      className="mt-2 w-full rounded-full border border-ink/15 py-2 text-xs text-ink/60"
-                    >
-                      Snooze 1 h
-                    </button>
-                  </div>
-                )}
-                <div className="mt-6 mb-1 flex justify-center gap-8 text-[10px] text-paper/30">
-                  <span>Khayaal</span>
-                  <span>background</span>
-                </div>
-              </div>
-            </section>
-
-            {/* event log */}
-            <section className="rounded-3xl border border-paper/12 bg-white/[0.04] p-6">
-              <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-paper/50">Event log (audit trail)</h2>
-              <ul className="mt-4 space-y-2 text-sm">
-                {(bundle?.events ?? []).slice(-8).reverse().map((e) => (
-                  <li key={e.id} className="flex items-baseline gap-3">
-                    <span className="shrink-0 text-xs text-paper/40">{fmtClock(e.ts)}</span>
-                    <span className="text-paper/75">
-                      {e.meta ?? (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}
-                    </span>
-                  </li>
-                ))}
-                {(bundle?.events ?? []).length === 0 && <li className="text-sm text-paper/40">Nothing yet — run a scenario.</li>}
-              </ul>
-            </section>
-          </div>
+        <div className="onb-rise" style={{ marginTop: 32 }}>
+          <p
+            className="onb-mono"
+            style={{ fontSize: 13, letterSpacing: '0.08em', color: 'var(--signal)', margin: 0 }}
+          >
+            DEMO CONSOLE — NOT SHOWN TO FAMILIES
+          </p>
+          <h1 className="onb-h1" style={{ marginTop: 8 }}>
+            Run the story. Watch the engine respond.
+          </h1>
+          <p className="onb-body" style={{ marginTop: 8 }}>
+            This is the evaluator&rsquo;s fast path: one household, pre-seeded and
+            household-scoped to this browser for a day. Everything below is the real engine
+            scoring real signals — nothing here is staged.
+          </p>
         </div>
 
-        <p className="mt-8 text-center text-xs leading-relaxed text-paper/35">
-          Two-window demo: open the child dashboard in a second window, run “Possible emergency”
-          here, and watch the alert arrive there in real time.
-        </p>
+        <div className="onb-cols2" style={{ marginTop: 8 }}>
+            {/* LEFT column */}
+            <div>
+              {/* 01 — Scenarios */}
+              <section className="onb-rise" style={{ '--d': '60ms' } as React.CSSProperties}>
+                <div className="onb-sechead">
+                  <span className="onb-secindex">01</span>
+                  <span className="onb-seclabel">Scenarios</span>
+                  <span className="onb-secrule" />
+                </div>
+                <div className="onb-panel">
+                  <div className="onb-rows">
+                    {(
+                      [
+                        {
+                          key: 'normal' as Scenario,
+                          title: 'Normal day',
+                          desc: 'An ordinary morning, nothing more.',
+                        },
+                        {
+                          key: 'slow' as Scenario,
+                          title: 'Slow morning',
+                          desc: 'Up and about — but no unlock.',
+                        },
+                        {
+                          key: 'emergency' as Scenario,
+                          title: 'Possible emergency',
+                          desc: 'Silent since yesterday evening.',
+                        },
+                      ] as const
+                    ).map((sc) => (
+                      <div className="onb-row" key={sc.key}>
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: 'block', fontSize: 15, fontWeight: 600 }}>
+                            {sc.title}
+                          </span>
+                          <span style={{ display: 'block', fontSize: 13, color: 'var(--ink-3)' }}>
+                            {sc.desc}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => runScenario(sc.key)}
+                          disabled={busy === sc.key}
+                        >
+                          {busy === sc.key ? 'Seeding…' : 'Run'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="onb-meta" style={{ marginTop: 12 }}>
+                    Each scenario seeds six days of believable signals and sets the simulated
+                    clock. Everything after that is the real engine scoring real absences.
+                  </p>
+                </div>
+              </section>
+
+              {/* 02 — Time-warp */}
+              <section className="onb-rise" style={{ '--d': '120ms' } as React.CSSProperties}>
+                <div className="onb-sechead">
+                  <span className="onb-secindex">02</span>
+                  <span className="onb-seclabel">Time-warp</span>
+                  <span className="onb-secrule" />
+                </div>
+                <div className="onb-panel">
+                  <div className="onb-row">
+                    <span className="onb-rowlabel">Sim clock</span>
+                    <span className="onb-rowvalue">
+                      {simClock}
+                      {offsetH !== 0 ? ` · +${offsetH.toFixed(1)} h` : ''}
+                    </span>
+                  </div>
+                  <div className="onb-row">
+                    <span className="onb-rowlabel">Advance</span>
+                    <span className="onb-actions" style={{ gap: 8 }}>
+                      <button type="button" className="btn-secondary" onClick={() => warp({ simAdvanceMinutes: 10 })}>
+                        +10 min
+                      </button>
+                      <button type="button" className="btn-secondary" onClick={() => warp({ simAdvanceMinutes: 60 })}>
+                        +1 h
+                      </button>
+                      <button type="button" className="btn-ghost onb-copybtn" onClick={() => warp({ simResetTime: true })}>
+                        Reset
+                      </button>
+                    </span>
+                  </div>
+                  <div className="onb-row">
+                    <span className="onb-rowlabel">Ladder</span>
+                    <Toggle
+                      on={autoEscalate}
+                      label="Auto-escalate 1 → 2 → 3"
+                      onClick={() => setAutoEscalate((v) => !v)}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* 03 — Signals */}
+              <section className="onb-rise" style={{ '--d': '180ms' } as React.CSSProperties}>
+                <div className="onb-sechead">
+                  <span className="onb-secindex">03</span>
+                  <span className="onb-seclabel">Inject a signal</span>
+                  <span className="onb-secrule" />
+                </div>
+                <div className="onb-panel">
+                  <div className="onb-rows">
+                    {(
+                      [
+                        { label: 'She unlocked her phone', type: 'screen_event', value: 'unlock' },
+                        { label: 'Movement in the house', type: 'motion', value: 1 },
+                        { label: 'Plugged in to charge', type: 'charging', value: true },
+                        { label: 'Left home', type: 'location_zone', value: 'away' },
+                        { label: 'Back home', type: 'location_zone', value: 'home' },
+                      ] as const
+                    ).map((sig) => (
+                      <div className="onb-row" key={sig.label}>
+                        <span className="onb-status" data-tone="idle" style={{ color: 'var(--ink)' }}>
+                          <span className="onb-dot" />
+                          {sig.label}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => manualSignal(sig.type, sig.value)}
+                          disabled={!bundle}
+                        >
+                          Post
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="onb-row" style={{ marginTop: 4 }}>
+                    <span className="onb-rowlabel">Room sensor</span>
+                    <Toggle
+                      on={espSim}
+                      label="Simulated presence, every 12 s"
+                      onClick={() => setEspSim((v) => !v)}
+                    />
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            {/* RIGHT column */}
+            <div>
+              {/* 04 — Engine */}
+              <section className="onb-rise" style={{ '--d': '90ms' } as React.CSSProperties}>
+                <div className="onb-sechead">
+                  <span className="onb-secindex">04</span>
+                  <span className="onb-seclabel">Engine output</span>
+                  <span className="onb-secrule" />
+                </div>
+                <div className="onb-panel">
+                  <div className="onb-row">
+                    <span className="onb-rowlabel">Wellbeing</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span className="onb-mono" style={{ fontSize: 26 }}>
+                        {state?.score ?? '—'}
+                      </span>
+                      <span
+                        className="onb-status"
+                        data-tone={tier === 0 ? 'calm' : tier === 1 ? 'watch' : 'alarm'}
+                      >
+                        <span className="onb-dot" style={{ background: TIER_INK[tier] }} />
+                        {TIER_WORD[tier]}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="onb-row">
+                    <span className="onb-rowlabel">Status</span>
+                    <span className="onb-rowvalue" style={{ fontFamily: 'var(--serif)', fontSize: 15 }}>
+                      {state?.status || '—'}
+                    </span>
+                  </div>
+                  <div className="onb-row">
+                    <span className="onb-rowlabel">Confidence</span>
+                    <span className="onb-rowvalue">
+                      {Math.round((state?.confidence ?? 1) * 100)}%
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
+                    {Object.keys(TIER_WORD).map((k) => {
+                      const t = Number(k);
+                      return (
+                        <span
+                          key={k}
+                          className="onb-status"
+                          data-tone={t === tier ? 'signal' : 'idle'}
+                          style={{ color: t === tier ? 'var(--ink)' : 'var(--ink-3)' }}
+                        >
+                          <span
+                            className="onb-dot"
+                            style={t <= tier ? { background: TIER_INK[t] } : undefined}
+                          />
+                          {TIER_WORD[t]}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+
+              {/* 05 — Her phone */}
+              <section className="onb-rise" style={{ '--d': '150ms' } as React.CSSProperties}>
+                <div className="onb-sechead">
+                  <span className="onb-secindex">05</span>
+                  <span className="onb-seclabel">Her phone, simulated</span>
+                  <span className="onb-secrule" />
+                </div>
+                <div className="onb-panel">
+                  <div className="onb-row">
+                    <span className="onb-rowlabel">Screen</span>
+                    <span className="onb-rowvalue">
+                      {bundle?.household.parentName}&rsquo;s phone · {simClock}
+                    </span>
+                  </div>
+                  {tier === 0 && (
+                    <p className="onb-body" style={{ fontSize: 15, marginTop: 12 }}>
+                      Quiet. Nothing to open, nothing to do.
+                    </p>
+                  )}
+                  {tier === 1 && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        border: '1px solid var(--rule-strong)',
+                        borderLeft: '2px solid var(--watch)',
+                        borderRadius: 8,
+                        padding: '12px 16px',
+                        background: 'var(--paper)',
+                      }}
+                    >
+                      <p className="onb-meta" style={{ margin: 0 }}>
+                        a gentle nudge
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 600 }}>
+                        Everything okay?
+                      </p>
+                    </div>
+                  )}
+                  {(tier === 2 || tier === 3) && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        border: '1px solid var(--rule-strong)',
+                        borderLeft: '2px solid var(--alarm)',
+                        borderRadius: 8,
+                        padding: '12px 16px',
+                        background: 'var(--paper)',
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Are you alright?</p>
+                      <p className="onb-meta" style={{ margin: '4px 0 0' }}>
+                        One tap ends the matter.
+                      </p>
+                      <div className="onb-actions" style={{ marginTop: 12 }}>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => postJSON(`/api/v1/household/${hhId}/checkin`)}
+                        >
+                          I&rsquo;m OK
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => postJSON(`/api/v1/household/${hhId}/snooze`, { minutes: 60 })}
+                        >
+                          Snooze 1 h
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <p className="onb-meta" style={{ marginTop: 12 }}>
+                    Tier 4 hands the screen to the SOS sheet on the household dashboard.
+                  </p>
+                </div>
+              </section>
+
+              {/* 06 — Event ledger */}
+              <section className="onb-rise" style={{ '--d': '210ms' } as React.CSSProperties}>
+                <div className="onb-sechead">
+                  <span className="onb-secindex">06</span>
+                  <span className="onb-seclabel">Event ledger</span>
+                  <span className="onb-secrule" />
+                </div>
+                <div className="onb-panel">
+                  <div className="onb-rows">
+                    {events.length === 0 && (
+                      <p className="onb-body" style={{ fontSize: 15, margin: 0 }}>
+                        Nothing yet — run a scenario.
+                      </p>
+                    )}
+                    {events
+                      .slice(-8)
+                      .reverse()
+                      .map((e) => (
+                        <div className="onb-row" key={e.id}>
+                          <span className="onb-rowvalue" style={{ color: 'var(--ink-3)' }}>
+                            {fmtClock(e.ts)}
+                          </span>
+                          <span className="onb-rowvalue" style={{ textAlign: 'left', fontFamily: 'var(--sans)', fontSize: 14 }}>
+                            {e.meta ??
+                              (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </section>
+            </div>
+        </div>
+
+        <div className="onb-note" data-tone="signal" style={{ marginTop: 32 }}>
+          <span className="onb-status" data-tone="signal">
+            <span className="onb-dot" />
+            Two windows
+          </span>
+          <div className="onb-notebody">
+            <p style={{ margin: 0 }}>
+              Open the household dashboard in a second window, run &ldquo;Possible
+              emergency&rdquo; here, and watch the alert arrive there in real time.
+            </p>
+          </div>
+        </div>
       </div>
     </main>
   );
@@ -268,55 +544,21 @@ export default function DemoPage() {
 
 // ---------------------------------------------------------------------------
 
-function ScenarioBtn({ title, desc, onClick, busy, tone }: { title: string; desc: string; onClick: () => void; busy: boolean; tone: 'ok' | 'warn' | 'bad' }) {
-  const ring = { ok: 'hover:border-[#7d8c6f]', warn: 'hover:border-[#c98a2b]', bad: 'hover:border-[#b23a2f]' }[tone];
+function Toggle({
+  on,
+  label,
+  onClick,
+}: {
+  on: boolean;
+  label: string;
+  onClick: () => void;
+}) {
   return (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      className={`rounded-2xl border border-paper/15 bg-paper/[0.04] p-4 text-left transition-colors ${ring} disabled:opacity-50`}
-    >
-      <p className="text-sm font-semibold text-paper">{busy ? 'Seeding…' : title}</p>
-      <p className="mt-1 text-xs leading-snug text-paper/50">{desc}</p>
+    <button type="button" className="btn-secondary" aria-pressed={on} onClick={onClick}>
+      <span className="onb-status" data-tone={on ? 'calm' : 'idle'}>
+        <span className="onb-dot" />
+        {label} · {on ? 'on' : 'off'}
+      </span>
     </button>
-  );
-}
-
-function Gauge({ score, color }: { score: number | null; color: string }) {
-  const R = 52;
-  const C = Math.PI * R; // half circle
-  const pct = score === null ? 0 : score / 100;
-  return (
-    <div className="relative h-[74px] w-[140px]">
-      <svg viewBox="0 0 140 74" className="h-full w-full">
-        <path d="M 18 66 A 52 52 0 0 1 122 66" fill="none" stroke="#ffffff18" strokeWidth="10" strokeLinecap="round" />
-        <path
-          d="M 18 66 A 52 52 0 0 1 122 66"
-          fill="none"
-          stroke={color}
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={`${C * pct} ${C}`}
-          className="transition-all duration-700"
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-end justify-center pb-0.5">
-        <span className="font-heading text-3xl text-paper">{score ?? '—'}</span>
-      </div>
-    </div>
-  );
-}
-
-function TierTrack({ tier }: { tier: number }) {
-  const labels = ['Quiet', 'Nudge', 'Check-in', 'Alert'];
-  return (
-    <div className="mt-5 flex gap-2">
-      {labels.map((l, i) => (
-        <div key={l} className="flex-1">
-          <div className="h-1.5 rounded-full transition-colors duration-500" style={{ background: i <= tier && i > 0 ? '#c98a2b' : i === 0 && tier === 0 ? '#7d8c6f' : '#ffffff22' }} />
-          <p className={`mt-1.5 text-[10px] ${i === tier ? 'text-paper' : 'text-paper/40'}`}>{l}</p>
-        </div>
-      ))}
-    </div>
   );
 }

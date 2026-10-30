@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@khayaal/shared', '@khayaal/engine'],
+  // Additive isolation hook: concurrent agents can build/serve into their own
+  // distDir (NEXT_DIST_DIR=.next-onboard next start -p 3102) without touching
+  // the shared .next. Default behavior is unchanged.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   outputFileTracingRoot: process.cwd() + '/../..',
   async headers() {
     return [

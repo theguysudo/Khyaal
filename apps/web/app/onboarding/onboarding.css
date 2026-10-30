@@ -1,0 +1,673 @@
+/*
+ * The Quiet Ledger — onboarding surface (sign-in, household setup, watchers,
+ * demo console). Scoped entirely under `.onb` so it cannot leak into other
+ * agents' pages. Token values are verbatim from docs/DESIGN_QUIET_LEDGER.md;
+ * when the shared globals.css gains the same foundation these rules reconcile
+ * by deletion, not by rewrite.
+ *
+ * Composed strictly within the spec's forbidden-practices list: no color
+ * fades, no frosted panels, no luminous edges, no floating shapes, no
+ * rounded card rows, no ambient loops, no purple AI palette.
+ */
+
+.onb {
+  /* Tokens — DESIGN_QUIET_LEDGER.md, light row */
+  --paper: #faf8f5;
+  --paper-raised: #ffffff;
+  --ink: #1a1815;
+  --ink-2: #57534e;
+  --ink-3: #8a857d;
+  --rule: #e7e2da;
+  --rule-strong: #d6cfc4;
+  --signal: #b4451c;
+  --signal-ink: #fff7f0;
+  --calm: #2f6b4f;
+  --watch: #9a6a1b;
+  --alarm: #b3261e;
+
+  /* Type stacks — spec fallbacks */
+  --serif: ui-serif, 'New York', Georgia, serif;
+  --sans: -apple-system, 'SF Pro Text', Inter, system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+
+  /* Motion law — one curve, 160–360ms */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.onb ::selection {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+/* Focus is always visible; hit areas stay >= 40px. */
+.onb :focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* --- Layout ------------------------------------------------------------- */
+
+.onb-wrap {
+  margin: 0 auto;
+  max-width: 680px;
+  padding: 20px 20px 96px;
+}
+.onb-wrap-wide {
+  max-width: 1120px;
+}
+
+.onb-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 14px 0 18px;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.onb-wordmark {
+  font-family: var(--serif);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.onb-toplink {
+  font-size: 15px;
+  color: var(--ink-2);
+  text-decoration: none;
+  padding: 8px 0;
+}
+.onb-toplink:hover {
+  color: var(--ink);
+}
+
+/* --- Type ramp ---------------------------------------------------------- */
+
+.onb-verdict {
+  font-family: var(--serif);
+  font-size: clamp(30px, 6vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.onb-h1 {
+  font-family: var(--serif);
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.onb-h2 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.onb-body {
+  font-size: 17px;
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.onb-meta {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.onb-mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Numbered editorial sections ---------------------------------------- */
+
+.onb-sechead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 40px 0 16px;
+}
+
+.onb-secindex {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--signal);
+  flex: none;
+}
+
+.onb-seclabel {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  flex: none;
+}
+
+.onb-secrule {
+  flex: 1;
+  height: 1px;
+  background: var(--rule-strong);
+}
+
+/* --- Progress rail ------------------------------------------------------- */
+
+.onb-progress {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: 8px;
+}
+
+.onb-progress-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 8px 8px 0;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.onb-progress-item[data-clickable='true'] {
+  cursor: pointer;
+}
+
+.onb-progress-index {
+  font-family: var(--mono);
+  font-size: 13px;
+  flex: none;
+}
+
+.onb-progress-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.onb-progress-item[data-state='done'] .onb-progress-index,
+.onb-progress-item[data-state='done'] .onb-progress-label {
+  color: var(--ink-2);
+}
+.onb-progress-item[data-state='done'] {
+  border-bottom-color: var(--rule-strong);
+}
+
+.onb-progress-item[data-state='current'] .onb-progress-index {
+  color: var(--signal);
+}
+.onb-progress-item[data-state='current'] .onb-progress-label {
+  color: var(--ink);
+}
+.onb-progress-item[data-state='current'] {
+  border-bottom-color: var(--signal);
+}
+
+.onb-progress-item[data-state='todo'] .onb-progress-index,
+.onb-progress-item[data-state='todo'] .onb-progress-label {
+  color: var(--ink-3);
+}
+
+@media (max-width: 520px) {
+  .onb-progress-item .onb-progress-label {
+    display: none;
+  }
+  .onb-progress-item[data-state='current'] .onb-progress-label {
+    display: inline;
+  }
+}
+
+/* --- Panels and ledger rows ---------------------------------------------- */
+
+.onb-panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.onb-panel + .onb-panel {
+  margin-top: 24px;
+}
+
+.onb-rows {
+  display: block;
+}
+
+.onb-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-height: 52px;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+}
+.onb-row > * {
+  min-width: 0;
+}
+.onb-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.onb-row:last-child {
+  padding-bottom: 0;
+}
+
+.onb-rowlabel {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  flex: none;
+}
+
+.onb-rowvalue {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.onb-rowlink {
+  color: var(--ink);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 48px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.onb-rowlink:hover {
+  color: var(--signal);
+}
+
+/* --- Status: dot + word, never color alone ------------------------------- */
+
+.onb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  flex: none;
+}
+.onb-status > * {
+  min-width: 0;
+}
+
+.onb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  box-sizing: border-box;
+}
+
+.onb-status[data-tone='calm'] .onb-dot {
+  background: var(--calm);
+}
+.onb-status[data-tone='watch'] .onb-dot {
+  background: var(--watch);
+}
+.onb-status[data-tone='alarm'] .onb-dot {
+  background: var(--alarm);
+}
+.onb-status[data-tone='signal'] .onb-dot {
+  background: var(--signal);
+}
+.onb-status[data-tone='idle'] .onb-dot {
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+}
+
+/* --- Buttons (spec families) --------------------------------------------- */
+
+.onb .btn-primary,
+.onb .btn-secondary,
+.onb .btn-ghost {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+@media (min-width: 640px) {
+  .onb .btn-primary,
+  .onb .btn-secondary,
+  .onb .btn-ghost {
+    min-height: 40px;
+  }
+}
+
+.onb .btn-primary {
+  border: 0;
+  background: var(--signal);
+  color: var(--signal-ink);
+  overflow: hidden;
+  isolation: isolate;
+  transition: color 240ms var(--ease), transform 160ms var(--ease);
+}
+.onb .btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--paper-raised);
+  transform: translateX(-101%);
+  transition: transform 240ms var(--ease);
+}
+.onb .btn-primary:hover:not(:disabled)::before {
+  transform: translateX(0);
+}
+.onb .btn-primary:hover:not(:disabled) {
+  color: var(--ink);
+}
+.onb .btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.onb .btn-primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.onb .btn-secondary {
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink);
+  transition: box-shadow 200ms var(--ease), transform 160ms var(--ease);
+}
+.onb .btn-secondary:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.onb .btn-secondary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.onb .btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.onb .btn-ghost {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  padding: 0 4px;
+}
+.onb .btn-ghost::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 8px;
+  height: 1px;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 200ms var(--ease);
+}
+.onb .btn-ghost:hover:not(:disabled)::after {
+  transform: scaleX(1);
+}
+.onb .btn-ghost:active:not(:disabled) {
+  opacity: 0.7;
+}
+
+.onb .btn-block {
+  width: 100%;
+}
+
+/* --- Fields --------------------------------------------------------------- */
+
+.onb-field {
+  display: block;
+}
+
+.onb-fieldlabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.onb-fieldhint {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-3);
+  text-align: right;
+}
+
+.onb-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px; /* 16px+ prevents iOS focus zoom */
+  line-height: 1.4;
+  appearance: none;
+  transition: border-color 160ms var(--ease);
+}
+
+.onb-input:hover {
+  border-color: var(--ink-3);
+}
+
+.onb-input:focus {
+  outline: none;
+  border-color: var(--signal);
+}
+
+.onb-input[aria-invalid='true'] {
+  border-color: var(--alarm);
+}
+
+select.onb-input {
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2357534E' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  cursor: pointer;
+}
+
+.onb-fielderror {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--alarm);
+}
+
+/* --- Notes (calm error / info states) ------------------------------------- */
+
+.onb-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--rule-strong);
+  border-left-width: 2px;
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.onb-note[data-tone='alarm'] {
+  border-left-color: var(--alarm);
+}
+.onb-note[data-tone='calm'] {
+  border-left-color: var(--calm);
+}
+.onb-note[data-tone='signal'] {
+  border-left-color: var(--signal);
+}
+
+.onb-notebody {
+  flex: 1;
+  min-width: 0;
+}
+
+.onb-notetitle {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0 0 4px;
+}
+
+/* --- Pairing code / copy chip --------------------------------------------- */
+
+.onb-code {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 28px;
+  letter-spacing: 0.18em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  padding: 10px 16px 10px 20px; /* optical: tracking adds right-side air */
+}
+
+.onb-copybtn {
+  min-height: 40px;
+  padding: 0 10px;
+}
+
+/* --- Dividers, misc -------------------------------------------------------- */
+
+.onb-rule {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 24px 0;
+}
+
+.onb-stack > * + * {
+  margin-top: 16px;
+}
+
+.onb-grid2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 560px) {
+  .onb-grid2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.onb-cols2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.onb-cols2 > * {
+  min-width: 0;
+}
+@media (min-width: 960px) {
+  .onb-cols2 {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 48px;
+  }
+}
+
+.onb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.onb-footer {
+  margin-top: 56px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+/* --- First-paint rise (once, staggered) ------------------------------------ */
+
+@keyframes onb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.onb-rise {
+  animation: onb-rise 320ms var(--ease) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb *,
+  .onb *::before,
+  .onb *::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+  }
+}

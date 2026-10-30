@@ -46,3 +46,6 @@ untitled folder/
 
 # stray source copy of the brand icon, superseded by apps/web/public/favicon.ico
 favicon/
+
+# isolated build dirs (parallel-agent builds)
+.next-onboard/
