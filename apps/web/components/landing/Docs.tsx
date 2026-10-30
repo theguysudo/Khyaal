@@ -94,19 +94,6 @@ const PRIVACY = [
 export default function Docs() {
   return (
     <section id="docs" className="relative overflow-hidden bg-paper px-5 py-24 sm:px-8">
-      {/* a faint engineering grid, so it reads as a blueprint */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.35]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(42,36,29,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(42,36,29,.055) 1px, transparent 1px)',
-          backgroundSize: '56px 56px',
-          maskImage: 'radial-gradient(ellipse 80% 60% at 50% 35%, black 30%, transparent 78%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 35%, black 30%, transparent 78%)',
-        }}
-      />
-
       <div className="relative mx-auto max-w-6xl">
         <div className="max-w-2xl">
           <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-clay">The complete picture</p>
@@ -127,7 +114,7 @@ export default function Docs() {
             {PIPELINE.map((p, i) => (
               <li
                 key={p.step}
-                className="group relative rounded-[22px] border border-ink/10 bg-white/80 p-5 shadow-[0_2px_20px_rgba(42,36,29,.05)] backdrop-blur-sm transition-transform duration-300 hover:-translate-y-1"
+                className="group relative rounded-lg border border-[#E7E2DA] bg-white p-5 transition-colors duration-200 hover:border-[#D6CFC4]"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[11px] tracking-[0.2em] text-clay">{p.step}</span>
@@ -152,7 +139,7 @@ export default function Docs() {
           <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-ink/40">The stack</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {STACK.map((group) => (
-              <div key={group.group} className="rounded-[22px] border border-ink/10 bg-white/75 p-5">
+              <div key={group.group} className="rounded-lg border border-[#E7E2DA] bg-white p-5">
                 <h3 className="font-heading text-[17px] text-ink">{group.group}</h3>
                 <ul className="mt-3 space-y-1.5">
                   {group.items.map((item) => (
@@ -177,7 +164,7 @@ export default function Docs() {
               documented route by route in the repository README, and every household route is authorised — a family
               session, a device credential, or the demo cookie.
             </p>
-            <div className="mt-5 overflow-hidden rounded-[20px] border border-ink/10 bg-white/80">
+            <div className="mt-5 overflow-hidden rounded-lg border border-[#E7E2DA] bg-white">
               <table className="w-full text-left text-[12.5px]">
                 <thead>
                   <tr className="border-b border-ink/8 bg-paper/70">
@@ -212,13 +199,13 @@ export default function Docs() {
             <h3 className="mt-3 font-heading text-[28px] leading-tight text-ink">What Khayaal refuses to do</h3>
             <ul className="mt-5 space-y-3">
               {PRIVACY.map((p) => (
-                <li key={p.title} className="rounded-[18px] border border-ink/10 bg-white/70 p-4">
+                <li key={p.title} className="rounded-lg border border-[#E7E2DA] bg-white p-4">
                   <p className="text-[14px] font-medium text-ink">{p.title}</p>
                   <p className="mt-1 text-[13px] leading-relaxed text-ink/55">{p.body}</p>
                 </li>
               ))}
             </ul>
-            <div className="mt-5 rounded-[20px] border border-clay/25 bg-clay/6 p-5">
+            <div className="mt-5 rounded-lg border border-[#B4451C] bg-[#FDF3EC] p-5">
               <p className="text-[13px] leading-relaxed text-ink/70">
                 <span className="font-medium text-ink">Everything is free.</span> Google OAuth, Firebase Spark, GitHub
                 Actions, VAPID push and the hosted open models — no paid service is wired in anywhere, on purpose.

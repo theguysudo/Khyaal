@@ -3,19 +3,22 @@
 /**
  * The SOS takeover — the one screen in Khayaal that is allowed to be loud.
  *
- * When `state.sos.active` flips true this paints over the whole dashboard:
- * red, unmissable, showing who pressed and who is already responding. The
- * siren uses WebAudio; browsers only let audio start after a user gesture on
- * the page, so the overlay arms itself on the first tap and says so plainly
- * instead of pretending it is ringing when it cannot.
+ * iOS sheet behaviour: a full-bleed alarm backdrop and a sheet that slides up
+ * on the ledger curve (cubic-bezier(.32,.72,0,1), 360ms). The sheet runs the
+ * dark token set (.theme-dark in globals.css) — dark paper, warm ink — with
+ * the elapsed time ticking in tabular mono. The siren uses WebAudio; browsers
+ * only let audio start after a user gesture on the page, so the overlay arms
+ * itself on the first tap and says so plainly instead of pretending it is
+ * ringing when it cannot. The arm button is the design system's only pulsing
+ * element: the btn-sos rest-pulse outline.
  *
  * "Stand down" resolves the SOS; "I've responded" records an acknowledgement
  * without silencing it. Neither is buried: this state is rare and urgent.
  */
 
 import * as React from 'react';
-import { postJSON } from '@/lib/api';
-import { fmtAgo } from '@/lib/api';
+import { postJSON, fmtAgo } from '@/lib/api';
+import { IconSpeaker } from './icons';
 
 interface Props {
   householdId: string;
@@ -78,6 +81,10 @@ export default function SosOverlay({ householdId, parentName, sos, childName }: 
   if (!sos.active) return null;
 
   const since = sos.sinceTs ? fmtAgo(sos.sinceTs, now) : 'just now';
+  // The countdown — tabular mono, ticking once a second while the alarm runs.
+  const elapsedS = sos.sinceTs ? Math.max(0, Math.floor((now - sos.sinceTs) / 1000)) : 0;
+  const mm = String(Math.floor(elapsedS / 60)).padStart(2, '0');
+  const ss = String(elapsedS % 60).padStart(2, '0');
 
   const standDown = async () => {
     setBusy('resolve');
@@ -96,58 +103,52 @@ export default function SosOverlay({ householdId, parentName, sos, childName }: 
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-auto p-6 backdrop-blur-md"
-      style={{ background: 'linear-gradient(169deg, rgba(52, 7, 14, 0.94) 7%, rgba(24, 4, 10, 0.96) 62%, rgba(5, 1, 4, 0.97) 100%)' }}
-    >
-      <div
-        className="kh-gradring w-full max-w-lg rounded-[20px] p-8 text-center text-white"
-        style={{
-          background: 'linear-gradient(175deg, rgba(96, 17, 22, 0.72) 0%, rgba(38, 8, 16, 0.78) 100%)',
-          backdropFilter: 'blur(60px)',
-          WebkitBackdropFilter: 'blur(60px)',
-          boxShadow: '0 3.5px 5.5px rgba(0,0,0,0.02), 0 24px 48px -12px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.14)',
-        }}
-      >
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-err-200">
+    <div className="sheet-backdrop theme-dark fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Emergency">
+      <div className="sheet w-full max-w-lg rounded-t-2xl border border-[#3B362F] bg-[#1E1B18] p-8 text-center text-[#F2EEE8] sm:rounded-2xl">
+        <p className="t-meta text-[#E5645C]">
           {sos.origin === 'button' ? 'Button pressed' : 'Automatic — ladder timed out'}
         </p>
-        <h2 className="mt-3 text-5xl font-bold tracking-[-0.02em]">SOS</h2>
-        <p className="mt-3 text-lg leading-relaxed">
+        <h2 className="t-display mt-3 text-[56px] text-[#F2EEE8]">SOS</h2>
+        <p className="mt-3 t-body text-[#F2EEE8]">
           {parentName} raised the emergency alarm — {since}.
         </p>
+        <p className="mt-2 font-mono text-[15px] tabular-nums text-[#E5645C]" aria-live="polite">
+          T+{mm}:{ss} since raised
+        </p>
         {sos.ack && (
-          <p className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium">
+          <p className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[#3B362F] px-4 py-2 text-[15px] text-[#F2EEE8]">
+            <span className="dot bg-[#7FB89B]" aria-hidden />
             {sos.ack.by} is responding.
           </p>
         )}
         {!armed ? (
-          <button
-            onClick={startSiren}
-            className={`kh-press mt-6 w-full rounded-[10px] bg-white px-5 py-3 text-sm font-semibold text-err-700 shadow-[0_6px_20px_-6px_rgba(255,255,255,0.35)] transition hover:bg-err-50`}
-          >
-            🔊 Tap to sound the siren on this device
+          <button onClick={startSiren} className="btn-sos mt-6">
+            <IconSpeaker className="h-4 w-4" />
+            Tap to sound the siren on this device
           </button>
         ) : (
-          <p className="mt-6 animate-pulse text-sm font-semibold text-err-100 motion-reduce:animate-none">● Siren sounding on this device</p>
+          <p className="mt-6 inline-flex items-center gap-2 text-[15px] font-semibold text-[#E5645C]">
+            <span className="dot bg-[#E5645C]" aria-hidden />
+            Siren sounding on this device
+          </p>
         )}
         <div className="mt-5 grid gap-2.5">
           <button
             onClick={respond}
             disabled={busy !== null}
-            className="kh-press rounded-[10px] border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#20060a]"
+            className="kh-press rounded-lg border border-[#3B362F] px-5 py-3 text-[15px] font-semibold text-[#F2EEE8] transition-colors hover:border-[#F2EEE8] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFF7F0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1E1B18]"
           >
             {busy === 'respond' ? 'Recording…' : "I'm responding"}
           </button>
           <button
             onClick={standDown}
             disabled={busy !== null}
-            className="kh-press rounded-[10px] border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#20060a]"
+            className="kh-press rounded-lg border border-[#3B362F] px-5 py-3 text-[15px] font-semibold text-[#F2EEE8] transition-colors hover:border-[#F2EEE8] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFF7F0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1E1B18]"
           >
             {busy === 'resolve' ? 'Standing down…' : 'Stand down — she is safe'}
           </button>
         </div>
-        <p className="mt-5 text-xs leading-relaxed text-err-100/85">
+        <p className="mt-5 text-[13px] leading-relaxed text-[#A8A29E]">
           Every registered phone is ringing at full volume. Stand down only once someone has laid eyes on her.
         </p>
       </div>

@@ -1,238 +1,49 @@
 /*
- * Motion + surface layer for the household dashboard.
+ * Motion + surface layer for the household dashboard — Quiet Ledger edition
+ * (docs/DESIGN_QUIET_LEDGER.md).
  *
- * Two jobs, both scoped under .kh- prefixes so nothing leaks into the landing
- * pages:
+ * The ledger surface system (tokens, hairline panels, ledger rows, segmented
+ * control, sheet, button families) lives in app/globals.css. What is scoped
+ * here is the household's own motion law and the signature odometer:
  *
- *  1. Motion, borrowed craft in Khayaal's voice: a staggered card entrance
- *     that plays once, masked line reveals for the alert banner, small
- *     press/lift answers on every control, and a breathing dot for live
- *     sensors. Everything respects prefers-reduced-motion by falling back to
- *     fully visible, static UI.
- *
- *  2. The Vision UI dark-glass surface system (Figma file
- *     zxxQKywVTTCgmXdHQHQxdh, Dashboard Screen 580:3777): the glass card
- *     recipe (.kh-glass), the white gradient hairline (.kh-gradring), the
- *     glass secondary button fill (.kh-gbtn), the page's blurred colour
- *     blobs (.kh-blobs), and the rolling-digit counter. Values are the ones
- *     pulled from the Figma: card fill linear-gradient(175deg, rgba(6,11,40,
- *     .74), rgba(14,21,58,.71)), backdrop blur 60px, radius 20px, shadow
- *     0 3.5px 5.5px rgba(0,0,0,.02).
+ *  - One curve everywhere: cubic-bezier(.32,.72,0,1), 160–360ms.
+ *  - Section fade-up on first paint, staggered 60ms, once (globals .kh-enter).
+ *  - The odometer counter — the one signature animation, kept verbatim in
+ *    geometry and easing, recoloured to ink on paper.
+ *  - Magnetic press on every control: scale(.97) on :active.
+ *  - prefers-reduced-motion kills everything but opacity.
  *
  * Deliberately plain CSS imported by the household pages — no motion library.
  */
 
 /* -------------------------------------------------------------------------
-   0. Type layer — the dashboard speaks Plus Jakarta Sans (the Vision UI
-   face; Google Fonts family "Plus Jakarta Sans"). The household layout loads
-   it via next/font and sets --font-jakarta here; re-pointing --font-heading
-   means tailwind's `font-heading` utility resolves to it inside .kh-root
-   only. Inter stays loaded as the fallback. `color-scheme: dark` makes the
-   browser render native selects/scrollbars for the dark surface.
+   0. Type layer — the ledger voices. Verdicts are serif (ui-serif / New York
+   / Georgia), body and UI are the system sans, every numeral, index and
+   timestamp is mono. `color-scheme: light` keeps native selects and
+   scrollbars on paper.
    ------------------------------------------------------------------------- */
 .kh-root {
-  color-scheme: dark;
-  font-family: var(--font-jakarta), var(--font-inter), 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  --font-heading: var(--font-jakarta), var(--font-inter), 'Plus Jakarta Sans', system-ui, sans-serif;
+  color-scheme: light;
+  font-family: var(--font-body-ui);
 }
 
 /* -------------------------------------------------------------------------
-   0b. Vision glass recipe — the card surface every dashboard card shares.
-   Fill + blur + shadow are the exact Figma values; the hairline is Figma's
-   white gradient border (linear-gradient(138deg, white .36 → transparent))
-   drawn as a 1px masked ring so it follows the radius, landing at ~12-15%
-   effective opacity like the reference.
+   1. The signature — the wellbeing odometer.
+   One clipped column per digit holding a 0–9 stack, translated by whole ems
+   on a gentle spring when the live score changes. Geometry and easing are
+   unchanged from the previous design; only the colour moved (ink on paper,
+   mono digits per the ledger's data voice). The old orange under-glow is
+   gone — glow is banned.
    ------------------------------------------------------------------------- */
-.kh-glass {
-  background: linear-gradient(175deg, rgba(6, 11, 40, 0.74) 0%, rgba(14, 21, 58, 0.71) 100%);
-  -webkit-backdrop-filter: blur(60px);
-  backdrop-filter: blur(60px);
-  box-shadow: 0 3.5px 5.5px rgba(0, 0, 0, 0.02);
-}
-
-.kh-gradring {
-  position: relative;
-}
-.kh-gradring::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(138deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0) 64%);
-  opacity: 0.42;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Glass secondary button — white 10% fill, 15% on hover, gradient hairline
-   comes from .kh-gradring in the class list. */
-.kh-gbtn {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-.kh-gbtn:hover {
-  background-color: rgba(255, 255, 255, 0.16);
-}
-
-/* The page's depth layer. Vision UI blurs a photo 136px behind its navy
-   gradient; Khayaal reproduces the depth with pure CSS — large soft radial
-   colour blobs (Vision purple/blue/teal, plus one faint Khayaal ember) on a
-   fixed layer behind everything. */
-.kh-blobs {
-  background:
-    radial-gradient(38% 30% at 16% 6%, rgba(67, 24, 255, 0.34) 0%, rgba(67, 24, 255, 0) 100%),
-    radial-gradient(44% 36% at 86% 90%, rgba(0, 117, 255, 0.26) 0%, rgba(0, 117, 255, 0) 100%),
-    radial-gradient(26% 20% at 74% 14%, rgba(79, 209, 197, 0.10) 0%, rgba(79, 209, 197, 0) 100%),
-    radial-gradient(30% 24% at 8% 78%, rgba(220, 104, 3, 0.10) 0%, rgba(220, 104, 3, 0) 100%);
-  filter: blur(46px);
-}
-
-/* -------------------------------------------------------------------------
-   1. Card entrance — first paint only.
-   CSS animations run once per element lifetime: the /state poll re-renders
-   the page every 1.5 s but React keeps the same DOM nodes, so the choreography
-   physically cannot re-fire. `backwards` fill means the cards hold their
-   hidden state through the stagger delay, then return to natural styles —
-   no lingering transform/filter, so nothing traps the fixed consent popup
-   in a containing block after the entrance settles.
-   ------------------------------------------------------------------------- */
-@keyframes kh-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(1.02);
-    filter: blur(7px);
-  }
-  60% {
-    filter: blur(0);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-
-.kh-bento > * {
-  animation: kh-card-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-.kh-bento > :nth-child(1)  { animation-delay: 40ms; }
-.kh-bento > :nth-child(2)  { animation-delay: 95ms; }
-.kh-bento > :nth-child(3)  { animation-delay: 150ms; }
-.kh-bento > :nth-child(4)  { animation-delay: 205ms; }
-.kh-bento > :nth-child(5)  { animation-delay: 260ms; }
-.kh-bento > :nth-child(6)  { animation-delay: 315ms; }
-.kh-bento > :nth-child(7)  { animation-delay: 370ms; }
-.kh-bento > :nth-child(8)  { animation-delay: 425ms; }
-.kh-bento > :nth-child(9)  { animation-delay: 480ms; }
-.kh-bento > :nth-child(10) { animation-delay: 535ms; }
-.kh-bento > :nth-child(11) { animation-delay: 590ms; }
-.kh-bento > :nth-child(12) { animation-delay: 645ms; }
-.kh-bento > :nth-child(13) { animation-delay: 700ms; }
-.kh-bento > :nth-child(14) { animation-delay: 755ms; }
-.kh-bento > :nth-child(15) { animation-delay: 810ms; }
-.kh-bento > :nth-child(16) { animation-delay: 865ms; }
-
-/* -------------------------------------------------------------------------
-   2. Masked line reveal — the tier-3 banner's words slide out from behind
-   an overflow mask while the banner itself is collapsing open. The JSX keys
-   the rising line on the alert state, so the reveal fires when the tier
-   flips (and never again while the banner stays up).
-   ------------------------------------------------------------------------- */
-@keyframes kh-line-out {
-  from { transform: translateY(112%); }
-  to   { transform: translateY(0); }
-}
-.kh-line-mask {
-  display: block;
-  overflow: hidden;
-}
-.kh-line-rise {
-  display: block;
-  animation: kh-line-out 0.66s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: var(--kh-line-delay, 0ms);
-}
-
-/* -------------------------------------------------------------------------
-   3. Press + lift micro-interactions.
-   Scoped under .kh-dash so these rules outrank Tailwind's single-class
-   transition utilities regardless of stylesheet order. The press is the
-   spring from the v3 reference: scale ~0.96 with a slight overshoot back
-   (cubic-bezier .34,1.56,.64,1); a 1px hover lift for solid primary actions;
-   everything well under 250 ms.
-   ------------------------------------------------------------------------- */
-.kh-dash .kh-press {
-  transition:
-    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease,
-    opacity 150ms ease;
-}
-.kh-dash .kh-press:active {
-  transform: scale(0.96);
-}
-.kh-dash .kh-lift:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.55);
-}
-.kh-dash .kh-lift:active {
-  transform: translateY(0) scale(0.96);
-}
-
-/* -------------------------------------------------------------------------
-   4. Live-sensor breathing dot — the Watchers card's status dot eases its
-   opacity while a sensor is checking in. Gentle, ~2.4 s, opacity only.
-   ------------------------------------------------------------------------- */
-@keyframes kh-dot-breathe {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.4; }
-}
-.kh-dot-live {
-  animation: kh-dot-breathe 2.4s ease-in-out infinite;
-}
-
-/* -------------------------------------------------------------------------
-   5. The signature — the wellbeing counter.
-   The Vision glass card (same recipe as .kh-glass, applied in the component)
-   with the Khayaal orange glow breathing behind the digits, and an odometer:
-   one clipped column per digit holding a 0–9 stack, translated by whole ems
-   on a gentle spring. Geometry follows the v3 reference (.kx3-odo /
-   .kx3-digit); the orange under-glow keeps the counter the "vibrant variant"
-   card in the Vision family.
-   ------------------------------------------------------------------------- */
-.kh-counter-glow {
-  position: absolute;
-  inset: -38% -18%;
-  pointer-events: none;
-  background: radial-gradient(
-    circle at 50% 58%,
-    rgba(255, 47, 0, 0) 55%,
-    rgba(255, 47, 0, 0.22) 72%,
-    rgba(255, 107, 33, 0.45) 84%,
-    rgba(242, 127, 36, 0.75) 93%,
-    rgba(255, 220, 166, 0.8) 100%
-  );
-  filter: blur(8px);
-  animation: kh-glow-breathe 6s ease-in-out infinite;
-}
-@keyframes kh-glow-breathe {
-  0%, 100% { opacity: 0.75; transform: translateY(0); }
-  50%      { opacity: 1; transform: translateY(-6px); }
-}
-
 .kh-odo {
   display: flex;
   align-items: baseline;
   height: 1em;
   overflow: hidden;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 .kh-odo-digit {
@@ -253,36 +64,46 @@
   line-height: 1;
 }
 
-/* The counter's digits carry Plus Jakarta Sans Bold with tight tracking —
-   the Vision UI big-number setting. */
+/* The counter's digits speak the data voice: mono. */
 .kh-odo-digits {
-  font-family: var(--font-jakarta), var(--font-inter), 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-data);
 }
 
 /* -------------------------------------------------------------------------
-   6. Tier emphasis — the ladder chips, the header badge and the alert
-   banner's dot ease their colours when a poll flips the tier, so the climb
-   reads as a change, not a jump. Colour + veil-opacity only; no movement.
+   2. Magnetic press — every control answers with scale(.97) on :active,
+   160ms on the ledger curve. No lift, no shadow.
+   ------------------------------------------------------------------------- */
+.kh-dash .kh-press {
+  transition:
+    transform 160ms var(--ease-ledger),
+    background-color 160ms var(--ease-ledger),
+    border-color 160ms var(--ease-ledger),
+    color 160ms var(--ease-ledger),
+    opacity 160ms var(--ease-ledger);
+}
+.kh-dash .kh-press:active {
+  transform: scale(0.97);
+}
+
+/* -------------------------------------------------------------------------
+   3. Tier emphasis — ladder steps, the header badge and the alert banner's
+   dot ease their colours when a poll flips the tier, so the climb reads as a
+   change, not a jump. Colour only; no movement, no glow.
    ------------------------------------------------------------------------- */
 .kh-tier-ease {
-  transition: background-color 700ms ease, color 700ms ease, border-color 700ms ease, box-shadow 700ms ease, opacity 700ms ease;
+  transition:
+    background-color 240ms var(--ease-ledger),
+    color 240ms var(--ease-ledger),
+    border-color 240ms var(--ease-ledger),
+    opacity 240ms var(--ease-ledger);
 }
 
 /* -------------------------------------------------------------------------
-   Reduced motion: every animation above gets its escape — cards, lines and
-   dots render fully visible and still; press/lift keep their colour answers
-   but never move; the odometer snaps instead of rolling; the glow holds.
+   Reduced motion: the entrance holds its settled frame, presses keep their
+   colour answers but never move, the odometer snaps instead of rolling.
    ------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .kh-bento > *,
-  .kh-line-rise,
-  .kh-dot-live,
-  .kh-counter-glow {
-    animation: none !important;
-  }
-  .kh-dash .kh-press:active,
-  .kh-dash .kh-lift:hover,
-  .kh-dash .kh-lift:active {
+  .kh-dash .kh-press:active {
     transform: none;
   }
   .kh-odo-col {

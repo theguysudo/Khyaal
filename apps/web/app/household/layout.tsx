@@ -1,32 +1,14 @@
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import * as React from 'react';
 
 /**
- * The household shell's type layer.
+ * The household shell — Quiet Ledger edition.
  *
- * The dashboard speaks Vision UI: Plus Jakarta Sans (Google Fonts family for
- * Vision's "Plus Jakarta Display"), weights 400/500/600/700, on the dark
- * glass surface. It is loaded here — not in the root layout — so the landing
- * page keeps its own display faces untouched. Inter stays loaded as the
- * fallback face. `.kh-root` both applies Plus Jakarta Sans as the body face
- * and re-points `--font-heading` (which tailwind's `font-heading` utility
- * resolves to) at it, so every card inside the household route renders the
- * dashboard's type scale without touching anything outside it.
+ * The ledger's voices are system stacks defined in globals.css: verdicts in
+ * ui-serif ("New York"/Georgia), body and UI in the system sans, every
+ * numeral, index and timestamp in ui-monospace. Nothing needs loading here —
+ * the dashboard reads like a printed ledger, not a branded type show.
+ * `.kh-root` scopes the household's motion layer (app/household/motion.css).
  */
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-jakarta',
-  display: 'swap',
-});
-
 export default function HouseholdLayout({ children }: { children: React.ReactNode }) {
-  return <div className={`${jakarta.variable} ${inter.variable} kh-root`}>{children}</div>;
+  return <div className="kh-root">{children}</div>;
 }

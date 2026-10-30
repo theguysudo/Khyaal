@@ -1,12 +1,15 @@
 'use client';
 
 /**
- * Bento primitives for the family dashboard, adapted from the analytics-bento
- * reference: smooth Catmull-Rom paths, rAF CountUp, ResizeObserver sizing —
- * with surfaces on the Vision UI dark-glass recipe (fill
- * linear-gradient(175deg, rgba(6,11,40,.74), rgba(14,21,58,.71)), 60px
- * backdrop blur, 20px radius, white gradient hairline) and every number shown
- * is one a family is allowed to see.
+ * Ledger primitives for the family dashboard — Quiet Ledger edition
+ * (docs/DESIGN_QUIET_LEDGER.md).
+ *
+ * Surfaces are hairline panels on raised paper: 1px rules, radius 8, never a
+ * shadow, never a pill. Data lives in full-width ledger rows (caps label left,
+ * tabular-mono value right, status as a 6px dot + word). Multi-frame content
+ * gets a segmented control with a 160ms thumb slide. The measurement helpers
+ * (useSize), the Catmull-Rom path builder and the reduced-motion hook are
+ * unchanged — only the skin moved.
  */
 
 import * as React from 'react';
@@ -89,6 +92,31 @@ export function CountUp({ value, duration = 1100 }: { value: number; duration?: 
   return <span ref={ref}>0</span>;
 }
 
+/**
+ * The numbered section head — mono index + caps label + hairline rule spanning
+ * the column. Every card on the dashboard belongs to one of these.
+ */
+export function SectionHead({
+  index,
+  label,
+  note,
+  id,
+}: {
+  index: string;
+  label: string;
+  note?: string;
+  id?: string;
+}) {
+  return (
+    <div id={id} className="ledger-section-head scroll-mt-6">
+      <span className="ledger-index">{index}</span>
+      <span className="ledger-label">{label}</span>
+      {note && <span className="ledger-note">{note}</span>}
+    </div>
+  );
+}
+
+/** The ledger panel — raised paper, 1px rule, radius 8, never a shadow. */
 export function BentoCard({
   className = '',
   children,
@@ -101,18 +129,100 @@ export function BentoCard({
   return (
     <section
       aria-label={label}
-      className={`kh-glass kh-gradring relative min-w-0 overflow-hidden rounded-[20px] p-5 text-white sm:p-6 ${className}`}
+      className={`ledger-panel relative min-w-0 p-5 text-[#1A1815] sm:p-6 ${className}`}
     >
       {children}
     </section>
   );
 }
 
+/** Card title — caps 13px label with an optional note on the right, on a rule. */
 export function CardTitle({ children, note }: { children: React.ReactNode; note?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <h2 className="text-lg font-bold leading-6 tracking-[-0.01em] text-white">{children}</h2>
-      {note && <span className="text-[11px] font-medium text-vision-dim">{note}</span>}
+    <div className="flex items-baseline justify-between gap-3 border-b border-[#E7E2DA] pb-3">
+      <h2 className="text-[13px] font-medium uppercase leading-4 tracking-[0.08em] text-[#1A1815]">{children}</h2>
+      {note && <span className="text-[13px] text-[#8A857D]">{note}</span>}
+    </div>
+  );
+}
+
+/** Status — a 6px dot and a word. Colour is never the only carrier. */
+export function StatusDot({
+  color,
+  word,
+  className = '',
+}: {
+  color: string;
+  word: string;
+  className?: string;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-2 text-[13px] text-[#57534E] ${className}`}>
+      <span className="dot" style={{ background: color }} aria-hidden />
+      <span>{word}</span>
+    </span>
+  );
+}
+
+/** One ledger row: caps label left, tabular-mono value right. */
+export function LedgerRow({
+  label,
+  value,
+  children,
+}: {
+  label: React.ReactNode;
+  value?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="ledger-row">
+      <span className="ledger-row-label">{label}</span>
+      {value !== undefined ? <span className="ledger-row-value">{value}</span> : null}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Segmented control — track paper-raised on a 1px rule, active segment
+ * ink-on-paper with a 160ms thumb slide (iOS 26 mechanics, re-authored).
+ */
+export function Seg<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  ariaLabel: string;
+}) {
+  const active = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
+  return (
+    <div className="seg" role="group" aria-label={ariaLabel}>
+      <span
+        aria-hidden
+        className="seg-thumb"
+        style={{
+          width: `calc((100% - 4px) / ${options.length})`,
+          transform: `translateX(${active * 100}%)`,
+        }}
+      />
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          className="seg-btn"
+          aria-pressed={o.value === value}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }

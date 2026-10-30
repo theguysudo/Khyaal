@@ -1,53 +1,60 @@
 /**
- * The dashboard's shared UI vocabulary — one place for the Vision-UI dark
- * glass patterns every card repeats: focus rings, buttons, badges, inputs,
- * and the tier colour map (the dashboard-side twin of lib/api's TIER_META,
- * restyled onto the Vision dark surface: Vision green/amber/red for tiers,
- * Khayaal terracotta for the mid-tier ramp).
+ * The dashboard's shared UI vocabulary — the Quiet Ledger edition.
  *
- * Brand mapping: Khayaal terracotta (brand-*) stays the colour of filled
- * actions; Vision's purple/blue/teal/green (vision-*) are the data accents.
- * Everything is a full literal string so Tailwind's scanner sees each class.
+ * Buttons and inputs map onto the four ledger button families and the paper
+ * input defined in app/globals.css (.btn-primary swipe-fill, .btn-secondary
+ * border-draw, .btn-ghost underline-draw, .btn-sos rest-pulse). Focus is
+ * handled globally (2px signal outline on :focus-visible) — the FOCUS_* here
+ * only special-case surfaces where the signal outline would vanish.
+ *
+ * Status is always dot + word: the tier map's `pill` is text colour only, the
+ * `dot` paints the 6px status dot, `color` paints chart fills. Everything is
+ * a full literal string so Tailwind's scanner sees each class.
  */
 
-/* Focus rings — one per surface the dashboard renders on. White rings on the
-   dark glass, offset onto the page navy. */
-export const FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-vision-navy';
-export const FOCUS_ON_DARK =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-vision-navy';
+/* Focus rings. The ledger's global focus outline is 2px signal; on the alarm
+   banner (signal-on-alarm would vanish) the outline switches to paper. */
+export const FOCUS = '';
+export const FOCUS_ON_DARK = '';
 export const FOCUS_ON_RED =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#20060a]';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFF7F0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2a0d09]';
 export const FOCUS_ON_N50 = FOCUS;
 
-/* Buttons — Vision UI on dark: primary is Khayaal terracotta (the brand's
-   filled action, white text, 10×18 padding, 10px radius, warm shadow);
-   secondary is glass (white 10% fill, gradient hairline via .kh-gradring,
-   hover 16%). */
-export const BTN_PRIMARY = `kh-press kh-lift inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-brand-600 px-[18px] py-[10px] text-sm font-semibold text-white shadow-[0_6px_20px_-6px_rgba(220,104,3,0.55)] transition-colors hover:bg-brand-500 disabled:opacity-40 disabled:hover:bg-brand-600 ${FOCUS}`;
-export const BTN_SECONDARY = `kh-press kh-gradring kh-gbtn inline-flex items-center justify-center gap-1.5 rounded-[10px] px-[18px] py-[10px] text-sm font-semibold text-white disabled:opacity-40 ${FOCUS}`;
-export const BTN_DANGER = `kh-press kh-lift inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-err-600 px-[18px] py-[10px] text-sm font-semibold text-white shadow-[0_6px_20px_-6px_rgba(227,26,26,0.55)] transition-colors hover:bg-err-500 disabled:opacity-40 ${FOCUS_ON_RED}`;
-/* The small, quiet variant used inside rows and chips. */
-export const BTN_GHOST =
-  'kh-press rounded-lg px-2.5 py-1 text-xs font-medium text-vision-dim transition-colors hover:bg-white/10 hover:text-white';
+/* Buttons — the ledger families from globals.css. kh-press adds the magnetic
+   scale(.97) answer from motion.css. */
+export const BTN_PRIMARY = 'btn-primary kh-press';
+export const BTN_SECONDARY = 'btn-secondary kh-press';
+export const BTN_GHOST = 'btn-ghost kh-press';
+/* Solid alarm button for the tier-3 banner — alarm fill, no pulse (the pulse
+   is reserved for the SOS rail button, the only permitted loop). */
+export const BTN_DANGER =
+  'kh-press inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#B3261E] px-[18px] py-[10px] text-[15px] font-semibold text-[#FFF7F0] transition-colors hover:bg-[#9E211A] disabled:opacity-40';
 
-/* Inputs — Vision's dark field (Figma 580:4242): near-navy fill, faint white
-   stroke, quiet white focus. */
+/* Inputs — paper field on a 1px rule-strong, signal focus border. */
 export const INPUT =
-  'min-w-0 rounded-xl border border-white/15 bg-vision-field/70 px-3.5 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/40 focus-visible:ring-4 focus-visible:ring-white/10';
+  'min-w-0 rounded-lg border border-[#D6CFC4] bg-white px-3.5 py-2.5 text-[15px] text-[#1A1815] outline-none transition-colors placeholder:text-[#8A857D] focus:border-[#B4451C]';
 
-/* Badge pill — Text xs/Medium, 2px 8px, 16px radius (Figma badge pattern). */
-export const BADGE =
-  'inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-0.5 text-xs font-medium whitespace-nowrap';
+/* Status line — dot + word, no pill, no colour-only carrier. */
+export const BADGE = 'inline-flex items-center gap-2 text-[13px] whitespace-nowrap';
 
-/* The dashboard-side tier map — same tiers as lib/api's TIER_META, recoloured
-   for the dark glass. `dot`/`pill` style the status badge (pills are the
-   hue at 10-15% fill with a lighter text tone for contrast); `color` paints
-   chart fills and contribution bars. */
+/* The dashboard-side tier map — same tiers as lib/api's TIER_META, spoken in
+   ledger tokens: calm green, watch amber, alarm red. `dot`/`pill` style the
+   status line (text hue + 6px dot); `color` paints chart fills. */
 export const TIER_UI: Record<number, { color: string; pill: string; dot: string }> = {
-  0: { color: '#01B574', pill: 'bg-[#01B574]/10 text-[#01B574]', dot: 'bg-[#01B574]' },
-  1: { color: '#FDB022', pill: 'bg-[#FDB022]/10 text-[#FDB022]', dot: 'bg-[#FDB022]' },
-  2: { color: '#F79009', pill: 'bg-[#F79009]/10 text-[#F79009]', dot: 'bg-[#F79009]' },
-  3: { color: '#E31A1A', pill: 'bg-[#E31A1A]/15 text-err-400', dot: 'bg-[#E31A1A]' },
-  4: { color: '#E31A1A', pill: 'bg-err-600 text-white', dot: 'bg-err-200' },
+  0: { color: '#2F6B4F', pill: 'text-[#2F6B4F]', dot: 'bg-[#2F6B4F]' },
+  1: { color: '#9A6A1B', pill: 'text-[#9A6A1B]', dot: 'bg-[#9A6A1B]' },
+  2: { color: '#9A6A1B', pill: 'text-[#9A6A1B]', dot: 'bg-[#9A6A1B]' },
+  3: { color: '#B3261E', pill: 'text-[#B3261E]', dot: 'bg-[#B3261E]' },
+  4: { color: '#B3261E', pill: 'text-[#B3261E]', dot: 'bg-[#B3261E]' },
 };
+
+/* Chart palette — ledger tokens for svg fills/strokes on paper. */
+export const INK = '#1A1815';
+export const INK_2 = '#57534E';
+export const INK_3 = '#8A857D';
+export const RULE = '#E7E2DA';
+export const RULE_STRONG = '#D6CFC4';
+export const SIGNAL = '#B4451C';
+export const CALM = '#2F6B4F';
+export const WATCH = '#9A6A1B';
+export const ALARM = '#B3261E';

@@ -15,16 +15,15 @@ export type SoundId = 'rain' | 'ocean' | 'forest' | 'night' | 'fire';
 export interface SoundMeta {
   id: SoundId;
   label: string;
-  glyph: string;
   hint: string;
 }
 
 export const SOUNDS: SoundMeta[] = [
-  { id: 'rain', label: 'Rain', glyph: '🌧️', hint: 'steady rain on a window' },
-  { id: 'ocean', label: 'Ocean', glyph: '🌊', hint: 'slow waves on a shore' },
-  { id: 'forest', label: 'Forest', glyph: '🌲', hint: 'leaves and far-off birds' },
-  { id: 'night', label: 'Night', glyph: '🌙', hint: 'crickets and a soft breeze' },
-  { id: 'fire', label: 'Fireplace', glyph: '🔥', hint: 'embers and a warm crackle' },
+  { id: 'rain', label: 'Rain', hint: 'steady rain on a window' },
+  { id: 'ocean', label: 'Ocean', hint: 'slow waves on a shore' },
+  { id: 'forest', label: 'Forest', hint: 'leaves and far-off birds' },
+  { id: 'night', label: 'Night', hint: 'crickets and a soft breeze' },
+  { id: 'fire', label: 'Fireplace', hint: 'embers and a warm crackle' },
 ];
 
 interface Track {

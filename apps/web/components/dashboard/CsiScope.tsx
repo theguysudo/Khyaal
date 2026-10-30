@@ -4,42 +4,41 @@
  * CsiScope — the room sensor's own waveform, drawn like an instrument.
  *
  * The ESP32 reads how its Wi-Fi echoes move through the room and sends one
- * variance number every 250 ms. This card draws that number over the last
- * three minutes, with the device's own motion threshold and the periods it
+ * variance number every 250 ms. This card draws that number over a window
+ * chosen on the ledger's segmented control (1 / 3 / 5 minutes — the endpoint
+ * keeps five), with the device's own motion threshold and the periods it
  * flagged as motion or a fall shaded behind the line. It is the room's
  * signal, not a recording of a person — there is no audio, no camera and
  * nothing here to replay.
  */
 
 import * as React from 'react';
-import { BentoCard, CardTitle, smooth, useReducedMotion, useSize } from './bento';
+import { BentoCard, Seg, smooth, useReducedMotion, useSize } from './bento';
 import { fmtClock, useCsiSeries, type CsiBundle } from '@/lib/api';
-
-/** How much of the stream the scope shows — the endpoint returns 5 minutes. */
-const WINDOW_MS = 3 * 60_000;
 
 const CH = 150; // svg height, matching the other dashboard charts
 const RAIL_H = 16; // strip reserved at the bottom for event markers
 
-/* Chart palette — Vision data accents on the dark glass: the waveform is
-   white, motion is teal, a fall is Vision red, grid/separators #2D2E5F. */
-const WAVE = '#FFFFFF';
-const SAGE = '#4FD1C5';
-const RED = '#E31A1A';
-const DUSK = '#2D2E5F';
-const GREY = '#2D2E5F';
-/* The IR beam keeps its own hue so it never reads as a CSI verdict — lifted
-   to a violet that survives the dark surface. */
-const IR = '#A78BFA';
+/* Chart palette — ledger tokens on paper: the waveform is ink, motion is
+   calm green, a fall is alarm red, the grid and threshold are rules. The IR
+   beam keeps its own hue so it never reads as a CSI verdict — the watch
+   amber, dashed on the rail. */
+const WAVE = '#1A1815';
+const CALM = '#2F6B4F';
+const ALARM = '#B3261E';
+const RULE = '#E7E2DA';
+const RULE_STRONG = '#D6CFC4';
+const INK_3 = '#8A857D';
+const WATCH = '#9A6A1B';
 
-const STATE_STYLE: Record<string, { label: string; pill: string; dot: string; pulse: boolean }> = {
-  idle: { label: 'Idle', pill: 'bg-white/[0.06] text-vision-dim', dot: 'bg-white/30', pulse: false },
-  motion: { label: 'Motion', pill: 'bg-[#4FD1C5]/10 text-[#4FD1C5]', dot: 'bg-[#4FD1C5]', pulse: true },
-  fall: { label: 'Fall', pill: 'bg-[#E31A1A]/15 text-err-400', dot: 'bg-[#E31A1A]', pulse: true },
-  lost: { label: 'Lost', pill: 'bg-white/[0.06] text-vision-dim', dot: 'bg-vision-dim', pulse: false },
+const STATE_STYLE: Record<string, { label: string; color: string }> = {
+  idle: { label: 'Idle', color: RULE_STRONG },
+  motion: { label: 'Motion', color: CALM },
+  fall: { label: 'Fall', color: ALARM },
+  lost: { label: 'Lost', color: INK_3 },
 };
 
-const EVENT_COLOR: Record<string, string> = { motion: SAGE, fall: RED, idle: GREY, lost: '#4A5070' };
+const EVENT_COLOR: Record<string, string> = { motion: CALM, fall: ALARM, idle: RULE_STRONG, lost: INK_3 };
 
 /** Variance numbers have no fixed unit — keep the readout short and honest. */
 function fmtV(n: number): string {
@@ -49,18 +48,33 @@ function fmtV(n: number): string {
   return n.toFixed(2);
 }
 
+const WINDOWS = [
+  { value: '60', label: '1 MIN' },
+  { value: '180', label: '3 MIN' },
+  { value: '300', label: '5 MIN' },
+] as const;
+
 export default function CsiScope({ id }: { id: string }) {
   const { bundle } = useCsiSeries(id, 1000);
   const reduce = useReducedMotion();
+  const [windowSec, setWindowSec] = React.useState<'60' | '180' | '300'>('180');
   return (
-    <BentoCard label="Room sensor scope" className="col-span-12 lg:col-span-5">
-      <CardTitle note="live · last 3 min">What the sensor hears</CardTitle>
-      <ScopeBody bundle={bundle} reduce={reduce} />
+    <BentoCard label="Room sensor scope">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E7E2DA] pb-3">
+        <h2 className="text-[13px] font-medium uppercase leading-4 tracking-[0.08em] text-[#1A1815]">What the sensor hears</h2>
+        <Seg
+          ariaLabel="Scope window"
+          value={windowSec}
+          onChange={setWindowSec}
+          options={WINDOWS.map((w) => ({ value: w.value, label: w.label }))}
+        />
+      </div>
+      <ScopeBody bundle={bundle} reduce={reduce} windowMs={Number(windowSec) * 60_000} />
     </BentoCard>
   );
 }
 
-function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boolean }) {
+function ScopeBody({ bundle, reduce, windowMs }: { bundle: CsiBundle | null; reduce: boolean; windowMs: number }) {
   const [ref, { w: W }] = useSize();
   const [drawn, setDrawn] = React.useState(false);
 
@@ -76,12 +90,12 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
   // Trim to the visible window (the tail of the series is already sorted).
   let start = points.length;
   const t1Raw = Math.max(nowTs, points.length ? points[points.length - 1].ts : 0);
-  while (start > 0 && points[start - 1].ts >= t1Raw - WINDOW_MS) start--;
+  while (start > 0 && points[start - 1].ts >= t1Raw - windowMs) start--;
   const win = points.slice(start);
 
   if (!bundle) {
     return (
-      <div className="mt-4 flex min-h-[150px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm text-vision-dim">
+      <div className="mt-4 flex min-h-[150px] items-center justify-center rounded-lg border border-dashed border-[#D6CFC4] text-[15px] text-[#57534E]">
         Listening to the room sensor…
       </div>
     );
@@ -89,7 +103,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
 
   if (win.length === 0) {
     return (
-      <div className="mt-4 rounded-xl border border-dashed border-white/15 p-5 text-sm leading-relaxed text-vision-dim">
+      <div className="mt-4 rounded-lg border border-dashed border-[#D6CFC4] p-5 text-[15px] leading-relaxed text-[#57534E]">
         Waiting for readings — wave a hand in front of the room sensor. The waveform appears as soon as
         it starts streaming.
       </div>
@@ -99,9 +113,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
   const latest = win[win.length - 1];
   const st = STATE_STYLE[latest.state] ?? {
     label: latest.state,
-    pill: 'bg-white/[0.06] text-vision-dim',
-    dot: 'bg-white/30',
-    pulse: false,
+    color: RULE_STRONG,
   };
   const thr = bundle.threshold || latest.thr;
   const sensorLabel = bundle.anchors.find((a) => a.sourceId === latest.sourceId)?.label ?? latest.sourceId;
@@ -110,8 +122,8 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
   const step = Math.max(1, Math.ceil(win.length / 480));
   const sampled = win.filter((p, i) => i % step === 0 || i === win.length - 1);
 
-  const t0 = t1Raw - WINDOW_MS;
-  const X = (ts: number) => Math.max(0, Math.min(W, ((ts - t0) / WINDOW_MS) * W));
+  const t0 = t1Raw - windowMs;
+  const X = (ts: number) => Math.max(0, Math.min(W, ((ts - t0) / windowMs) * W));
   const vMax = Math.max(thr, ...sampled.map((p) => p.v)) * 1.15 + 1e-6;
   const plotH = CH - RAIL_H;
   const Y = (v: number) => 8 + (1 - v / vMax) * (plotH - 16);
@@ -142,7 +154,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
 
   // The IR beam is the sensor's other channel: near-field only, never part
   // of the CSI verdict. Its ticks share the rail with a distinct colour.
-  const IR_COLOR = IR;
+  const IR_COLOR = WATCH;
   const irEvents = (bundle.irEvents ?? []).slice(-30);
   const irOnRail = irEvents.filter((e) => e.ts >= t0);
   const irNearNow = irEvents.length > 0 && irEvents[irEvents.length - 1].state === 'detected';
@@ -152,27 +164,34 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
     <>
       <div className="mt-4 flex items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-vision-dim">Signal strength now</p>
-          <p className="mt-1 text-[28px] font-bold leading-none tracking-[-0.02em] text-white">{fmtV(latest.v)}</p>
-          <p className="mt-1.5 text-xs text-vision-dim">{sensorLabel}</p>
+          <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-[#57534E]">Signal strength now</p>
+          <p className="mt-1 font-mono text-[28px] font-semibold leading-none tracking-[-0.02em] text-[#1A1815]">{fmtV(latest.v)}</p>
+          <p className="mt-1.5 text-[13px] text-[#8A857D]">{sensorLabel}</p>
         </div>
         <span className="inline-flex flex-col items-end gap-1.5">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ${st.pill}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${st.dot} ${st.pulse && !reduce ? 'animate-pulse' : ''}`} />
+          {/* status — always dot + word */}
+          <span className="inline-flex items-center gap-2 text-[13px] text-[#57534E]">
+            <span className="dot" style={{ background: st.color }} aria-hidden />
             {st.label}
           </span>
           {irNearNow && (
-            <span className="inline-flex items-center gap-1.5 rounded-2xl bg-[#A78BFA]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#C4B5FD]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#A78BFA]" />
+            <span className="inline-flex items-center gap-2 text-[13px] text-[#57534E]">
+              <span className="dot" style={{ background: IR_COLOR }} aria-hidden />
               Object at the sensor
             </span>
           )}
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <Stat label="Instant · 0.25 s" value={fmtV(latest.f)} />
-        <Stat label="Motion threshold" value={fmtV(thr)} />
+      <div className="mt-4">
+        <div className="ledger-row !py-2">
+          <span className="ledger-row-label">Instant · 0.25 s</span>
+          <span className="ledger-row-value">{fmtV(latest.f)}</span>
+        </div>
+        <div className="ledger-row !py-2">
+          <span className="ledger-row-label">Motion threshold</span>
+          <span className="ledger-row-value">{fmtV(thr)}</span>
+        </div>
       </div>
 
       <div ref={ref} className="relative mt-3 min-h-[150px] flex-1">
@@ -182,7 +201,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
             height={CH}
             className="block"
             role="img"
-            aria-label={`Room sensor variance over the last three minutes. Currently ${st.label.toLowerCase()}, reading ${fmtV(latest.v)} against a threshold of ${fmtV(thr)}.`}
+            aria-label={`Room sensor variance over the last window. Currently ${st.label.toLowerCase()}, reading ${fmtV(latest.v)} against a threshold of ${fmtV(thr)}.`}
           >
             {bands.map((b, i) => (
               <rect
@@ -191,15 +210,15 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
                 y={0}
                 width={b.w}
                 height={plotH}
-                fill={b.kind === 'fall' ? RED : SAGE}
-                opacity={b.kind === 'fall' ? 0.15 : 0.10}
+                fill={b.kind === 'fall' ? ALARM : CALM}
+                opacity={b.kind === 'fall' ? 0.14 : 0.10}
               />
             ))}
-            <line x1="0" x2={W} y1={Y(thr)} y2={Y(thr)} stroke="#A0AEC0" strokeOpacity="0.5" strokeWidth="1" strokeDasharray="4 4" />
-            <text x={W - 4} y={Math.max(10, Y(thr) - 5)} textAnchor="end" fontSize="10" fill="#A0AEC0">
+            <line x1="0" x2={W} y1={Y(thr)} y2={Y(thr)} stroke={INK_3} strokeOpacity="0.6" strokeWidth="1" strokeDasharray="4 4" />
+            <text x={W - 4} y={Math.max(10, Y(thr) - 5)} textAnchor="end" fontSize="10" fill={INK_3}>
               threshold
             </text>
-            {d && <path d={`${d}L${last[0]},${plotH}L${P[0][0]},${plotH}Z`} fill={WAVE} opacity="0.07" />}
+            {d && <path d={`${d}L${last[0]},${plotH}L${P[0][0]},${plotH}Z`} fill={WAVE} opacity="0.05" />}
             {d && (
               <path
                 d={d}
@@ -211,12 +230,12 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
                 style={{
                   strokeDasharray: 1,
                   strokeDashoffset: drawn || reduce ? 0 : 1,
-                  transition: reduce ? 'none' : 'stroke-dashoffset 1.2s cubic-bezier(.3,.8,.2,1) .1s',
+                  transition: reduce ? 'none' : 'stroke-dashoffset 1.2s cubic-bezier(.32,.72,0,1) .1s',
                 }}
               />
             )}
-            <circle cx={last[0]} cy={last[1]} r="4" fill={WAVE} className="stroke-[#0B1029]" strokeWidth="1.5" />
-            <line x1="0" x2={W} y1={CH - 7} y2={CH - 7} className="stroke-vision-sep" strokeWidth="1" />
+            <circle cx={last[0]} cy={last[1]} r="4" fill={WAVE} stroke="#FFFFFF" strokeWidth="1.5" />
+            <line x1="0" x2={W} y1={CH - 7} y2={CH - 7} stroke={RULE} strokeWidth="1" />
             {railEvents.map((e, i) => (
               <line
                 key={`${e.ts}-${e.sourceId}-${i}`}
@@ -224,7 +243,7 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
                 x2={X(e.ts)}
                 y1={CH - 12}
                 y2={CH - 2}
-                stroke={EVENT_COLOR[e.kind] ?? GREY}
+                stroke={EVENT_COLOR[e.kind] ?? RULE_STRONG}
                 strokeWidth="2"
                 strokeLinecap="round"
               >
@@ -250,41 +269,32 @@ function ScopeBody({ bundle, reduce }: { bundle: CsiBundle | null; reduce: boole
         )}
       </div>
 
-      <ul className="mt-3 space-y-1.5">
-        {recent.length === 0 && <li className="text-xs text-white/40">A quiet window — the sensor has not flagged anything.</li>}
+      <ul className="mt-3">
+        {recent.length === 0 && <li className="text-[13px] text-[#8A857D]">A quiet window — the sensor has not flagged anything.</li>}
         {recent.map((e, i) => (
-          <li key={`${e.ts}-${e.sourceId}-${i}`} className="flex items-baseline gap-3 text-xs">
-            <span className="flex-none tabular-nums text-white/40">{fmtClock(e.ts)}</span>
-            <span className="inline-flex items-center gap-1.5 text-white/85">
-              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: EVENT_COLOR[e.kind] ?? GREY }} />
+          <li key={`${e.ts}-${e.sourceId}-${i}`} className="ledger-row !py-2 text-[13px]">
+            <span className="flex-none font-mono tabular-nums text-[#8A857D]">{fmtClock(e.ts)}</span>
+            <span className="inline-flex items-center gap-2 text-[#1A1815]">
+              <span className="dot flex-none" style={{ background: EVENT_COLOR[e.kind] ?? RULE_STRONG }} aria-hidden />
               {e.label}
             </span>
           </li>
         ))}
         {recentIr.map((e, i) => (
-          <li key={`ir-${e.ts}-${i}`} className="flex items-baseline gap-3 text-xs">
-            <span className="flex-none tabular-nums text-white/40">{fmtClock(e.ts)}</span>
-            <span className="inline-flex items-center gap-1.5 text-white/85">
-              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: IR_COLOR }} />
+          <li key={`ir-${e.ts}-${i}`} className="ledger-row !py-2 text-[13px]">
+            <span className="flex-none font-mono tabular-nums text-[#8A857D]">{fmtClock(e.ts)}</span>
+            <span className="inline-flex items-center gap-2 text-[#1A1815]">
+              <span className="dot flex-none" style={{ background: IR_COLOR }} aria-hidden />
               {e.state === 'detected' ? 'Something is right at the sensor (IR beam)' : 'The IR beam cleared'}
             </span>
           </li>
         ))}
       </ul>
 
-      <p className="mt-3 text-[11px] leading-relaxed text-vision-dim">
+      <p className="mt-3 text-[13px] leading-relaxed text-[#8A857D]">
         The sensor reads how its own Wi-Fi echoes move around the room — a waveform, never a recording. No
         camera, no microphone.
       </p>
     </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-vision-tile/60 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-vision-dim">{label}</p>
-      <p className="mt-1 text-lg font-bold leading-none tracking-[-0.01em] text-white">{value}</p>
-    </div>
   );
 }

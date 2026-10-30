@@ -1,13 +1,15 @@
 'use client';
 
 /**
- * The child dashboard — calm bento, richer controls, now in the Vision UI
- * language: the deep navy gradient page, dark-glass cards (fill
- * linear-gradient(175deg, rgba(6,11,40,.74), rgba(14,21,58,.71)), 60px
- * backdrop blur, 20px radius, white gradient hairline), Plus Jakarta Sans,
- * white/#A0AEC0 text — with Khayaal's terracotta kept as the brand colour of
- * every filled action, and the wellbeing score as the signature glass counter
- * with rolling odometer digits and its own orange glow.
+ * The child dashboard — the Quiet Ledger edition.
+ *
+ * A printed ledger, not a SaaS console: warm paper, three inks, hairline
+ * rules, numbered editorial sections (01 — SIGNALS … 05 — SOURCES), one warm
+ * accent. The serif verdict is the loudest element on the page and the
+ * odometer wellbeing counter rolls directly beneath it. Data lives in
+ * full-width ledger rows — caps label left, tabular-mono value right, status
+ * always as a 6px dot and a word. Panels are raised paper on a 1px rule; they
+ * never carry a shadow or any soft-effect surface.
  *
  * Dignity-first by construction: this screen never receives raw signals from
  * the API, only aggregates (per-hour counts), a status, plain-language
@@ -21,8 +23,8 @@ import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import '../motion.css';
-import { BentoCard, CardTitle, smooth, useSize } from '@/components/dashboard/bento';
-import { CounterCard } from '@/components/dashboard/Odometer';
+import { BentoCard, CardTitle, SectionHead, Seg, smooth, useSize } from '@/components/dashboard/bento';
+import { CounterCard, Odometer } from '@/components/dashboard/Odometer';
 import {
   BADGE,
   BTN_DANGER,
@@ -33,6 +35,14 @@ import {
   INPUT,
   TIER_UI,
 } from '@/components/dashboard/kh';
+import {
+  IconBell,
+  IconCheckin,
+  IconLock,
+  IconMessage,
+  IconPhone,
+  IconVoice,
+} from '@/components/dashboard/icons';
 import NightWatchCard from '@/components/dashboard/NightWatchCard';
 import TalkbackCard from '@/components/dashboard/TalkbackCard';
 import MovementCard from '@/components/dashboard/MovementCard';
@@ -42,13 +52,67 @@ import BlueprintMap from '@/components/dashboard/BlueprintMap';
 import CsiScope from '@/components/dashboard/CsiScope';
 import { fmtAgo, fmtClock, patchJSON, postJSON, TIER_META, useHouseholdState } from '@/lib/api';
 
-/** The header's anchor nav — the same sections the old hero jumped to. */
+/** The header's anchor nav — the numbered sections of the ledger. */
 const NAV_LINKS = [
-  { label: 'Status', href: '#kh-current-status' },
-  { label: 'Her day', href: '#kh-day-trend' },
-  { label: 'Rhythm', href: '#kh-rhythm' },
-  { label: 'Circle', href: '#kh-care-circle' },
+  { label: 'Signals', href: '#kh-signals', index: '01' },
+  { label: 'Watchers', href: '#kh-watchers', index: '02' },
+  { label: 'Talk', href: '#kh-talk', index: '03' },
+  { label: 'Night', href: '#kh-night', index: '04' },
 ] as const;
+
+/** The serif verdict, one line per tier — meaning matches TIER_META labels. */
+function verdictFor(tier: number, parentName: string, learning: boolean): string {
+  if (learning) return `Khayaal is learning ${parentName}’s rhythm.`;
+  switch (tier) {
+    case 1:
+      return `${parentName} got a gentle nudge.`;
+    case 2:
+      return `${parentName} was asked to check in.`;
+    case 3:
+      return `${parentName} needs attention.`;
+    case 4:
+      return 'The alarm is ringing.';
+    default:
+      return `${parentName} is doing fine.`;
+  }
+}
+
+/**
+ * The mobile tab bar — the iOS 26 floating tab bar flattened to editorial:
+ * a fixed paper bar with a hairline top rule, mono indices 01–04, active =
+ * 2px signal underline. No blur. The section nearest the top of the viewport
+ * is the active one.
+ */
+function LedgerTabBar() {
+  const [active, setActive] = useState<string>('kh-signals');
+
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) setActive(e.target.id);
+        }
+      },
+      { rootMargin: '-20% 0px -60% 0px' },
+    );
+    NAV_LINKS.forEach(({ href }) => {
+      const el = document.getElementById(href.slice(1));
+      if (el) io.observe(el);
+    });
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <nav className="ledger-tabbar lg:hidden" aria-label="Sections">
+      {NAV_LINKS.map((l) => (
+        <a key={l.href} href={l.href} className={active === l.href.slice(1) ? 'active' : ''} aria-current={active === l.href.slice(1) ? 'true' : undefined}>
+          <span>{l.index}</span>
+          <span className="t-word">{l.label}</span>
+        </a>
+      ))}
+    </nav>
+  );
+}
 
 export default function DashboardPage() {
   const { id } = useParams<{ id: string }>();
@@ -57,13 +121,10 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <main
-        className="kh-dash flex min-h-screen items-center justify-center px-6"
-        style={{ background: 'linear-gradient(169deg, #0F123B 7%, #090D2E 62%, #020515 100%)' }}
-      >
-        <div className="kh-glass kh-gradring relative max-w-sm rounded-[20px] p-8 text-center">
-          <p className="text-lg font-bold text-white">We couldn't reach this household</p>
-          <p className="mt-2 text-sm text-vision-dim">{error}</p>
+      <main className="kh-dash flex min-h-screen items-center justify-center px-6">
+        <div className="ledger-panel max-w-sm p-8 text-center">
+          <p className="t-section text-[#1A1815]">We couldn't reach this household</p>
+          <p className="mt-2 text-sm text-[#57534E]">{error}</p>
           <Link href="/login" className={`${BTN_PRIMARY} mt-5`}>
             Your families
           </Link>
@@ -73,11 +134,8 @@ export default function DashboardPage() {
   }
   if (!bundle) {
     return (
-      <main
-        className="kh-dash flex min-h-screen items-center justify-center"
-        style={{ background: 'linear-gradient(169deg, #0F123B 7%, #090D2E 62%, #020515 100%)' }}
-      >
-        <p className="animate-pulse text-sm text-vision-dim motion-reduce:animate-none">Listening for signals…</p>
+      <main className="kh-dash flex min-h-screen items-center justify-center">
+        <p className="text-sm text-[#8A857D]">Listening for signals…</p>
       </main>
     );
   }
@@ -98,214 +156,228 @@ export default function DashboardPage() {
   };
 
   return (
-    <main
-      className="kh-dash relative min-h-screen"
-      style={{ background: 'linear-gradient(169deg, #0F123B 7%, #090D2E 62%, #020515 100%)' }}
-    >
-      {/*
-        The Vision page field: the navy gradient from the Figma (169deg,
-        #0F123B 7% → #090D2E 62% → #020515 100%) paints the scrolling page
-        itself, the blurred colour blobs that stand in for Vision's
-        136px-blurred backdrop image sit fixed behind everything, and the
-        tier tint rides above them as a whisper (which transition-colors can
-        still cross-fade when a poll flips the tier).
-      */}
-      <div aria-hidden className="kh-blobs pointer-events-none fixed -inset-[12%]" />
-      <div
-        aria-hidden
-        className="kh-tier-ease pointer-events-none fixed inset-0"
-        style={{ backgroundColor: meta.color, opacity: state.tier >= 3 ? 0.09 : 0.05 }}
-      />
-
-      <div className="relative pb-16">
-        <div className="mx-auto max-w-6xl px-4 pt-5 sm:px-8">
-          {/*
-            The header — Vision anatomy: the ✳︎ logomark chip (the one
-            terracotta brand square), the Khayaal / Overview breadcrumb in
-            white/#A0AEC0, the live tier badge, and the section anchors the
-            old hero carried — all on the navy gradient.
-          */}
-          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-vision-sep pb-4">
-            <div className="flex items-center gap-2.5">
-              <span
-                aria-hidden
-                className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-brand-600 text-[15px] text-white shadow-[0_6px_20px_-6px_rgba(220,104,3,0.55)]"
-              >
-                ✳︎
-              </span>
-              <span className="text-[13px] font-medium text-vision-dim">
-                Khayaal <span className="mx-0.5 text-white/25">/</span>{' '}
-                <strong className="font-semibold text-white">Overview</strong>
-              </span>
-              <span className={`kh-tier-ease ml-1 hidden sm:inline-flex ${BADGE} ${ui.pill}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${ui.dot} motion-reduce:animate-none ${state.tier >= 3 ? 'animate-pulse' : ''}`} aria-hidden />
-                {meta.label}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <nav aria-label="Sections" className="mr-2 hidden items-center gap-5 lg:flex">
-                {NAV_LINKS.map((l) => (
-                  <a
-                    key={l.href}
-                    href={l.href}
-                    className="text-sm font-medium text-vision-dim transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-vision-navy"
-                  >
-                    {l.label}
-                  </a>
-                ))}
-              </nav>
-              {hh.simTimeOffsetMs !== 0 && (
-                <span className={`${BADGE} bg-white/10 text-vision-dim`}>demo clock · {fmtClock(bundle.simNowTs)}</span>
-              )}
-              <a href="#kh-reach-her" className={`${BTN_PRIMARY} px-3.5 py-2`}>
-                Reach her
-              </a>
-              <Link href={`/household/${id}/settings`} className={`${BTN_SECONDARY} px-3.5 py-2`}>
-                Settings
-              </Link>
-            </div>
-          </header>
-
-          {/*
-            tier-3 alert — the only thing allowed to shout, in the error ramp.
-            The section stays mounted and collapses through a grid row so the
-            bento below glides aside instead of teleporting when a poll flips
-            the tier; when collapsed it is inert, so the hidden buttons can
-            neither be tabbed into nor clicked.
-          */}
-          <div
-            className="grid transition-[grid-template-rows] duration-500 ease-out motion-reduce:transition-none"
-            style={{ gridTemplateRows: isAlert ? '1fr' : '0fr' }}
-            aria-hidden={!isAlert}
-          >
-            <div className="min-h-0 overflow-hidden">
-              <section
-                inert={!isAlert}
-                style={{
-                  background: 'linear-gradient(175deg, rgba(96, 17, 22, 0.62) 0%, rgba(34, 7, 14, 0.72) 100%)',
-                  backdropFilter: 'blur(60px)',
-                  WebkitBackdropFilter: 'blur(60px)',
-                  boxShadow: '0 3.5px 5.5px rgba(0,0,0,0.02), 0 24px 48px -20px rgba(227, 26, 26, 0.30)',
-                }}
-                className={`kh-gradring mt-6 rounded-[20px] ${isAlert ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500 motion-reduce:transition-none`}
-              >
-                <div className="border-l-4 border-err-500 p-5 sm:p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="max-w-xl">
-                      {/*
-                        Masked line reveal: each line slides out of its own
-                        overflow mask while the banner collapses open. The key on
-                        the alert state restarts the animation exactly once, when
-                        the tier flips — polls that keep the banner up never
-                        re-fire it.
-                      */}
-                      <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-err-300">
-                        <span className="inline-block h-2 w-2 rounded-full bg-err-500 motion-reduce:animate-none animate-pulse" aria-hidden />
-                        <span className="kh-line-mask">
-                          <span key={isAlert ? 'eyebrow-in' : 'eyebrow-out'} className={isAlert ? 'kh-line-rise' : undefined}>
-                            Needs attention
-                          </span>
-                        </span>
-                      </p>
-                      <p className="mt-2 text-lg font-bold tracking-[-0.01em] text-white">
-                        <span className="kh-line-mask">
-                          <span
-                            key={isAlert ? 'head-in' : 'head-out'}
-                            className={isAlert ? 'kh-line-rise' : undefined}
-                            style={{ '--kh-line-delay': '80ms' } as React.CSSProperties}
-                          >
-                            {hh.parentName} hasn't responded to the nudge or the check-in.
-                          </span>
-                        </span>
-                      </p>
-                      <p className="mt-1.5 text-sm leading-relaxed text-err-100/85">
-                        <span className="kh-line-mask">
-                          <span
-                            key={isAlert ? 'sub-in' : 'sub-out'}
-                            className={isAlert ? 'kh-line-rise' : undefined}
-                            style={{ '--kh-line-delay': '160ms' } as React.CSSProperties}
-                          >
-                            {state.ack
-                              ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
-                              : hh.callPlan
-                                ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
-                                : 'A call is usually the right next step.'}
-                          </span>
-                        </span>
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2.5">
-                      <a
-                        href="#"
-                        onClick={(e) => e.preventDefault()}
-                        title="Wire your number in settings — this demo cannot place calls"
-                        className={BTN_DANGER}
-                      >
-                        📞 Call {hh.parentName}
-                      </a>
-                      <button
-                        onClick={ack}
-                        disabled={acking}
-                        className={`kh-press rounded-[10px] border border-white/20 bg-white/10 px-[18px] py-[10px] text-sm font-semibold text-white transition-colors hover:bg-white/15 disabled:opacity-40 ${FOCUS_ON_RED}`}
-                      >
-                        {state.ack ? 'Acknowledged ✓' : acking ? 'Noting…' : "I've checked in"}
-                      </button>
-                      <button
-                        onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
-                        className={BTN_SECONDARY}
-                      >
-                        Snooze 1 h
-                      </button>
-                    </div>
-                  </div>
-                  {circle.length > 0 && (
-                    <p className="mt-3 border-t border-[#E31A1A]/25 pt-3 text-xs text-err-200/80">
-                      Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
-                    </p>
-                  )}
-                </div>
-              </section>
-            </div>
+    <main className="kh-dash relative min-h-screen pb-24 lg:pb-16">
+      <div className="mx-auto max-w-[1120px] px-4 pt-5 sm:px-8">
+        {/*
+          The header — ledger anatomy: the ✳︎ logomark square, the Khayaal /
+          Overview breadcrumb in ink, the live tier as dot + word, and the
+          numbered-section anchors. Hairline rule beneath, no shadow.
+        */}
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E7E2DA] pb-4">
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-[#B4451C] text-[15px] text-[#FFF7F0]"
+            >
+              ✳︎
+            </span>
+            <span className="text-[13px] font-medium text-[#57534E]">
+              Khayaal <span className="mx-0.5 text-[#D6CFC4]">/</span>{' '}
+              <strong className="font-semibold text-[#1A1815]">Overview</strong>
+            </span>
+            <span className={`kh-tier-ease ml-1 hidden sm:inline-flex ${BADGE}`}>
+              <span className={`dot ${ui.dot}`} aria-hidden />
+              <span className={ui.pill}>{meta.label}</span>
+            </span>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <nav aria-label="Sections" className="mr-2 hidden items-center gap-5 lg:flex">
+              {NAV_LINKS.map((l) => (
+                <a key={l.href} href={l.href} className="text-[13px] font-medium tracking-[0.08em] text-[#57534E] uppercase transition-colors hover:text-[#1A1815]">
+                  <span className="mr-1.5 font-mono text-[#8A857D]">{l.index}</span>
+                  {l.label}
+                </a>
+              ))}
+            </nav>
+            {hh.simTimeOffsetMs !== 0 && (
+              <span className={`${BADGE} text-[#8A857D]`}>
+                <span className="font-mono">demo clock · {fmtClock(bundle.simNowTs)}</span>
+              </span>
+            )}
+            <a href="#kh-talk" className={`${BTN_PRIMARY} px-3.5`}>
+              Reach her
+            </a>
+            <Link href={`/household/${id}/settings`} className={`${BTN_SECONDARY} px-3.5`}>
+              Settings
+            </Link>
+          </div>
+        </header>
 
-          {/* the bento — kh-bento drives the once-only entrance stagger (see motion.css) */}
-          <div className="kh-bento mt-6 grid grid-cols-12 gap-4 sm:gap-5">
-            {/* the sections the header's nav jumps to, plus its primary action */}
-            <div id="kh-current-status" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
+        {/*
+          The verdict — one serif sentence under the household header, the
+          single loudest element on the page, with the odometer wellbeing
+          counter beneath it (the signature interaction, unchanged).
+        */}
+        <div className="mt-8">
+          <p className="t-display max-w-3xl text-[34px] sm:text-[48px]">{verdictFor(state.tier, hh.parentName, state.learning)}</p>
+          <div className="mt-4 flex items-end gap-3">
+            {state.score === null ? (
+              <span className="kh-odo-digits text-[44px] font-semibold leading-none tracking-[-0.02em] text-[#D6CFC4]">···</span>
+            ) : (
+              <Odometer value={state.score} className="text-[44px]" />
+            )}
+            <span className="pb-1 font-mono text-[13px] text-[#8A857D]">/ 100 wellbeing</span>
+          </div>
+        </div>
+
+        {/*
+          tier-3 alert — the only thing allowed to shout, on the alarm hue.
+          The section stays mounted and collapses through a grid row so the
+          ledger below glides aside instead of teleporting when a poll flips
+          the tier; when collapsed it is inert, so the hidden buttons can
+          neither be tabbed into nor clicked.
+        */}
+        <div
+          className="grid transition-[grid-template-rows] duration-[360ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none"
+          style={{ gridTemplateRows: isAlert ? '1fr' : '0fr' }}
+          aria-hidden={!isAlert}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <section
+              inert={!isAlert}
+              className={`ledger-panel mt-6 border-l-4 border-l-[#B3261E] p-5 transition-opacity duration-[360ms] sm:p-6 ${isAlert ? 'opacity-100' : 'opacity-0'} motion-reduce:transition-none`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-xl">
+                  <p className="flex items-center gap-2 text-[13px] font-medium uppercase tracking-[0.08em] text-[#B3261E]">
+                    <span className="dot bg-[#B3261E]" aria-hidden />
+                    Needs attention
+                  </p>
+                  <p className="mt-2 text-lg font-semibold leading-snug text-[#1A1815]">
+                    {hh.parentName} hasn't responded to the nudge or the check-in.
+                  </p>
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-[#57534E]">
+                    {state.ack
+                      ? `${state.ack.by} acknowledged at ${fmtClock(state.ack.ts)} — siblings notified.`
+                      : hh.callPlan
+                        ? `Plan: call ${hh.parentName} after ${hh.callPlan.callElderAfterMin} min, alert the circle after ${hh.callPlan.alertCircleAfterMin} min.`
+                        : 'A call is usually the right next step.'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  <a
+                    href="#"
+                    onClick={(e) => e.preventDefault()}
+                    title="Wire your number in settings — this demo cannot place calls"
+                    className={BTN_DANGER}
+                  >
+                    <IconPhone className="h-4 w-4" />
+                    Call {hh.parentName}
+                  </a>
+                  <button
+                    onClick={ack}
+                    disabled={acking}
+                    className={`${BTN_SECONDARY} kh-press ${FOCUS_ON_RED}`}
+                  >
+                    {state.ack ? 'Acknowledged' : acking ? 'Noting…' : "I've checked in"}
+                  </button>
+                  <button
+                    onClick={() => postJSON(`/api/v1/household/${id}/snooze`, { minutes: 60 })}
+                    className={BTN_SECONDARY}
+                  >
+                    Snooze 1 h
+                  </button>
+                </div>
+              </div>
+              {circle.length > 0 && (
+                <p className="mt-3 border-t border-[#E7E2DA] pt-3 text-[13px] text-[#57534E]">
+                  Care circle notified: {circle.map((m) => `${m.name} (${m.role})`).join(' · ')}
+                </p>
+              )}
+            </section>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ 01 — SIGNALS */}
+        <div className="kh-enter mt-12">
+          <SectionHead index="01" label="Signals" note="aggregates only — never a feed" id="kh-signals" />
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-5">
               <StatusCard bundle={bundle} />
             </div>
-            <div id="kh-day-trend" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-7 [&>section]:h-full">
+            <div className="min-w-0 lg:col-span-7">
               <TrendCard bundle={bundle} />
             </div>
-            <div id="kh-reach-her" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-7 [&>section]:h-full">
-              <CommandsCard id={id} bundle={bundle} />
-            </div>
-            <TalkbackCard id={id} parentName={hh.parentName} childName={hh.childName} />
-            <div id="kh-rhythm" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
+            <div className="min-w-0 lg:col-span-5">
               <RhythmCard bundle={bundle} />
             </div>
-            <LadderCard tier={state.tier} />
-            <ExplainCard bundle={bundle} />
-            <NightWatchCard events={bundle.sleepSound} />
-            <MovementCard movement={bundle.movement} nowTs={bundle.simNowTs} />
-            <BlueprintMap id={id} />
-            <CsiScope id={id} />
-            <SmartwatchPanel householdId={id} />
-            <AnalysisCard id={id} bundle={bundle} />
-            <div id="kh-care-circle" className="col-span-12 min-w-0 scroll-mt-6 lg:col-span-5 [&>section]:h-full">
+            <div className="min-w-0 lg:col-span-7">
+              <ExplainCard bundle={bundle} />
+            </div>
+            <div className="min-w-0 lg:col-span-5">
+              <LadderCard tier={state.tier} />
+            </div>
+            <div className="min-w-0 lg:col-span-7">
+              <AnalysisCard id={id} bundle={bundle} />
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ 02 — THE WATCHERS */}
+        <div className="kh-enter mt-12">
+          <SectionHead index="02" label="The watchers" note="rooms and wrists, never cameras" id="kh-watchers" />
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-7">
+              <BlueprintMap id={id} />
+            </div>
+            <div className="min-w-0 lg:col-span-5">
+              <CsiScope id={id} />
+            </div>
+            <div className="min-w-0 lg:col-span-5">
+              <MovementCard movement={bundle.movement} nowTs={bundle.simNowTs} />
+            </div>
+            <div className="min-w-0 lg:col-span-7">
+              <SmartwatchPanel householdId={id} />
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ 03 — TALK */}
+        <div className="kh-enter mt-12">
+          <SectionHead index="03" label="Talk" note="everything here rides the commands channel" id="kh-talk" />
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <div id="kh-reach-her" className="min-w-0 scroll-mt-6 lg:col-span-7">
+              <CommandsCard id={id} bundle={bundle} />
+            </div>
+            <div className="min-w-0 lg:col-span-5">
+              <TalkbackCard id={id} parentName={hh.parentName} childName={hh.childName} />
+            </div>
+            <div id="kh-care-circle" className="min-w-0 scroll-mt-6 lg:col-span-7">
               <CircleCard id={id} bundle={bundle} />
             </div>
-            <PushCard id={id} />
-            <EventsCard bundle={bundle} />
+            <div className="min-w-0 lg:col-span-5">
+              <PushCard id={id} />
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ 04 — NIGHT WATCH */}
+        <div className="kh-enter mt-12">
+          <SectionHead index="04" label="Night watch" note="on-device, nothing recorded" id="kh-night" />
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <div id="kh-rhythm" className="min-w-0 scroll-mt-6 lg:col-span-7">
+              <NightWatchCard events={bundle.sleepSound} />
+            </div>
+            <div className="min-w-0 lg:col-span-5">
+              <EventsCard bundle={bundle} />
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ 05 — SOURCES */}
+        <div className="kh-enter mt-12">
+          <SectionHead index="05" label="Sources" note="never a feed, never a map" id="kh-sources" />
+          <div className="mt-6 grid grid-cols-1 gap-6">
             <SourcesCard id={id} bundle={bundle} />
           </div>
-
-          <p className="mt-10 text-center text-xs leading-relaxed text-vision-dim">
-            Khayaal never shows a feed, a map or a recording — this page only ever sees what you see. Signals are
-            AES-256-GCM encrypted at rest and discarded after 7 days.
-          </p>
         </div>
+
+        <p className="mt-10 border-t border-[#E7E2DA] pt-4 text-center text-[13px] leading-relaxed text-[#8A857D]">
+          Khayaal never shows a feed, a map or a recording — this page only ever sees what you see. Signals are
+          AES-256-GCM encrypted at rest and discarded after 7 days.
+        </p>
       </div>
+      <LedgerTabBar />
       <SosOverlay
         householdId={id}
         parentName={hh.parentName}
@@ -375,6 +447,12 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
   };
 
   const pending = bundle.commands;
+  const TYPES = [
+    { t: 'message', label: 'Message', icon: IconMessage },
+    { t: 'reminder', label: 'Reminder', icon: IconBell },
+    { t: 'tts', label: 'Voice (spoken aloud)', icon: IconVoice },
+    { t: 'request_checkin', label: 'Ask for check-in', icon: IconCheckin },
+  ] as const;
 
   return (
     <BentoCard label="Reach her phone">
@@ -382,24 +460,18 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
         Reach her phone
       </CardTitle>
       <div className="mt-4 flex flex-wrap gap-2">
-        {(
-          [
-            ['message', '💬 Message'],
-            ['reminder', '⏰ Reminder'],
-            ['tts', '🗣 Voice (spoken aloud)'],
-            ['request_checkin', '🌼 Ask for check-in'],
-          ] as const
-        ).map(([t, label]) => (
+        {TYPES.map(({ t, label, icon: Icon }) => (
           <button
             key={t}
             onClick={() => setType(t)}
             aria-pressed={type === t}
-            className={`kh-press rounded-[10px] border px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+            className={`kh-press inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
               type === t
-                ? 'border-transparent bg-brand-600 text-white shadow-[0_6px_20px_-6px_rgba(220,104,3,0.55)]'
-                : 'border-white/10 bg-white/5 text-vision-dim hover:bg-white/10 hover:text-white'
+                ? 'bg-[#1A1815] text-[#FAF8F5]'
+                : 'border border-[#D6CFC4] bg-transparent text-[#57534E] hover:border-[#1A1815] hover:text-[#1A1815]'
             } ${FOCUS}`}
           >
+            <Icon className="h-3.5 w-3.5" />
             {label}
           </button>
         ))}
@@ -424,28 +496,26 @@ function CommandsCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
           }
           className={`${INPUT} flex-1`}
         />
-        <div className="flex flex-none overflow-hidden rounded-[10px] border border-white/10 bg-white/5 text-xs font-medium">
-          {(['en', 'hi'] as const).map((l) => (
-            <button
-              key={l}
-              onClick={() => setLang(l)}
-              aria-pressed={lang === l}
-              className={`kh-press px-3 py-2.5 transition-colors ${lang === l ? 'bg-white text-[#101828]' : 'text-vision-dim hover:bg-white/5 hover:text-white'} ${FOCUS}`}
-            >
-              {l === 'en' ? 'EN' : 'हिं'}
-            </button>
-          ))}
-        </div>
+        <Seg
+          ariaLabel="Language"
+          value={lang}
+          onChange={setLang}
+          options={[
+            { value: 'en', label: 'EN' },
+            { value: 'hi', label: 'हिं' },
+          ]}
+        />
         <button onClick={send} disabled={busy || !text.trim()} className={BTN_PRIMARY}>
           {busy ? 'Sending…' : 'Send'}
         </button>
       </div>
-      {sent && <p className="mt-2 text-xs font-medium text-[#01B574]">Sent ✓ — her phone picks it up in a moment.</p>}
+      {sent && <p className="mt-2 text-[13px] font-medium text-[#2F6B4F]">Sent — her phone picks it up in a moment.</p>}
       {pending.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {pending.slice(-3).map((c) => (
-            <li key={c.id} className="truncate text-xs text-vision-dim">
-              pending · {c.type}: “{c.text}”
+            <li key={c.id} className="ledger-row !py-2 text-[13px]">
+              <span className="text-[#8A857D]">{c.type}</span>
+              <span className="truncate font-normal">“{c.text}”</span>
             </li>
           ))}
         </ul>
@@ -466,22 +536,21 @@ function RhythmCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
         {activity.map((v, h) => (
           <div key={h} className="group relative flex-1">
             <div
-              className="w-full rounded-t-[3px] transition-all duration-500 motion-reduce:transition-none"
+              className="w-full transition-[height] duration-[360ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none"
               style={{
                 height: `${Math.max(4, (v / max) * 76)}px`,
-                // Vision data accents: the current hour reads white, the
-                // ordinary hours Vision blue, the empty hours the tile navy.
-                background: h === nowHour ? '#FFFFFF' : v === 0 ? '#1A1F37' : '#0075FF',
-                opacity: h > nowHour ? 0.35 : 1,
+                // The ledger's ink ramp: the current hour is full ink, the
+                // ordinary hours ink at rest, the empty hours a bare rule.
+                background: h === nowHour ? '#1A1815' : v === 0 ? '#E7E2DA' : '#57534E',
               }}
             />
-            <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#020515] px-1.5 py-0.5 text-[10px] font-medium text-white group-hover:block">
+            <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-[#E7E2DA] bg-white px-1.5 py-0.5 font-mono text-[10px] text-[#1A1815] group-hover:block">
               {h}:00 · {v}
             </span>
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-vision-dim">
+      <p className="mt-3 text-[13px] leading-relaxed text-[#57534E]">
         Signal counts per hour — her ordinary day, drawn from harmless aggregates. No content, no location.
       </p>
     </BentoCard>
@@ -489,31 +558,37 @@ function RhythmCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['
 }
 
 function LadderCard({ tier }: { tier: number }) {
-  const pct = Math.min(100, (tier / 4) * 100);
   return (
-    <BentoCard label="Escalation ladder" className="col-span-12 lg:col-span-5">
+    <BentoCard label="Escalation ladder">
       <CardTitle note="most days, step 3 never comes">Where things stand</CardTitle>
 
-      {/* the v3 ladder bar — one gradient rail, filled to the current tier */}
-      <div className="mt-4">
-        <div className="h-2 overflow-hidden rounded-full bg-vision-tile">
-          <div
-            className="kh-tier-ease h-full rounded-full"
+      {/* the ladder — four hairline segments, flat tier colours */}
+      <div className="mt-4 flex gap-1.5" aria-hidden>
+        {[0, 1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className="kh-tier-ease h-1.5 flex-1 rounded-full"
             style={{
-              width: `${Math.max(4, pct)}%`,
-              background: 'linear-gradient(90deg, #01B574, #F79009 62%, #E31A1A)',
+              background:
+                tier >= 1 && i > 0 && i <= Math.min(tier, 3)
+                  ? i === 3
+                    ? '#B3261E'
+                    : '#9A6A1B'
+                  : i === 0 && tier === 0
+                    ? '#2F6B4F'
+                    : '#E7E2DA',
             }}
           />
-        </div>
-        <div className="mt-1.5 flex justify-between text-[9.5px] font-medium text-vision-dim">
-          <span>Quiet</span>
-          <span>Nudge</span>
-          <span>Check-in</span>
-          <span>Alert</span>
-        </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex justify-between font-mono text-[11px] text-[#8A857D]">
+        <span>Quiet</span>
+        <span>Nudge</span>
+        <span>Check-in</span>
+        <span>Alert</span>
       </div>
 
-      <div className="mt-4 space-y-2.5">
+      <div className="mt-4">
         {[
           ['Quiet observation', 'signals only — nobody is contacted', 0],
           ['Gentle nudge', 'on her phone; nothing has left the house', 1],
@@ -522,20 +597,27 @@ function LadderCard({ tier }: { tier: number }) {
         ].map(([label, desc, t], i) => {
           const active = tier >= (t as number);
           return (
-            <div key={label as string} className="flex items-center gap-3">
-              <span
-                className="kh-tier-ease flex h-7 w-7 flex-none items-center justify-center rounded-lg text-[11px] font-semibold"
-                style={{
-                  background: active ? (i === 3 ? '#E31A1A' : i === 0 ? '#01B574' : '#DC6803') : '#1A1F37',
-                  color: active ? 'white' : '#A0AEC0',
-                }}
-              >
-                {i}
+            <div key={label as string} className="ledger-row">
+              <span className="flex min-w-0 items-baseline gap-3">
+                <span
+                  className="kh-tier-ease flex h-7 w-7 flex-none items-center justify-center rounded-md border font-mono text-[11px]"
+                  style={{
+                    borderColor: active ? (i === 3 ? '#B3261E' : i === 0 ? '#2F6B4F' : '#9A6A1B') : '#D6CFC4',
+                    background: active ? (i === 3 ? '#B3261E' : i === 0 ? '#2F6B4F' : '#9A6A1B') : 'transparent',
+                    color: active ? '#FFF7F0' : '#8A857D',
+                  }}
+                >
+                  {i}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-[15px] font-medium ${active ? 'text-[#1A1815]' : 'text-[#D6CFC4]'}`}>{label as string}</span>
+                  <span className="block truncate text-[13px] text-[#8A857D]">{desc as string}</span>
+                </span>
               </span>
-              <div className="min-w-0">
-                <p className={`text-sm font-medium ${active ? 'text-white' : 'text-white/35'}`}>{label as string}</p>
-                <p className="truncate text-xs text-white/35">{desc as string}</p>
-              </div>
+              <span className="ledger-row-value flex items-center gap-2">
+                <span className="dot" style={{ background: active ? (i === 3 ? '#B3261E' : i === 0 ? '#2F6B4F' : '#9A6A1B') : '#E7E2DA' }} aria-hidden />
+                <span className="text-[13px] text-[#57534E]">{active ? 'reached' : 'waiting'}</span>
+              </span>
             </div>
           );
         })}
@@ -549,26 +631,26 @@ function ExplainCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>[
   const { state } = bundle;
   const ui = TIER_UI[state.tier];
   return (
-    <BentoCard label="Why this score" className="col-span-12 lg:col-span-7">
+    <BentoCard label="Why this score">
       <CardTitle note="plain language, always">Why this score</CardTitle>
-      <div className="mt-5 space-y-3.5">
-        {state.learning && <p className="text-sm text-vision-dim">Khayaal is still learning — nothing is being scored yet.</p>}
+      <div className="mt-4">
+        {state.learning && <p className="text-[15px] text-[#57534E]">Khayaal is still learning — nothing is being scored yet.</p>}
         {!state.learning && state.contributions.length === 0 && (
-          <p className="text-sm text-vision-dim">Everything we look for is present and ordinary. Nothing to explain.</p>
+          <p className="text-[15px] text-[#57534E]">Everything we look for is present and ordinary. Nothing to explain.</p>
         )}
         {state.contributions.map((c, i) => (
-          <div key={i} className="flex items-start gap-3">
-            <div className="mt-1.5 h-2 w-24 flex-none overflow-hidden rounded-full bg-vision-tile">
-              <div
-                className="h-full rounded-full transition-[width] duration-700 motion-reduce:transition-none"
+          <div key={i} className="ledger-row">
+            <span className="h-1.5 w-24 flex-none self-center overflow-hidden rounded-full bg-[#E7E2DA]">
+              <span
+                className="block h-full rounded-full transition-[width] duration-[360ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none"
                 style={{ width: `${Math.min(100, (c.effect / 30) * 100)}%`, background: ui.color }}
               />
-            </div>
-            <p className="text-sm leading-relaxed text-white/85">{c.reason}</p>
+            </span>
+            <span className="min-w-0 text-right text-[15px] leading-relaxed text-[#1A1815]">{c.reason}</span>
           </div>
         ))}
         {!state.learning && (
-          <p className="pt-1 text-xs leading-relaxed text-vision-dim">
+          <p className="pt-3 text-[13px] leading-relaxed text-[#8A857D]">
             A missing source lowers confidence — it never raises the score on its own. Signals are AES-256-GCM encrypted
             at rest and discarded after 7 days.
           </p>
@@ -606,11 +688,11 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
   };
 
   return (
-    <BentoCard label="AI behaviour analysis" className="col-span-12 lg:col-span-7">
+    <BentoCard label="AI behaviour analysis">
       <CardTitle note={model ? `last: ${model}` : 'MiniMax · NVIDIA · OpenRouter'}>
         Behaviour analysis, read by a model
       </CardTitle>
-      <p className="mt-2 text-xs leading-relaxed text-vision-dim">
+      <p className="mt-3 text-[13px] leading-relaxed text-[#57534E]">
         Only privacy-safe aggregates leave the house: score trend, tier changes, hourly shape, recurring reasons.
         Never content — there is none.
       </p>
@@ -634,9 +716,9 @@ function AnalysisCard({ id, bundle }: { id: string; bundle: ReturnType<typeof us
           {busy ? 'Reading the week…' : 'Run analysis'}
         </button>
       </div>
-      {error && <p className="mt-2 text-sm text-err-400">{error}</p>}
+      {error && <p className="mt-2 text-[15px] text-[#B3261E]">{error}</p>}
       {text && (
-        <div className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.04] p-4 text-[13.5px] leading-relaxed text-white/85">
+        <div className="mt-4 whitespace-pre-wrap rounded-lg border border-[#E7E2DA] bg-[#FAF8F5] p-4 text-[13.5px] leading-relaxed text-[#1A1815]">
           {text}
         </div>
       )}
@@ -678,17 +760,17 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
   return (
     <BentoCard label="Care circle">
       <CardTitle note="neighbours who can check in">Care circle</CardTitle>
-      <ul className="mt-4 space-y-2">
+      <ul className="mt-4">
         {circle.length === 0 && (
-          <li className="rounded-xl border border-dashed border-white/15 p-3 text-xs leading-relaxed text-vision-dim">
+          <li className="rounded-lg border border-dashed border-[#D6CFC4] p-3 text-[13px] leading-relaxed text-[#57534E]">
             Add family and trusted neighbours — when a real alert fires, they're notified too and can visit.
           </li>
         )}
         {circle.map((m) => (
-          <li key={m.email} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-sm text-white">
-            <span>
-              {m.name} <span className="text-xs text-vision-dim">({m.role})</span>
-              <span className="block text-xs text-vision-dim">
+          <li key={m.email} className="ledger-row">
+            <span className="min-w-0 text-[15px] text-[#1A1815]">
+              {m.name} <span className="text-[13px] text-[#8A857D]">({m.role})</span>
+              <span className="block text-[13px] text-[#8A857D]">
                 {m.email}
                 {m.phone ? ` · ${m.phone}` : ''}
               </span>
@@ -696,7 +778,7 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
             <button
               onClick={() => manage('remove', m.email)}
               disabled={busy}
-              className={`kh-press rounded-lg px-2 py-1 text-xs font-medium text-white/40 transition-colors hover:bg-[#E31A1A]/15 hover:text-err-400 disabled:opacity-40 ${FOCUS}`}
+              className={`kh-press rounded px-2 py-1 text-[13px] font-medium text-[#8A857D] transition-colors hover:bg-[#F7E0D3] hover:text-[#B3261E] disabled:opacity-40 ${FOCUS}`}
             >
               remove
             </button>
@@ -716,8 +798,8 @@ function CircleCard({ id, bundle }: { id: string; bundle: ReturnType<typeof useH
             Add to circle
           </button>
         </div>
-        {error && <p className="text-xs text-err-400">{error}</p>}
-        <p className="text-[11px] leading-relaxed text-vision-dim">
+        {error && <p className="text-[13px] text-[#B3261E]">{error}</p>}
+        <p className="text-[13px] leading-relaxed text-[#8A857D]">
           Circle members sign in at /login and claim this household with its pairing code. On a real alert they are
           notified alongside the family — a neighbour can be the fastest help there is. Phone numbers feed the call
           chain: your phone's own dialer places the calls, so there's no SMS gateway to set up.
@@ -772,22 +854,22 @@ function PushCard({ id }: { id: string }) {
   };
 
   return (
-    <BentoCard label="Alerts on this device" className="col-span-12 lg:col-span-5">
+    <BentoCard label="Alerts on this device">
       <CardTitle note="free browser push, no SMS gateway">Alerts on this device</CardTitle>
-      <p className="mt-3 text-sm leading-relaxed text-vision-dim">
+      <p className="mt-3 text-[15px] leading-relaxed text-[#57534E]">
         When an urgent alert fires, this laptop or tablet gets the nudge too — the notification arrives even with
         Khayaal closed.
       </p>
       <div className="mt-4 flex items-center gap-3">
         {status === 'unsupported' ? (
-          <span className="text-sm text-white/40">This browser can't receive push notifications.</span>
+          <span className="text-[15px] text-[#8A857D]">This browser can't receive push notifications.</span>
         ) : (
           <button onClick={subscribe} disabled={busy || status === 'on'} className={BTN_PRIMARY}>
-            {status === 'on' ? 'Alerts are on ✓' : busy ? 'Enabling…' : 'Enable urgent alerts here'}
+            {status === 'on' ? 'Alerts are on' : busy ? 'Enabling…' : 'Enable urgent alerts here'}
           </button>
         )}
       </div>
-      {note && <p className="mt-3 text-xs leading-relaxed text-vision-dim">{note}</p>}
+      {note && <p className="mt-3 text-[13px] leading-relaxed text-[#57534E]">{note}</p>}
     </BentoCard>
   );
 }
@@ -795,16 +877,16 @@ function PushCard({ id }: { id: string }) {
 function EventsCard({ bundle }: { bundle: ReturnType<typeof useHouseholdState>['bundle'] }) {
   if (!bundle) return null;
   return (
-    <BentoCard label="Recent events" className="col-span-12 lg:col-span-5">
+    <BentoCard label="Recent events">
       <CardTitle note="audit trail">Quiet log</CardTitle>
-      <ul className="mt-4 space-y-0.5">
+      <ul className="mt-4">
         {bundle.events.slice(-6).reverse().map((e) => (
-          <li key={e.id} className="flex items-baseline gap-3 border-b border-vision-sep py-2 text-sm last:border-b-0">
-            <span className="w-16 flex-none text-xs tabular-nums text-white/40">{fmtClock(e.ts)}</span>
-            <span className="text-white/85">{e.meta ?? (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}</span>
+          <li key={e.id} className="ledger-row">
+            <span className="w-16 flex-none font-mono text-[13px] tabular-nums text-[#8A857D]">{fmtClock(e.ts)}</span>
+            <span className="text-right text-[15px] text-[#1A1815]">{e.meta ?? (e.type === 'tier_change' ? `tier ${e.from} → ${e.to}` : e.type)}</span>
           </li>
         ))}
-        {bundle.events.length === 0 && <li className="py-2 text-sm text-white/40">A quiet day. Nothing to report.</li>}
+        {bundle.events.length === 0 && <li className="py-2 text-[15px] text-[#8A857D]">A quiet day. Nothing to report.</li>}
       </ul>
     </BentoCard>
   );
@@ -974,10 +1056,10 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
   const bars = (rssi: number) => (rssi > -55 ? '▮▮▮▮' : rssi > -65 ? '▮▮▮' : rssi > -75 ? '▮▮' : '▮');
 
   return (
-    <div className="kh-gradring mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-4">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-vision-dim">Wi-Fi, laptop-style — runs over the sensor's USB link</p>
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-        <span className={status?.connected ? 'text-white/85' : 'text-err-400'}>
+    <div className="mt-4 rounded-lg border border-[#E7E2DA] bg-[#FAF8F5] p-4">
+      <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-[#57534E]">Wi-Fi, laptop-style — runs over the sensor's USB link</p>
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[15px]">
+        <span className={status?.connected ? 'text-[#1A1815]' : 'text-[#B3261E]'}>
           {status?.connected
             ? `Connected to ${status.ssid} · ${bars(status.rssi ?? -80)} ${status.rssi ?? ''} dBm${status.ip ? ` · ${status.ip}` : ''}`
             : 'Not connected to any network'}
@@ -985,7 +1067,7 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         <button
           onClick={() => queue('wifi_scan')}
           disabled={busy !== null}
-          className={`kh-press rounded-[10px] border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 ${FOCUS}`}
+          className={`${BTN_SECONDARY} h-8 px-3 text-[13px]`}
         >
           {busy === 'wifi_scan' ? 'Scanning…' : 'Scan networks'}
         </button>
@@ -993,14 +1075,14 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
           <button
             onClick={() => queue('wififorget')}
             disabled={busy !== null}
-            className={`kh-press rounded-[10px] border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/85 transition-colors hover:bg-[#E31A1A]/15 hover:text-err-400 disabled:opacity-40 ${FOCUS}`}
+            className={`kh-press h-8 rounded-lg border border-[#D6CFC4] px-3 text-[13px] font-medium text-[#1A1815] transition-colors hover:border-[#B3261E] hover:text-[#B3261E] disabled:opacity-40 ${FOCUS}`}
           >
             Forget Wi-Fi
           </button>
         )}
       </div>
-      {note && <p className="mt-2 text-xs text-vision-dim">{note}</p>}
-      <p className="mt-1.5 text-[11px] text-vision-dim">
+      {note && <p className="mt-2 text-[13px] text-[#57534E]">{note}</p>}
+      <p className="mt-1.5 font-mono text-[13px] text-[#8A857D]">
         {relaySeenTs ? (
           relayAlive(relaySeenTs) ? (
             <>USB relay: checking in every 3 s — last {fmtAgo(relaySeenTs, Date.now())}.</>
@@ -1012,20 +1094,20 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
         )}
       </p>
       {relayError && (
-        <p className="mt-2 rounded-lg border border-[#E31A1A]/25 bg-[#E31A1A]/10 px-3 py-2 text-xs leading-relaxed text-err-300">
+        <p className="mt-2 rounded-lg border border-[#B3261E] px-3 py-2 text-[13px] leading-relaxed text-[#B3261E]">
           {relayError}
         </p>
       )}
       {scanError && (
-        <p className="mt-2 rounded-lg border border-[#E31A1A]/25 bg-[#E31A1A]/10 px-3 py-2 text-xs leading-relaxed text-err-300">
+        <p className="mt-2 rounded-lg border border-[#B3261E] px-3 py-2 text-[13px] leading-relaxed text-[#B3261E]">
           The scan came back empty — {scanError}.
         </p>
       )}
       {networks && networks.length === 0 && !scanError && !relayError && (
-        <p className="mt-2 text-xs text-vision-dim">No networks found nearby.</p>
+        <p className="mt-2 text-[13px] text-[#57534E]">No networks found nearby.</p>
       )}
       {networks && networks.length > 0 && (
-        <ul className="mt-3 divide-y divide-vision-sep">
+        <ul className="mt-3 divide-y divide-[#E7E2DA]">
           {networks
             .slice()
             .sort((a, b) => b.rssi - a.rssi)
@@ -1036,13 +1118,13 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
                     setSelected(n.ssid);
                     setPassword('');
                   }}
-                  className={`kh-press flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-white/5 ${selected === n.ssid ? 'bg-vision-purple/15' : ''} ${FOCUS}`}
+                  className={`kh-press flex w-full items-center justify-between px-2 py-2 text-left text-[15px] transition-colors hover:bg-[#F7F4EF] ${selected === n.ssid ? 'bg-[#F7E0D3]' : ''} ${FOCUS}`}
                 >
-                  <span className="text-white/85">
-                    {n.secure && <span className="mr-1.5 text-white/35">🔒</span>}
+                  <span className="inline-flex items-center gap-1.5 text-[#1A1815]">
+                    {n.secure && <IconLock className="h-3.5 w-3.5 text-[#8A857D]" />}
                     {n.ssid}
                   </span>
-                  <span className="text-xs text-vision-dim">{bars(n.rssi)}</span>
+                  <span className="font-mono text-[13px] text-[#57534E]">{bars(n.rssi)}</span>
                 </button>
               </li>
             ))}
@@ -1067,9 +1149,9 @@ function WiFiPanel({ id, sourceId }: { id: string; sourceId: string }) {
           </button>
         </div>
       )}
-      <p className="mt-3 text-[11px] leading-relaxed text-vision-dim">
+      <p className="mt-3 text-[13px] leading-relaxed text-[#8A857D]">
         Needs the sensor's USB cable plugged into this Mac with the relay running:
-        <code className="mx-1 text-white/60">python3 firmware/tunnel/khayaal_serial_bridge.py</code>
+        <code className="mx-1 font-mono text-[#57534E]">python3 firmware/tunnel/khayaal_serial_bridge.py</code>
         — the dashboard queues the action, the relay types it to the sensor over USB and posts the scan
         results back. Your password only travels from this page through the server to the USB relay — it is never
         stored anywhere.
@@ -1209,13 +1291,13 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
     : null;
 
   return (
-    <BentoCard label="Sources" className="col-span-12">
-      <CardTitle note="never a feed, never a map">The watchers</CardTitle>
+    <BentoCard label="Sources">
+      <CardTitle note="keys are shown once">The watchers</CardTitle>
       {pairingCode && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm">
-          <span className="text-vision-dim">
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#E7E2DA] bg-[#FAF8F5] px-4 py-3 text-[15px]">
+          <span className="text-[#57534E]">
             Pairing code for a new phone or sensor:
-            <span className="ml-2 font-mono text-lg tracking-[0.2em] text-brand-400">{pairingCode}</span>
+            <span className="ml-2 font-mono text-lg tracking-[0.2em] text-[#B4451C]">{pairingCode}</span>
           </span>
           <button
             onClick={async () => {
@@ -1226,77 +1308,81 @@ function SourcesCard({ id, bundle }: { id: string; bundle: ReturnType<typeof use
                 /* keep showing the old one */
               }
             }}
-            className={`kh-press ml-auto rounded-[10px] border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white ${FOCUS}`}
+            className={`${BTN_SECONDARY} ml-auto h-8 px-3 text-[13px]`}
           >
             regenerate
           </button>
         </div>
       )}
-      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+      <div className="mt-4">
         {bundle.sources.map((s) => {
           const fresh = s.lastSeenTs && bundle.simNowTs - s.lastSeenTs < 30 * 60_000;
           const isEsp = s.type === 'esp32';
           return (
-            <span key={s.id} className="inline-flex items-center gap-2 rounded-[10px] border border-white/10 bg-white/[0.06] px-3.5 py-2 text-sm text-white/90">
-              <span
-                className={`h-2 w-2 rounded-full ${fresh ? 'kh-dot-live' : ''}`}
-                style={{ background: fresh ? '#01B574' : '#3A4060' }}
-                aria-hidden
-              />
-              {s.label}
-              <span className="text-xs text-white/40">{s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}</span>
-              {isEsp && (
-                <>
-                  <button
-                    onClick={() => fallTest(s.id)}
-                    className={`kh-press rounded-[10px] border border-white/15 bg-white/5 px-2.5 py-0.5 text-xs font-medium text-vision-dim transition-colors hover:bg-white/10 hover:text-white ${FOCUS}`}
-                  >
-                    {testedSrc === s.id ? 'firing…' : 'fall test'}
-                  </button>
-                  <button
-                    onClick={() => setWifiOpenFor(wifiOpenFor === s.id ? null : s.id)}
-                    aria-pressed={wifiOpenFor === s.id}
-                    className={`kh-press rounded-[10px] border border-white/15 bg-white/5 px-2.5 py-0.5 text-xs font-medium text-vision-dim transition-colors hover:bg-white/10 hover:text-white ${FOCUS}`}
-                  >
-                    Wi-Fi
-                  </button>
-                </>
-              )}
-            </span>
+            <div key={s.id} className="ledger-row">
+              <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="inline-flex items-center gap-2 text-[15px] text-[#1A1815]">
+                  <span className="dot" style={{ background: fresh ? '#2F6B4F' : '#D6CFC4' }} aria-hidden />
+                  {s.label}
+                </span>
+                <span className="font-mono text-[13px] text-[#8A857D]">
+                  {fresh ? 'checking in' : 'quiet'} · {s.lastSeenTs ? fmtAgo(s.lastSeenTs, bundle.simNowTs) : 'not seen yet'}
+                </span>
+                {isEsp && (
+                  <>
+                    <button
+                      onClick={() => fallTest(s.id)}
+                      className={`${BTN_SECONDARY} h-7 px-2.5 text-[13px]`}
+                    >
+                      {testedSrc === s.id ? 'firing…' : 'fall test'}
+                    </button>
+                    <button
+                      onClick={() => setWifiOpenFor(wifiOpenFor === s.id ? null : s.id)}
+                      aria-pressed={wifiOpenFor === s.id}
+                      className={`${BTN_SECONDARY} h-7 px-2.5 text-[13px]`}
+                    >
+                      Wi-Fi
+                    </button>
+                  </>
+                )}
+              </span>
+            </div>
           );
         })}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <button onClick={connectSensor} disabled={connectState === 'waiting'} className={BTN_PRIMARY}>
           {connectState === 'waiting' ? 'Connecting…' : 'Connect room sensor (plug in via USB)'}
         </button>
         <button
           onClick={addSensor}
           disabled={busy}
-          className={`kh-press rounded-[10px] border border-dashed border-white/20 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-vision-dim transition-colors hover:border-white/35 hover:text-white disabled:opacity-40 ${FOCUS}`}
+          className={`${BTN_SECONDARY}`}
         >
           {busy ? 'Pairing…' : '+ Add manually'}
         </button>
       </div>
       {connectState === 'waiting' && (
-        <p className="mt-3 text-sm text-vision-dim">
+        <p className="mt-3 text-[15px] text-[#57534E]">
           Paired — the USB relay is typing the identity into the board now. Keep the ESP32 plugged into this laptop;
           it finishes on its own.
         </p>
       )}
       {connectState === 'connected' && (
-        <p className="mt-3 text-sm text-[#01B574]">
+        <p className="mt-3 text-[15px] text-[#2F6B4F]">
           Room sensor connected — it is streaming live. Wave a hand in front of it and watch the blueprint.
         </p>
       )}
-      {error && <p className="mt-3 text-sm leading-relaxed text-err-400">{error}</p>}
+      {error && <p className="mt-3 text-[15px] leading-relaxed text-[#B3261E]">{error}</p>}
       {error && pairingCode && error.startsWith('The USB relay is not checking in') && (
-        <pre className="mt-2 overflow-x-auto rounded-lg border border-white/10 bg-[#020515]/80 px-4 py-3 font-mono text-[12.5px] text-[#C9D3EC]">{`python3 firmware/tunnel/khayaal_serial_bridge.py`}</pre>
+        <pre className="mt-2 overflow-x-auto rounded-lg border border-[#E7E2DA] bg-[#FAF8F5] px-4 py-3 font-mono text-[12.5px] text-[#1A1815]">{`python3 firmware/tunnel/khayaal_serial_bridge.py`}</pre>
       )}
       {wifiOpenFor && <WiFiPanel id={id} sourceId={wifiOpenFor} />}
       {serialBlock && (
-        <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-vision-dim">Paste into the sensor's serial monitor (115200) — the key is shown once</p>
-          <pre className="mt-2 overflow-x-auto whitespace-pre rounded-lg border border-white/10 bg-vision-field px-3 py-2.5 text-[12.5px] leading-relaxed text-[#C9D3EC]">{serialBlock}</pre>
-          <p className="mt-2 text-[11px] leading-relaxed text-vision-dim">
+        <div className="mt-4 rounded-lg border border-[#E7E2DA] bg-[#FAF8F5] p-4">
+          <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-[#57534E]">Paste into the sensor's serial monitor (115200) — the key is shown once</p>
+          <pre className="mt-2 overflow-x-auto whitespace-pre rounded-lg border border-[#E7E2DA] bg-white px-3 py-2.5 font-mono text-[12.5px] leading-relaxed text-[#1A1815]">{serialBlock}</pre>
+          <p className="mt-2 text-[13px] leading-relaxed text-[#8A857D]">
             Flash first with <code>bash firmware/test-pipeline.sh flash</code>. The sensor seals its traffic with
             AES-256-GCM under this key — <code>show</code> should say state=idle, wifi=up, encrypt=on.
           </p>
@@ -1330,7 +1416,7 @@ function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; 
   const points = trend.slice(-96);
   if (W > 0 && points.length < 2) {
     return (
-      <div ref={ref} className="flex min-h-[150px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm text-vision-dim">
+      <div ref={ref} className="mt-3 flex min-h-[150px] items-center justify-center rounded-lg border border-dashed border-[#D6CFC4] text-[15px] text-[#57534E]">
         The trend will appear as the day unfolds.
       </div>
     );
@@ -1348,26 +1434,26 @@ function TrendChart({ trend, nowTs }: { trend: { ts: number; score: number }[]; 
     <div ref={ref} className="relative mt-3 min-h-[150px] flex-1">
       {W > 0 && (
         <svg width={W} height={CH} className="block" role="img" aria-label="Wellbeing score over the last 24 hours">
-          {/* tier bands — the Vision ramp at a whisper */}
-          <rect x="0" y={Y(100)} width={W} height={Y(72) - Y(100)} fill="#E31A1A" opacity="0.06" />
-          <rect x="0" y={Y(72)} width={W} height={Y(55) - Y(72)} fill="#DC6803" opacity="0.05" />
-          <rect x="0" y={Y(55)} width={W} height={Y(35) - Y(55)} fill="#F79009" opacity="0.05" />
-          <rect x="0" y={Y(35)} width={W} height={Y(0) - Y(35)} fill="#01B574" opacity="0.05" />
+          {/* tier bands — the status hues at a whisper, flat fills */}
+          <rect x="0" y={Y(100)} width={W} height={Y(72) - Y(100)} fill="#B3261E" opacity="0.05" />
+          <rect x="0" y={Y(72)} width={W} height={Y(55) - Y(72)} fill="#9A6A1B" opacity="0.05" />
+          <rect x="0" y={Y(55)} width={W} height={Y(35) - Y(55)} fill="#9A6A1B" opacity="0.04" />
+          <rect x="0" y={Y(35)} width={W} height={Y(0) - Y(35)} fill="#2F6B4F" opacity="0.04" />
           {[0, 35, 55, 72].map((b) => (
-            <line key={b} x1="0" x2={W} y1={Y(b)} y2={Y(b)} className="stroke-vision-sep" strokeWidth="1" strokeDasharray="3 4" />
+            <line key={b} x1="0" x2={W} y1={Y(b)} y2={Y(b)} stroke="#E7E2DA" strokeWidth="1" strokeDasharray="3 4" />
           ))}
-          <path d={`${d}L${last[0]},${CH}L${P[0][0]},${CH}Z`} fill="#4FD1C5" opacity="0.09" />
+          <path d={`${d}L${last[0]},${CH}L${P[0][0]},${CH}Z`} fill="#B4451C" opacity="0.06" />
           <path
             d={d}
             pathLength={1}
             fill="none"
-            stroke="#4FD1C5"
-            strokeWidth="2.5"
+            stroke="#B4451C"
+            strokeWidth="2"
             strokeLinecap="round"
-            style={{ strokeDasharray: 1, strokeDashoffset: drawn || reduce ? 0 : 1, transition: reduce ? 'none' : 'stroke-dashoffset 1.4s cubic-bezier(.3,.8,.2,1) .2s' }}
+            style={{ strokeDasharray: 1, strokeDashoffset: drawn || reduce ? 0 : 1, transition: reduce ? 'none' : 'stroke-dashoffset 1.4s cubic-bezier(.32,.72,0,1) .2s' }}
           />
-          <circle cx={last[0]} cy={last[1]} r="4.5" fill="#4FD1C5" className="stroke-[#060B26]" strokeWidth="2" />
-          <text x={W - 4} y={Y(72) - 5} textAnchor="end" fontSize="10" className="fill-vision-dim">
+          <circle cx={last[0]} cy={last[1]} r="4" fill="#B4451C" stroke="#FFFFFF" strokeWidth="1.5" />
+          <text x={W - 4} y={Y(72) - 5} textAnchor="end" fontSize="10" fill="#8A857D">
             72 · escalate
           </text>
         </svg>

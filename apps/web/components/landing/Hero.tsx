@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * Full-screen hero from the Mainframe reference, carrying Khayaal's branding:
- * mouse-scrub background video (SENSITIVITY 0.8, seek-queue so we never flood
- * video.currentTime), a sleek transparent-glass navbar, blurred intro label,
- * typewriter, four white pills + one copy-email pill, and the black/90 mobile
- * overlay. Reference webfonts load via link; the --mf-* variables are scoped
- * to this hero so the rest of the site keeps its own type.
+ * Landing hero — Quiet Ledger edition.
+ *
+ * Paper instead of a dark screen: a serif headline set like a ledger cover,
+ * the typewriter line (one-shot, static cursor), the action row as hairline
+ * buttons, and the claymation as a framed media plate with its mouse-scrub
+ * seek still intact. The glass navbar is now a paper bar on a hairline rule;
+ * the soft-focus intro label, the scrim overlays and the blinking cursor are
+ * gone.
  */
 
 import Link from 'next/link';
@@ -86,7 +88,7 @@ export default function Hero() {
     video.addEventListener('seeked', onSeeked);
     return () => {
       window.removeEventListener('mousemove', onMove);
-      video.removeEventListener('seeked', onSeeked);
+      window.removeEventListener('seeked', onSeeked);
     };
   }, []);
 
@@ -102,17 +104,15 @@ export default function Hero() {
 
   return (
     <>
-      {/* ------------------------------------------- Fonts (reference webfonts) */}
-      <link rel="stylesheet" href="https://db.onlinewebfonts.com/c/5ac3fe7c6abd2f62067f266d89671492?family=HelveticaNowDisplay-Medium" />
-      <link rel="stylesheet" href="https://db.onlinewebfonts.com/c/1aa3377e489837a26d019bba501e779d?family=HelveticaNowDisplayW01-Rg" />
-
-      {/* ------------------------------------------------ Background video */}
-      <div className="fixed inset-0 z-0 bg-[#0a0908]" aria-hidden="true">
+      {/* ------------------------------------------------ Media plate (scrubbed) */}
+      <div
+        aria-hidden={!videoOk}
+        className="relative mt-24 aspect-[16/9] w-full overflow-hidden border border-[#E7E2DA] bg-[#EFEAE2] md:mt-28"
+      >
         {videoOk ? (
           <video
             ref={videoRef}
             className="h-full w-full object-cover"
-            style={{ objectPosition: '70% center' }}
             src="/homepage_animation.mp4"
             muted
             playsInline
@@ -120,104 +120,79 @@ export default function Hero() {
             onError={() => setVideoOk(false)}
           />
         ) : (
-          <div
-            className="h-full w-full"
-            style={{
-              background:
-                'radial-gradient(900px 600px at 72% 30%, #262033 0%, rgba(38,32,51,0) 60%), radial-gradient(700px 500px at 20% 80%, #1c2430 0%, rgba(28,36,48,0) 55%), #0a0908',
-            }}
-          />
+          <div className="flex h-full w-full items-center justify-center">
+            <span aria-hidden className="text-[28px] text-[#B4451C]">✳︎</span>
+          </div>
         )}
+        <p className="pointer-events-none absolute bottom-3 right-4 font-mono text-[11px] uppercase tracking-[0.14em] text-[#8A857D]">
+          move your cursor — the plate scrubs
+        </p>
       </div>
-      <div aria-hidden className="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-black/40 via-black/10 to-black/60" />
 
-      {/* ------------------------------------------------ Navbar — sleek glass bar */}
+      {/* ------------------------------------------------ Navbar — paper bar on a rule */}
       <header className="fixed inset-x-0 top-0 z-10 px-4 pt-4 sm:px-6 sm:pt-5">
-        <div className="kh-glass mx-auto flex max-w-5xl items-center justify-between rounded-full px-5 py-3 sm:px-7">
-          <Link href="/" className="flex items-center gap-2.5 select-none">
-            <span
-              className="text-[19px] tracking-tight text-white sm:text-[23px]"
-              style={{ fontFamily: 'var(--mf-heading)' }}
-            >
-              Khayaal
-            </span>
-            <span className="select-none text-[21px] leading-none text-[#e8a06b] sm:text-[25px]" style={{ letterSpacing: '-0.02em' }}>
-              ✳︎
-            </span>
+        <div className="mx-auto flex max-w-5xl items-center justify-between rounded-lg border border-[#E7E2DA] bg-[#FAF8F5] px-5 py-3 sm:px-7">
+          <Link href="/" className="flex select-none items-center gap-2.5">
+            <span aria-hidden className="text-[19px] leading-none text-[#B4451C] sm:text-[21px]">✳︎</span>
+            <span className="t-section text-[19px] text-[#1A1815] sm:text-[21px]">Khayaal</span>
           </Link>
 
-          <nav className="hidden items-center gap-7 text-[15px] text-white/90 md:flex">
+          <nav className="hidden items-center gap-7 text-[15px] text-[#57534E] md:flex">
             {NAV_LINKS.map((l) => (
-              <Link key={l.label} href={l.href} className="transition-opacity hover:opacity-60">
+              <Link key={l.label} href={l.href} className="transition-colors hover:text-[#1A1815]">
                 {l.label}
               </Link>
             ))}
           </nav>
 
-            <div className="hidden items-center gap-3 md:flex">
-              <Link href="/login" className="text-[15px] text-white/80 underline-offset-2 transition-opacity hover:opacity-70 hover:underline">
-                Sign in
-              </Link>
-              <Link
-                href="/onboarding"
-                className="rounded-full bg-white/95 px-4 py-1.5 text-[14px] font-medium text-black transition-colors duration-200 hover:bg-white"
-              >
-                Start for your family
-              </Link>
-            </div>
+          <div className="hidden items-center gap-4 md:flex">
+            <Link href="/login" className="text-[15px] text-[#57534E] underline-offset-2 transition-colors hover:text-[#1A1815] hover:underline">
+              Sign in
+            </Link>
+            <Link href="/onboarding" className="btn-primary h-9 px-4 text-[14px]">
+              Start for your family
+            </Link>
+          </div>
 
           {/* Mobile hamburger */}
           <button
             aria-label="Menu"
+            aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
             className="flex flex-col gap-[5px] p-2 md:hidden"
           >
-            <span
-              className={`h-[2px] w-6 bg-white transition-all duration-300 ${menuOpen ? 'translate-y-[7px] rotate-45' : ''}`}
-            />
-            <span className={`h-[2px] w-6 bg-white transition-all duration-300 ${menuOpen ? 'opacity-0' : ''}`} />
-            <span
-              className={`h-[2px] w-6 bg-white transition-all duration-300 ${menuOpen ? '-translate-y-[7px] -rotate-45' : ''}`}
-            />
+            <span className={`h-[2px] w-6 bg-[#1A1815] transition-all duration-300 ${menuOpen ? 'translate-y-[7px] rotate-45' : ''}`} />
+            <span className={`h-[2px] w-6 bg-[#1A1815] transition-all duration-300 ${menuOpen ? 'opacity-0' : ''}`} />
+            <span className={`h-[2px] w-6 bg-[#1A1815] transition-all duration-300 ${menuOpen ? '-translate-y-[7px] -rotate-45' : ''}`} />
           </button>
         </div>
       </header>
 
-      {/* Mobile overlay */}
+      {/* Mobile overlay — paper, hairline rows */}
       <div
-        className={`fixed inset-0 z-[9] flex flex-col justify-center gap-8 bg-black/90 px-8 backdrop-blur-md transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 z-[9] flex flex-col justify-center gap-8 bg-[#FAF8F5] px-8 transition-opacity duration-300 md:hidden ${
           menuOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
         {NAV_LINKS.map((l) => (
-          <Link key={l.label} href={l.href} onClick={() => setMenuOpen(false)} className="text-[32px] font-medium text-white">
+          <Link key={l.label} href={l.href} onClick={() => setMenuOpen(false)} className="t-section border-b border-[#E7E2DA] pb-4 text-[26px] text-[#1A1815]">
             {l.label}
           </Link>
         ))}
         <Link
           href="/onboarding"
           onClick={() => setMenuOpen(false)}
-          className="text-[32px] font-medium text-white underline underline-offset-4"
+          className="t-section text-[26px] text-[#B4451C] underline underline-offset-4"
         >
           Start for your family
         </Link>
       </div>
 
       {/* ------------------------------------------------ Hero section */}
-      <section className="relative z-[1] flex h-screen flex-col justify-end overflow-hidden px-5 pb-12 sm:px-8 md:justify-center md:px-10 md:pb-0">
-        <div className="relative z-10 max-w-xl">
-          {/* 1. Blurred intro label */}
-          <p
-            className="pointer-events-none mb-5 select-none sm:mb-6"
-            style={{
-              fontSize: 'clamp(18px, 4vw, 26px)',
-              lineHeight: 1.35,
-              fontWeight: 400,
-              color: '#fff',
-              filter: 'blur(4px)',
-              fontFamily: 'var(--mf-body)',
-            }}
-          >
+      <section className="relative z-[1] px-5 pb-16 pt-12 sm:px-8 md:pt-16">
+        <div className="relative z-10 max-w-3xl">
+          {/* 1. Kicker */}
+          <p className="t-meta mb-5 select-none text-[#8A857D] sm:mb-6">
             Hey there, meet Khayaal —
             <br />
             a quiet watch over parents who live alone
@@ -225,22 +200,16 @@ export default function Hero() {
 
           {/* 2. Typewriter — min-height fits the full copy at every clamp size */}
           <p
-            className="mb-5 text-white sm:mb-6"
-            style={{
-              fontSize: 'clamp(18px, 4vw, 26px)',
-              lineHeight: 1.4,
-              fontWeight: 400,
-              minHeight: 'clamp(100px, 15vw, 118px)',
-              fontFamily: 'var(--mf-body)',
-            }}
+            className="t-display mb-5 text-[clamp(26px,4vw,40px)] text-[#1A1815] sm:mb-6"
+            style={{ minHeight: 'clamp(120px, 18vw, 168px)' }}
           >
             {displayed}
-            {!done && <span className="mf-cursor" />}
+            {!done && <span className="mf-cursor" aria-hidden />}
           </p>
 
-          {/* 3. Action pills */}
+          {/* 3. Action row */}
           <div
-            className="flex flex-wrap gap-y-1 transition-all duration-[400ms] ease-out"
+            className="flex flex-wrap gap-y-1 transition-all duration-[360ms] ease-[cubic-bezier(.32,.72,0,1)]"
             style={{
               opacity: pillsVisible ? 1 : 0,
               transform: pillsVisible ? 'translateY(0px)' : 'translateY(8px)',
@@ -250,7 +219,7 @@ export default function Hero() {
               <Link
                 key={p.label}
                 href={p.href}
-                className="mx-[0.2em] mb-[0.4em] inline-flex items-center justify-center whitespace-nowrap rounded-full border border-black/10 bg-white px-4 py-[0.3em] text-[13px] text-black transition-colors duration-200 hover:bg-black hover:text-white sm:px-5 sm:text-[15px]"
+                className="btn-secondary mx-[0.2em] mb-[0.4em] h-9 px-4 text-[13px] sm:px-5 sm:text-[14px]"
               >
                 {p.label}
               </Link>
@@ -258,10 +227,10 @@ export default function Hero() {
             <button
               type="button"
               onClick={copyEmail}
-              className="mx-[0.2em] mb-[0.4em] inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-white bg-transparent px-4 py-[0.3em] text-[13px] text-white transition-colors duration-200 hover:bg-white hover:text-black sm:gap-3 sm:px-5 sm:text-[15px]"
+              className="btn-secondary mx-[0.2em] mb-[0.4em] inline-flex h-9 items-center justify-center gap-2 px-4 text-[13px] sm:px-5 sm:text-[14px]"
             >
               <span>
-                Reach us: <span className="underline underline-offset-1">{EMAIL}</span>
+                Reach us: <span className="underline underline-offset-2">{EMAIL}</span>
               </span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
                 <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -272,22 +241,6 @@ export default function Hero() {
           </div>
         </div>
       </section>
-
-      <style>{`
-        .mf-cursor {
-          display: inline-block;
-          width: 2px;
-          height: 1.1em;
-          background: #fff;
-          vertical-align: middle;
-          margin-left: 2px;
-          animation: mf-blink 1s step-end infinite;
-        }
-        @keyframes mf-blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
-      `}</style>
     </>
   );
 }

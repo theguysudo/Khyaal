@@ -3,24 +3,19 @@
 /**
  * The signature — the wellbeing counter, on the web.
  *
- * The Vision UI glass card (20px radius, the dark-glass fill + white gradient
- * hairline from the shared recipe) with Khayaal's orange glow breathing
- * behind it — the "vibrant variant" card of the Vision family — and the
- * digits rendered as an odometer: one clipped column per digit holding a 0–9
- * stack, translated by whole ems on a gentle spring when the live score
- * changes. Geometry and easing follow the v3 mobile reference (.kx3-odo).
+ * The odometer is kept exactly as it was: one clipped column per digit holding
+ * a 0–9 stack, translated by whole ems on a gentle spring when the live score
+ * changes. Geometry and easing are untouched — only the skin moved. In the
+ * Quiet Ledger the digits are mono ink on paper (the data voice), the orange
+ * under-glow and the glass card are gone (glow and blur are banned), and the
+ * counter sits directly beneath the serif verdict it belongs to.
  *
  * The value arrives from the same /state poll that fed the old CountUp —
  * nothing about the data contract changes, only the way it moves.
  */
 
 import * as React from 'react';
-
-/* The Vision card shadow, plus the counter's own Khayaal warm under-glow. */
-const GLASS_SHADOW =
-  '0 3.5px 5.5px rgba(0, 0, 0, 0.02), ' +
-  '0 44px 42px -36px rgba(255, 107, 33, 0.40), ' +
-  'inset 0 1px 3px rgba(255, 255, 255, 0.16)';
+import { LedgerRow } from './bento';
 
 /** One rolling digit: a clipped window over a 0–9 stack. */
 function OdoDigit({ char }: { char: string }) {
@@ -55,10 +50,10 @@ export function Odometer({ value, className = '' }: { value: number; className?:
 }
 
 /**
- * The full counter card — the hero of the dashboard. Everything the old
- * StatusCard said is still said here, in the new voice: the tier label,
- * the confidence note, the score, the plain-language status and the
- * last-activity line.
+ * The status panel under the verdict — everything the old counter card said,
+ * as ledger rows: the tier as dot + word, the confidence note, the
+ * plain-language status and the last-activity line. The rolling score itself
+ * lives under the page's serif verdict; this panel carries the reading.
  */
 export function CounterCard({
   score,
@@ -79,47 +74,32 @@ export function CounterCard({
   tierDot: string;
   status: React.ReactNode;
   lastLine: React.ReactNode;
-  /** Extra content sits under the counter (e.g. the day-trend mini read). */
+  /** Extra content sits under the rows (e.g. the day-trend mini read). */
   children?: React.ReactNode;
 }) {
+  void score;
   return (
-    <section
-      aria-label="Current status"
-      className="kh-glass kh-gradring relative flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] text-white"
-      style={{ boxShadow: GLASS_SHADOW }}
-    >
-      <div className="kh-counter-glow" aria-hidden />
-      <div className="relative flex h-full flex-col p-6 sm:p-7">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-vision-dim">Wellbeing</p>
-          <span className={`kh-tier-ease inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-1 text-xs font-medium ${tierPill}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${tierDot}`} aria-hidden />
-            {tierLabel}
-          </span>
-        </div>
-
-        <div className="mt-5 flex items-end gap-3">
-          {score === null ? (
-            <span className="kh-odo-digits text-[76px] font-bold leading-none tracking-[-0.02em] text-white/35 sm:text-[88px]">
-              ···
-            </span>
-          ) : (
-            <Odometer value={score} className="text-[76px] sm:text-[88px]" />
-          )}
-          <span className="pb-1.5 text-sm font-medium text-white/70">of 100</span>
-        </div>
-
-        <p className="mt-1 text-xs font-medium text-vision-dim">
-          {learning ? 'quiet learning — nothing is scored yet' : confidence}
-        </p>
-
-        <div className="mt-5 border-t border-vision-sep pt-5">
-          <p className="text-lg font-bold leading-snug text-white">{status}</p>
-          <p className="mt-2 text-sm leading-relaxed text-vision-dim">{lastLine}</p>
-        </div>
-
-        {children}
+    <section aria-label="Current status" className="ledger-panel flex h-full min-w-0 flex-col p-5 text-[#1A1815] sm:p-6">
+      <div className="flex items-baseline justify-between gap-3 border-b border-[#E7E2DA] pb-3">
+        <h2 className="text-[13px] font-medium uppercase leading-4 tracking-[0.08em] text-[#1A1815]">Current status</h2>
       </div>
+
+      <div className="ledger-row">
+        <span className="ledger-row-label">Standing</span>
+        <span className="ledger-row-value inline-flex items-center gap-2">
+          <span className={`dot ${tierDot}`} aria-hidden />
+          <span className={tierPill}>{tierLabel}</span>
+        </span>
+      </div>
+      <LedgerRow label="Confidence" value={learning ? 'learning — nothing scored yet' : confidence ?? '—'} />
+
+      <div className="ledger-row">
+        <span className="ledger-row-label">Reading</span>
+      </div>
+      <p className="t-body pt-1 font-medium leading-snug text-[#1A1815]">{status}</p>
+      <p className="mt-2 text-[15px] leading-relaxed text-[#57534E]">{lastLine}</p>
+
+      {children}
     </section>
   );
 }

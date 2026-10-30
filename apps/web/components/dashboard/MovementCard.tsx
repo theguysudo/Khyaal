@@ -10,7 +10,7 @@
  */
 
 import * as React from 'react';
-import { BentoCard, CardTitle } from './bento';
+import { BentoCard, CardTitle, LedgerRow } from './bento';
 import { fmtAgo } from '@/lib/api';
 
 export interface MovementSummary {
@@ -33,11 +33,11 @@ export default function MovementCard({
   const away = movement.zone === 'away';
 
   return (
-    <BentoCard label="Movement" className="col-span-12 lg:col-span-5">
+    <BentoCard label="Movement">
       <CardTitle note="on-device · no trail">Movement</CardTitle>
 
       {!hasData ? (
-        <div className="mt-4 rounded-xl border border-dashed border-white/15 p-4 text-sm leading-relaxed text-vision-dim">
+        <div className="mt-4 rounded-lg border border-dashed border-[#D6CFC4] p-4 text-[15px] leading-relaxed text-[#57534E]">
           Her phone can report how much she has moved and whether she is home — without ever telling us where she is.
           Turn it on in the app&rsquo;s Movement tab.
         </div>
@@ -45,8 +45,8 @@ export default function MovementCard({
         <>
           <div className="mt-4 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-vision-dim">Right now</p>
-              <p className="mt-1 text-2xl font-bold leading-tight tracking-[-0.01em] text-white">
+              <p className="inline-flex items-center gap-2 text-[13px] font-medium uppercase tracking-[0.08em] text-[#57534E]">Right now</p>
+              <p className="t-section mt-1 text-[#1A1815]">
                 {movement.zone === null
                   ? 'Not reported yet'
                   : away
@@ -54,21 +54,17 @@ export default function MovementCard({
                     : 'At home'}
               </p>
             </div>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-1 text-xs font-medium ${
-                movement.moving
-                  ? 'bg-[#4FD1C5]/10 text-[#4FD1C5]'
-                  : 'bg-white/[0.06] text-vision-dim'
-              }`}
-            >
+            <span className="inline-flex items-center gap-2 text-[13px] text-[#57534E]">
               <span
-                className={`h-1.5 w-1.5 rounded-full motion-reduce:animate-none ${movement.moving ? 'animate-pulse bg-[#4FD1C5]' : 'bg-white/30'}`}
+                className="dot"
+                style={{ background: movement.moving ? '#2F6B4F' : '#D6CFC4' }}
+                aria-hidden
               />
               {movement.moving ? 'moving' : 'still'}
             </span>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4">
             <Stat
               label="Steps today"
               value={movement.stepsToday === null ? '—' : String(Math.round(movement.stepsToday))}
@@ -86,7 +82,7 @@ export default function MovementCard({
             />
           </div>
 
-          <p className="mt-4 text-xs leading-relaxed text-vision-dim">
+          <p className="mt-3 border-t border-[#E7E2DA] pt-3 text-[13px] leading-relaxed text-[#57534E]">
             {movement.lastTs
               ? `Last reported ${fmtAgo(movement.lastTs, nowTs)}.`
               : 'Waiting for the first GPS report.'}{' '}
@@ -100,11 +96,15 @@ export default function MovementCard({
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-vision-tile/60 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-vision-dim">{label}</p>
-      <p className="mt-1 text-xl font-bold leading-none tracking-[-0.01em] text-white">{value}</p>
-      {unit && <p className="mt-1 text-[10px] text-white/40">{unit}</p>}
-    </div>
+    <LedgerRow
+      label={label}
+      value={
+        <>
+          {value}
+          {unit && <span className="block text-[13px] font-normal text-[#8A857D]">{unit}</span>}
+        </>
+      }
+    />
   );
 }
 

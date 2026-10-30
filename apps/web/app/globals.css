@@ -2,17 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Khayaal — "The Quiet Ledger" design system (docs/DESIGN_QUIET_LEDGER.md).
+ *
+ * Paper, ink, hairlines, numbered sections, one warm accent. Structure does
+ * the designing: rules and indices instead of shadows and soft effects.
+ * The dark token set exists for SOS contexts only (see .theme-dark).
+ */
+
 :root {
-  /* Brand tokens — Untitled UI Neutral base, Khayaal terracotta accents.
-     (The dashboard's full ramp lives in tailwind.config.ts; these carry the
-     page background, body text and selection colour for the whole app.) */
-  --paper: #fafafa;
-  --ink: #171717;
-  /* Mainframe reference hero fonts (loaded via webfont links in the hero) */
+  /* Quiet Ledger tokens — light (default) */
+  --paper: #faf8f5;
+  --paper-raised: #ffffff;
+  --ink: #1a1815;
+  --ink-2: #57534e;
+  --ink-3: #8a857d;
+  --rule: #e7e2da;
+  --rule-strong: #d6cfc4;
+  --signal: #b4451c;
+  --signal-ink: #fff7f0;
+  --calm: #2f6b4f;
+  --watch: #9a6a1b;
+  --alarm: #b3261e;
+
+  /* Motion law — one curve everywhere, 160–360ms */
+  --ease-ledger: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Type stacks */
+  --font-display: ui-serif, 'New York', Georgia, serif;
+  --font-body-ui: -apple-system, 'SF Pro Text', Inter, system-ui, sans-serif;
+  --font-data: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+
+  /* Mainframe reference fonts for the landing hero plate */
   --mf-heading: 'HelveticaNowDisplay-Medium', 'Helvetica Neue', Arial, sans-serif;
   --mf-body: 'HelveticaNowDisplayW01-Rg', 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* Dark tokens — SOS contexts only (SOS overlay/sheet, neighbour alarm). */
+.theme-dark {
+  --paper: #141210;
+  --paper-raised: #1e1b18;
+  --ink: #f2eee8;
+  --ink-2: #a8a29e;
+  --ink-3: #78716c;
+  --rule: #2c2823;
+  --rule-strong: #3b362f;
+  --signal: #d96b3a;
+  --calm: #7fb89b;
+  --watch: #d9b36a;
+  --alarm: #e5645c;
+}
+
+/* ------------------------------------------------------------------ resets */
 html {
   scroll-behavior: smooth;
 }
@@ -20,164 +61,465 @@ html {
 body {
   background: var(--paper);
   color: var(--ink);
+  font-family: var(--font-body-ui);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: #dc6803;
-  color: #ffffff;
+  background: var(--signal);
+  color: var(--signal-ink);
 }
 
-/* Landing hero ---------------------------------------------------------- */
-@keyframes kh-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
 }
+
+/* --------------------------------------------------------------- type ramp */
+.t-display {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 48px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.t-section {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.t-body {
+  font-size: 17px;
+  line-height: 1.55;
+}
+.t-ui {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.t-meta {
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.t-data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- buttons */
+/* Four families, iOS 26 mechanics re-authored natively. 40px tall (44 on
+   mobile), 15px semibold labels, focus ring 2px signal (global above). */
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-sos {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 240ms var(--ease-ledger),
+    background-color 160ms var(--ease-ledger),
+    transform 160ms var(--ease-ledger),
+    box-shadow 200ms var(--ease-ledger);
+}
+
+/* btn-primary — signal fill; on hover a paper layer swipes in from the left
+   and the label crossfades to ink. Magnetic press on :active. */
+.btn-primary {
+  background: var(--signal);
+  color: var(--signal-ink);
+  isolation: isolate;
+  overflow: hidden;
+}
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--paper);
+  transform: translateX(-101%);
+  transition: transform 240ms var(--ease-ledger);
+}
+.btn-primary:hover::before,
+.btn-primary:focus-visible::before {
+  transform: translateX(0);
+}
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  color: var(--ink);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+.btn-primary:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* btn-secondary — transparent on a 1px rule; the border thickens via an inset
+   box-shadow sweep on hover. Press as primary. */
+.btn-secondary {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+.btn-secondary:hover {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.btn-secondary:active {
+  transform: scale(0.97);
+}
+.btn-secondary:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* btn-ghost — ink text, no border; the underline draws left to right. */
+.btn-ghost {
+  background: none;
+  color: var(--ink);
+  padding: 0 2px;
+}
+.btn-ghost::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 4px;
+  height: 1px;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 200ms var(--ease-ledger);
+}
+.btn-ghost:hover::after,
+.btn-ghost:focus-visible::after {
+  transform: scaleX(1);
+}
+.btn-ghost:active {
+  transform: scale(0.97);
+}
+.btn-ghost:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* btn-sos — alarm fill; the one permitted loop: a 1px outline resting pulse. */
+.btn-sos {
+  background: var(--alarm);
+  color: var(--signal-ink);
+  width: 100%;
+}
+.btn-sos::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--alarm);
+  border-radius: inherit;
+  pointer-events: none;
+  animation: kh-sos-rest 1.5s var(--ease-ledger) infinite;
+}
+@keyframes kh-sos-rest {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.btn-sos:active {
+  transform: scale(0.97);
+}
+.btn-sos:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .btn-primary,
+  .btn-secondary,
+  .btn-sos {
+    height: 44px;
+  }
+}
+
+/* -------------------------------------------------------- ledger primitives */
+/* Numbered section head: mono index + caps label + hairline rule. */
+.ledger-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.ledger-index {
+  font-family: var(--font-data);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  flex: none;
+}
+.ledger-label {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink);
+}
+.ledger-note {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: right;
+}
+
+/* Panels: raised paper + 1px rule. Never a shadow, radius 8, never pill. */
+.ledger-panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+
+/* Ledger row: label left (caps 13), value right (tabular mono). */
+.ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.ledger-row:last-child {
+  border-bottom: 0;
+}
+.ledger-row-label {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.ledger-row-value {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  color: var(--ink);
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Status dot — colour is never the only carrier; always dot + word. */
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex: none;
+}
+
+/* ------------------------------------------------------- segmented control */
+.seg {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  padding: 2px;
+  isolation: isolate;
+}
+.seg-btn {
+  position: relative;
+  z-index: 1;
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  background: none;
+  border-radius: 6px;
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 160ms var(--ease-ledger);
+}
+.seg-btn[aria-pressed='true'] {
+  color: var(--signal-ink);
+}
+.seg-btn[aria-pressed='true']:hover {
+  color: var(--signal-ink);
+}
+.seg-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  z-index: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  transition:
+    transform 160ms var(--ease-ledger),
+    width 160ms var(--ease-ledger);
+}
+
+/* ------------------------------------------------------- sheet (SOS overlay) */
+.sheet-backdrop {
+  background: rgba(10, 6, 5, 0.72);
+}
+.sheet {
+  animation: kh-sheet-up 360ms var(--ease-ledger);
+}
+@keyframes kh-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* ------------------------------------------------ mobile tab bar (≤720px) */
+.ledger-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  background: var(--paper);
+  border-top: 1px solid var(--rule-strong);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.ledger-tabbar a {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px 12px;
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  text-decoration: none;
+  min-height: 44px;
+  justify-content: center;
+}
+.ledger-tabbar a .t-word {
+  font-family: var(--font-body-ui);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ledger-tabbar a.active {
+  color: var(--ink);
+}
+.ledger-tabbar a.active::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 25%;
+  right: 25%;
+  height: 2px;
+  background: var(--signal);
+}
+
+/* Section entrance — fade-up, staggered 60ms, once. */
+@keyframes kh-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.kh-enter > * {
+  animation: kh-fade-up 280ms var(--ease-ledger) backwards;
+}
+.kh-enter > :nth-child(1) { animation-delay: 0ms; }
+.kh-enter > :nth-child(2) { animation-delay: 60ms; }
+.kh-enter > :nth-child(3) { animation-delay: 120ms; }
+.kh-enter > :nth-child(4) { animation-delay: 180ms; }
+.kh-enter > :nth-child(5) { animation-delay: 240ms; }
+.kh-enter > :nth-child(6) { animation-delay: 300ms; }
+
+/* Landing hero cursor — a static bar while typing, no blink loop. */
+.mf-cursor,
 .kh-cursor {
   display: inline-block;
   width: 2px;
   height: 1.1em;
-  background: #2a241d;
+  background: currentColor;
   vertical-align: middle;
   margin-left: 2px;
-  animation: kh-blink 1s step-end infinite;
 }
 
-@keyframes kh-float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-}
-.kh-float { animation: kh-float 6s ease-in-out infinite; }
-.kh-float-slow { animation: kh-float 9s ease-in-out infinite; }
-
-@keyframes kh-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.012); }
-}
-.kh-breathe { animation: kh-breathe 4.5s ease-in-out infinite; transform-origin: 50% 80%; }
-
-@keyframes kh-blink-eyes {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.08); }
-}
-.kh-eyes { animation: kh-blink-eyes 4.4s ease-in-out infinite; transform-origin: center; }
-
-@keyframes kh-steam {
-  0% { opacity: 0; transform: translateY(2px); }
-  40% { opacity: 0.7; }
-  100% { opacity: 0; transform: translateY(-8px); }
-}
-.kh-steam { animation: kh-steam 3s ease-out infinite; }
-.kh-steam-2 { animation: kh-steam 3s ease-out infinite; animation-delay: 1.5s; }
-
-@keyframes kh-pulse-ring {
-  0% { opacity: 0.5; transform: scale(0.9); }
-  100% { opacity: 0; transform: scale(1.5); }
-}
-.kh-ring { animation: kh-pulse-ring 3.2s ease-out infinite; transform-origin: center; }
-
-/* Footer scene (Driftbar-derived) ---------------------------------------- */
-@keyframes kh-drift {
-  0% { transform: translate(0, 0) scale(1); opacity: 0; }
-  12% { opacity: var(--kh-glow, 0.8); }
-  88% { opacity: var(--kh-glow, 0.8); }
-  100% { transform: translate(var(--kh-dx, 30px), var(--kh-dy, -60px)) scale(1.15); opacity: 0; }
-}
-.kh-light {
-  position: absolute;
-  border-radius: 9999px;
-  animation: kh-drift var(--kh-dur, 12s) linear infinite;
-  animation-delay: var(--kh-delay, 0s);
-}
-
-/* Scroll story (Planet-Jump grammar: blur-rise reveals, staggered facts) --- */
-@keyframes reveal-down { from { opacity: 0; filter: blur(8px); transform: translateY(-18px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
-@keyframes reveal-side { from { opacity: 0; filter: blur(8px); transform: translateX(-20px); } to { opacity: 1; filter: blur(0); transform: translateX(0); } }
-@keyframes title-rise { from { opacity: 0; filter: blur(12px); transform: translate(-32px, 42px); } to { opacity: 1; filter: blur(0); transform: translate(-32px, 0); } }
-@keyframes fact-rise { from { opacity: 0; filter: blur(7px); transform: translateY(18px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
+/* Scroll story (paper ledger edition) -------------------------------------- */
+@keyframes reveal-down { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes reveal-side { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes title-rise { from { opacity: 0; transform: translate(-24px, 28px); } to { opacity: 1; transform: translate(-24px, 0); } }
+@keyframes fact-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes menu-row { from { opacity: 0.35; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes active-dot { from { opacity: 0; transform: scale(0); } to { opacity: 1; transform: scale(1); } }
 
-.st { color: #f5efe4; }
+.st { color: var(--ink); }
 .st [data-reveal] { opacity: 0; }
-.st [data-reveal].is-inview { animation: fact-rise 0.72s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--d, 0s); }
-.st [data-reveal='down'].is-inview { animation: reveal-down 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--d, 0s); }
-.st [data-reveal='side'].is-inview { animation: reveal-side 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--d, 0s); }
-.st [data-reveal='title'].is-inview { animation: title-rise 1.05s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--d, 0s); }
+.st [data-reveal].is-inview { animation: fact-rise 0.5s var(--ease-ledger) both; animation-delay: var(--d, 0s); }
+.st [data-reveal='down'].is-inview { animation: reveal-down 0.5s var(--ease-ledger) both; animation-delay: var(--d, 0s); }
+.st [data-reveal='side'].is-inview { animation: reveal-side 0.5s var(--ease-ledger) both; animation-delay: var(--d, 0s); }
+.st [data-reveal='title'].is-inview { animation: title-rise 0.6s var(--ease-ledger) both; animation-delay: var(--d, 0s); }
 
-.st .fact { display: grid; grid-template-columns: 168px 1fr; gap: 18px; padding: 16px 0; border-bottom: 1px solid rgb(255 255 255 / 0.22); }
+.st .fact {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: 18px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--rule);
+}
 .st .fact:last-child { border-bottom: 0; }
-.st .fact dt { font-weight: 700; color: #fff; font-size: 15px; line-height: 1.5; }
-.st .fact dd { margin: 0; color: rgb(255 255 255 / 0.72); font-size: 15px; line-height: 1.6; }
+.st .fact dt { font-weight: 600; color: var(--ink); font-size: 15px; line-height: 1.5; }
+.st .fact dd { margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.6; }
 
-/* liquid glass — thin fill, deep blur, lit edges */
-.kh-glass {
-  background: linear-gradient(
-    135deg,
-    rgb(255 255 255 / 0.13) 0%,
-    rgb(255 255 255 / 0.04) 38%,
-    rgb(255 255 255 / 0.09) 100%
-  );
-  border: 1px solid rgb(255 255 255 / 0.22);
-  backdrop-filter: blur(20px) saturate(1.5);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.28),
-    inset 0 -1px 0 rgb(255 255 255 / 0.05),
-    0 10px 40px rgb(0 0 0 / 0.22);
-}
-
-/* stronger glass for cards that sit on the dark story — nearly clear, very
-   reflective: bright sheen streak, lit top edge, deep blur */
-.kh-glass-strong {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(
-    135deg,
-    rgb(255 255 255 / 0.08) 0%,
-    rgb(255 255 255 / 0.015) 42%,
-    rgb(255 255 255 / 0.05) 100%
-  );
-  border: 1px solid rgb(255 255 255 / 0.28);
-  backdrop-filter: blur(28px) saturate(1.8) brightness(1.1);
-  -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.1);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.38),
-    inset 0 -1px 0 rgb(255 255 255 / 0.07),
-    0 18px 50px rgb(0 0 0 / 0.35);
-}
-.kh-glass-strong::before {
-  content: '';
-  position: absolute;
-  inset: -40%;
-  pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    rgb(255 255 255 / 0.16) 0%,
-    rgb(255 255 255 / 0.03) 28%,
-    rgb(255 255 255 / 0) 46%
-  );
-}
-
-/* side rail (planet-list adapted) */
+/* side rail (section index) */
 .st-rail {
   position: fixed; left: clamp(18px, 1.95vw, 28px); top: 50%; transform: translateY(-43%);
   z-index: 8; display: flex; flex-direction: column; gap: 6px;
   opacity: 0; pointer-events: none;
-  transition: opacity 0.45s ease, filter 0.45s ease;
+  transition: opacity 0.45s ease;
 }
 .st-rail.is-on { opacity: 1; pointer-events: auto; }
 .st-rail button {
   display: flex; align-items: center; gap: 8px; min-height: 20px;
   background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
-  color: rgb(255 255 255 / 0.5); font-size: 14px; line-height: 1;
-  transition: color 0.2s ease, transform 0.2s ease;
+  color: var(--ink-3); font-size: 14px; line-height: 1;
+  transition: color 0.2s ease;
 }
-.st-rail button .rail-dot { width: 6px; height: 6px; border-radius: 9999px; background: rgb(255 255 255 / 0.3); margin: 5px; transition: background 0.2s; flex: none; }
-.st-rail button.active { color: #fff; font-size: 16px; font-weight: 700; }
-.st-rail button.active .rail-dot { width: 16px; height: 16px; margin: 0; background: #fff; animation: active-dot 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.st-rail button:hover { color: rgb(255 255 255 / 0.85); }
+.st-rail button .rail-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--rule-strong); margin: 5px; transition: background 0.2s; flex: none; }
+.st-rail button.active { color: var(--ink); font-size: 16px; font-weight: 700; }
+.st-rail button.active .rail-dot { width: 16px; height: 16px; margin: 0; background: var(--signal); animation: active-dot 0.4s var(--ease-ledger) both; }
+.st-rail button:hover { color: var(--ink-2); }
 
 @media (max-width: 1023px) {
   .st-rail { display: none; }
@@ -189,11 +531,31 @@ body {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.kh-rise { animation: kh-rise 0.7s ease-out both; }
+.kh-rise { animation: kh-rise 0.4s var(--ease-ledger) both; }
 
+/* ---------------------------------------------------- reduced motion escape */
 @media (prefers-reduced-motion: reduce) {
-  .kh-float, .kh-float-slow, .kh-breathe, .kh-eyes, .kh-steam, .kh-steam-2, .kh-ring, .kh-light, .kh-rise {
+  .kh-enter > *,
+  .st [data-reveal].is-inview,
+  .kh-rise,
+  .st-rail button.active .rail-dot {
     animation: none !important;
+    opacity: 1;
+  }
+  .btn-primary::before,
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost::after,
+  .btn-sos::after,
+  .seg-btn,
+  .seg-thumb,
+  .sheet,
+  .ledger-tabbar a {
+    transition: none !important;
+  }
+  .btn-sos::after {
+    animation: none !important;
+    opacity: 0.6;
   }
   html { scroll-behavior: auto; }
 }
